@@ -1,0 +1,4 @@
+{"v":1,"type":"user","content":[{"text":"Earlier checkpoint"}]}
+{"v":1,"agent":"claude-code","cli_version":"0.12.2","type":"user","content":[{"text":"Change the demo. DB_PASSWORD=never-persist"}]}
+{"v":1,"type":"assistant","content":[{"type":"thinking","thinking":"excluded reasoning"},{"type":"text","text":"Applying change"},{"type":"tool_use","id":"tool-1","name":"Write","input":{"file_path":"src/main.go","content":"changed"},"result":{"output":"Success","status":"success"}},{"type":"image","source":{"data":"excluded image"}}]}
+{"v":1,"type":"assistant","content":"Completed"}

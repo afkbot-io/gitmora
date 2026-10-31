@@ -1,0 +1,22 @@
+# Optional public CA bundle (system roots plus the corporate CA, never a private key).
+services:
+  api:
+    environment:
+      SSL_CERT_FILE: /etc/gitmora/trusted-ca.pem
+    volumes:
+      - type: bind
+        source: ${GITMORA_GITLAB_CA_BUNDLE:?Set an absolute readable PEM bundle path}
+        target: /etc/gitmora/trusted-ca.pem
+        read_only: true
+        bind:
+          create_host_path: false
+  worker:
+    environment:
+      SSL_CERT_FILE: /etc/gitmora/trusted-ca.pem
+    volumes:
+      - type: bind
+        source: ${GITMORA_GITLAB_CA_BUNDLE:?Set an absolute readable PEM bundle path}
+        target: /etc/gitmora/trusted-ca.pem
+        read_only: true
+        bind:
+          create_host_path: false

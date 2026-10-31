@@ -1,0 +1,40 @@
+{
+  "name": "workgraph-development",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.22.0"
+  },
+  "scripts": {
+    "format:web": "prettier --write web/src web/public/assets/theme.js web/public/assets/locale.js web/index.html web/tsconfig.json web/vite.config.ts tests/web tsconfig.web-tests.json scripts/build-web.mjs scripts/audit-ui.mjs scripts/smoke-design.mjs scripts/smoke-web.mjs scripts/smoke-settings.mjs scripts/smoke-credentials.mjs scripts/smoke-work.mjs scripts/smoke-cli-auth.mjs scripts/browser-auth.mjs scripts/browser-policy.mjs scripts/native-mcp-verification.mjs scripts/smoke-registration.mjs scripts/build-identity-theme.mjs scripts/check-interface-copy.mjs",
+    "check:format:web": "prettier --check web/src web/public/assets/theme.js web/public/assets/locale.js web/index.html web/tsconfig.json web/vite.config.ts tests/web tsconfig.web-tests.json scripts/build-web.mjs scripts/audit-ui.mjs scripts/smoke-design.mjs scripts/smoke-web.mjs scripts/smoke-settings.mjs scripts/smoke-credentials.mjs scripts/smoke-work.mjs scripts/smoke-cli-auth.mjs scripts/browser-auth.mjs scripts/browser-policy.mjs scripts/native-mcp-verification.mjs scripts/smoke-registration.mjs scripts/build-identity-theme.mjs scripts/check-interface-copy.mjs",
+    "dev:web": "vite --config web/vite.config.ts",
+    "check:web": "tsc -p web/tsconfig.json",
+    "build:web": "npm run check:web && node scripts/build-web.mjs",
+    "test:web": "tsc -p tsconfig.web-tests.json && node --test build/web-tests/tests/web/*.test.js && node scripts/check-interface-copy.mjs",
+    "build:agents": "tsc -p tsconfig.agents.json",
+    "test:agents": "npm run build:agents && node --test build/agents/tests/opencode/*.test.js"
+  },
+  "devDependencies": {
+    "@opencode-ai/sdk": "1.19.5",
+    "@tailwindcss/vite": "4.3.3",
+    "@types/node": "22.19.7",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "axe-core": "4.14.0",
+    "opencode-ai": "1.19.5",
+    "playwright": "1.64.1",
+    "prettier": "3.9.10",
+    "tailwindcss": "4.3.3",
+    "typescript": "7.0.2",
+    "vite": "8.3.5"
+  },
+  "dependencies": {
+    "@fontsource/ibm-plex-mono": "5.3.0",
+    "@fontsource/ibm-plex-sans": "5.3.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  }
+}

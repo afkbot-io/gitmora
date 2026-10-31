@@ -1,0 +1,8 @@
+# Explicit activation after the provider, private route and RP file secret have been verified.
+# Keep these settings out of shared runtime.env: ordinary workers do not need identity configuration.
+services:
+  api:
+    environment:
+      WORKGRAPH_OIDC_ISSUER: https://gitmora.tasktopia.online/auth/realms/gitmora
+      WORKGRAPH_OIDC_CLIENT_ID: gitmora
+      WORKGRAPH_OIDC_CLIENT_SECRET_FILE: /run/secrets/oidc_client_secret

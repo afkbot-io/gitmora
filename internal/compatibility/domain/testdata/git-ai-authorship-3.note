@@ -1,0 +1,6 @@
+src/main.go
+  s_1234567890abcd::t_abcdef12345678 1-3,7
+  0123456789abcdef 9-10
+  h_abcdef12345678 12-14
+---
+{"schema_version":"authorship/3.0.0","git_ai_version":"fixture","base_commit_sha":"ffffffffffffffffffffffffffffffffffffffff","prompts":{"0123456789abcdef":{"agent_id":{"tool":"cursor","id":"legacy-session","model":"local"},"messages_url":"https://example.invalid/transcript?token=never-fetch-or-store","total_additions":2,"total_deletions":0,"accepted_lines":2,"overriden_lines":0}},"sessions":{"s_1234567890abcd":{"agent_id":{"tool":"opencode","id":"session-1","model":"local"},"human_author":"Director <director@example.invalid>"}},"humans":{"h_abcdef12345678":{"author":"Observed author <author@example.invalid>"}}}

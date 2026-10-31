@@ -1,0 +1,41 @@
+# One explicit self-managed provider. Export these non-secret policy values for every deployment command.
+# See docs/gitlab-self-managed.md; API/worker retain their internal-only network and end-to-end TLS.
+services:
+  api:
+    environment:
+      WORKGRAPH_GITLAB_ALLOWLIST: ${GITMORA_GITLAB_URL:?Set the exact HTTPS GitLab installation base}
+      WORKGRAPH_GITLAB_PROXY_URL: http://gitlab-egress:8080
+    depends_on:
+      gitlab-egress: {condition: service_healthy}
+  worker:
+    environment:
+      WORKGRAPH_GITLAB_ALLOWLIST: ${GITMORA_GITLAB_URL:?Set the exact HTTPS GitLab installation base}
+      WORKGRAPH_GITLAB_PROXY_URL: http://gitlab-egress:8080
+    depends_on:
+      gitlab-egress: {condition: service_healthy}
+  gitlab-egress:
+    image: ${WORKGRAPH_IMAGE:-gitmora:local}
+    command: [egress, --listen, "0.0.0.0:8080", --target, "${GITMORA_GITLAB_AUTHORITY:?Set the exact GitLab host:port}", --visibility, "${GITMORA_GITLAB_VISIBILITY:-private}"]
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=16m,mode=1777"]
+    networks: [private, gitlab_outbound]
+    pids_limit: 128
+    mem_limit: 128m
+    cpus: 0.5
+    stop_grace_period: 10s
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, /gitmorad, healthcheck]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+
+networks:
+  gitlab_outbound:

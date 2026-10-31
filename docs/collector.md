@@ -1,0 +1,157 @@
+# Local collector and Git integration
+
+The implemented collector accepts normalized observations, stores them locally and delivers context through normal Git hooks. A native OpenCode adapter is included and has been exercised with OpenCode 1.19.5. Explicit [native CLI login](cli-auth.md) uses browser OIDC consent and the OS secret store. Other native integrations remain separate work.
+
+## Setup and normal use
+
+Build both binaries with `make build`. Place `workgraph` at a stable executable path before enabling hooks. Use `gitmora auth login --server <URL>` for the native secret-store workflow, or provide the scoped token through the process environment using your secret manager; the default variable is `WORKGRAPH_TOKEN`. Tokens are not accepted as CLI arguments or saved in repository configuration.
+
+```sh
+gitmora init --server https://context.internal --repository-id <Gitmora-repository-UUID>
+gitmora bind --country-id <Tasktopia-country-UUID> --task-id <Tasktopia-task-UUID>
+gitmora capture < observation.json
+git add src/queue.go
+git commit -m 'Preserve failed deliveries'
+git push origin main
+gitmora status
+```
+
+`--remote` defaults to `origin`. Setup binds the immutable Gitmora repository UUID, API URL, named remote and its exact push URL. Identical setup is idempotent; changed identity/configuration is rejected instead of silently retargeting queued data. The server repository UUID is obtained from initial setup/catalog administration, not inferred from a task number.
+
+Bindings affect new Gitmora recordings in the current worktree. Existing recordings retain their task identity. Start a fresh native agent conversation when switching tasks: the collector cannot infer which parts of a caller-supplied complete conversation belong to a different task. `gitmora bind --clear` clears the binding for new recordings.
+
+## Native OpenCode
+
+After repository initialization and task binding, enable the plugin and restart OpenCode:
+
+```sh
+gitmora agent enable opencode
+```
+
+The plugin is installed under `$XDG_CONFIG_HOME/opencode`, or `~/.config/opencode` when XDG is unset, in `plugins/workgraph.ts` and a private `workgraph/` helper directory. It embeds no provider and needs no npm installation. Provider/model settings remain the user's OpenCode configuration. The installation stores an absolute collector executable path; keep the binary at that path. `--config-dir /absolute/path` selects a different OpenCode configuration directory for either enable or disable.
+
+This is a global plugin that activates only in explicitly initialized Git repositories. Its status probe does not create collector files in other repositories. User text, completed assistant text, completed/error tool results and scoped changed paths are captured; reasoning parts and attachment/data URLs are excluded. Large individual text/tool results carry an explicit omission marker. Native history is acquired in validated same-session keyset pages and split into bounded windows. Failed/incomplete acquisition records no partial pass; excessive inputs fail explicitly and preserve prior evidence. Native pagination is pinned to OpenCode 1.19.5; its source limits/codec are documented in [native windows](native-continuation.md).
+
+Awaited tool callbacks record a before/after HEAD window. A tool that writes files, commits several times and pushes in one command is therefore linked retrospectively even if Git hooks ran before OpenCode persisted its tool result. Fast-forward windows retain intermediate commits; a rewritten window records its new tip. This is observed session/commit context, not proof of individual line authorship. A separate test exercises agent edits followed by a developer's ordinary commit and push.
+
+Final conversation updates after a push become eligible only for that already authorized recording. The same native source keeps its original task binding across restart; binding a new task requires a new native conversation. Other uncommitted conversations stay private. Durable native file-event identities prevent replayed history from reintroducing paths already consumed by an earlier commit.
+
+The adapter serializes/coalesces lifecycle notifications, re-reads current SDK state and drains pending work on plugin disposal. It sends only a stable complete prefix: an unfinished parallel tool blocks later parts, avoiding insertion into already recorded evidence. Each capture attempts bounded delivery of eligible data. Configure `gitmora sync --watch` for continuing offline recovery after the native process exits.
+
+```sh
+gitmora agent disable opencode
+```
+
+Disable removes only verified owned files. Existing `opencode.json` and unrelated plugins remain. Modified files or replaced owned directories are conflicts and are preserved. Repository-wide collection/delivery consent is controlled separately with `gitmora disable` and `gitmora enable`.
+
+The `workgraph-opencode/2` adapter supports [native windows and continuation](native-continuation.md), including completed compaction summaries, retained pruned results, history replacements and conversations beyond one snapshot's 2 MiB limit. Original task/publication scope and immutable evidence remain intact. Durable native tool boundaries recover observed intervals after process termination; unknown ends require explicit resolution. Richer attachments and broader native version/platform coverage remain in scope.
+
+## Durable native tool recovery
+
+The plugin persists a tool's initial HEAD and task scope before reading SDK history, and its first observed end before waiting for any queued history read. Source windows and the exact target segment are accepted atomically. Startup applies target-bound entries without SDK access; completed unbound entries recapture their original source. Applying resolves only the stored interval and marks association/completion together. Later human HEAD changes and callback retries cannot extend an already observed end. Git operations concurrent inside the observed interval are context, not proven authorship.
+
+Inspect current-worktree metadata with `gitmora frontier list`, or one exact entry with `gitmora frontier get --id <hash>`. A null `after` means the process never observed the ending boundary. The collector leaves it unresolved; verify the actual Git history and choose an explicit end, or close the intent:
+
+```sh
+gitmora frontier resolve --id <hash> --end <verified-full-SHA> --reason 'Verified actual tool commit'
+gitmora frontier abandon --id <hash> --reason 'Tool did not execute'
+```
+
+Restart OpenCode after resolution to recapture the source and associate the stored interval. If `target_session_id` already exists, `gitmora frontier apply --id <hash> --sync` can finish without source access. `--sync` attempts delivery of already eligible data for at most two seconds; failed delivery retains the outbox. These commands grant no publication permission. Operator reasons are bounded and known-secret patterns are redacted.
+
+Adapter authors can use `frontier begin` and `frontier end` with strict stdin JSON `{ "agent": "opencode", "source_session_id": "opencode:<native-ID>", "call_id": "<stable-tool-ID>" }`. Begin/end read actual HEAD themselves. Use the returned hash as repeated `capture --pin-source --frontier <hash>` on the final `native_history` window, then `frontier apply`. Mixing `--frontier` with `--observe-head-from`, another source/worktree or an unfinished tool is rejected. An unchanged observation replay still binds its original accepted segment. These local metadata commands require repository initialization and never need provider credentials.
+
+The private SQLite ledger now stores bounded native source locator values for recovery, while mapping/call/event keys stay hashes. It automatically upgrades versions 1–4 to version 5; older clients reject the newer schema. Version 5 additionally protects immutable compatibility-origin fields. Stop agent/collector/watch processes before replacing binaries. At most 64 unfinished tools per worktree are admitted. Terminal IDs remain for exact replay; retention/erasure and automatic installer repair remain separate work. To upgrade the plugin, stop OpenCode, disable the verified owned installation with the new binary, enable it again and restart.
+
+## Adapter protocol
+
+`gitmora capture` reads one strict JSON object from stdin, up to 3 MiB before domain validation. It returns the scoped Gitmora `session_id`. Each observation contains the full completed conversation so far and this turn's observed changed files:
+
+```json
+{
+  "schema_version": 1,
+  "source_session_id": "native-agent-session-123",
+  "event_id": "completed-turn-2",
+  "agent": {"name": "generic-local", "version": "1", "model": "local-model"},
+  "started_at": "2026-10-30T10:00:00Z",
+  "messages": [
+    {"role": "user", "text": "Preserve failed deliveries"},
+    {"role": "assistant", "text": "The queue now retains failed uploads"},
+    {"role": "tool", "tool_name": "shell", "text": "Relevant checks passed"}
+  ],
+  "changed_files": ["src/queue.go"]
+}
+```
+
+`started_at`, `ended_at` and agent `version` are optional. For completed sessions provide their actual start/end timestamps. Missing start time uses first observation time. Source/event IDs are nonempty bounded UTF-8 strings; persistent mapping/event keys use digests instead of arbitrary raw identifiers. Gitmora session mapping includes repository, canonical worktree identity, integration name, native source ID and country/task binding.
+
+The event ID must remain stable on retry. Repeating the same event/content is acknowledged locally; changed content under the same event ID conflicts. In the generic protocol a later observation must preserve the recorded message prefix. Shorter snapshots, historical edits and compacted replacements conflict. Native continuations use the additional `native_history` protocol described in [native windows](native-continuation.md). Submit completed messages rather than partial streaming fragments.
+
+Adapters replaying cumulative native file history can provide `file_events: [{"id":"immutable-tool-or-patch-ID","path":"src/queue.go"}]` instead of repeating `changed_files`. The ledger remembers each event/path identity across process restart. `changed_files` remains a per-observation delta. Neither field represents line-level authorship.
+
+`capture --pin-source` pins the native source's first task mapping. The compatibility option `--observe-head-from <full-SHA|unborn>` links the current Git HEAD window and requires source pinning; it cannot recover an unobserved end after a crash. The shipped native plugin uses the durable journal below instead. `--sync` attempts eligible delivery for at most two seconds after durable recording; delivery failure keeps a successful recording response and leaves the queue for retry.
+
+The shared capture contract bounds messages, files and canonical payload to 2 MiB. Known secret patterns are redacted before local persistence. Original agent-owned files/logs are outside the collector's storage boundary. Message order is preserved. Changed paths are canonical relative paths and are accumulated separately as pending commit evidence.
+
+## Commit and rewrite semantics
+
+`post-commit` observes actual changed paths and remaining worktree/index changes. Only recordings in that worktree with overlapping pending observed paths are associated. Completed paths leave the pending set; partially committed files remain available for a later commit. This associates session context and does not establish line authorship.
+
+`post-rewrite` retains original SHAs and adds explicit Git-provided replacement SHAs. Both amend and rebase are tested. No user branch commits or commit messages are added by the collector.
+
+`pre-push` consumes all provided ref updates and selects reachable commits, including intermediate commits. When a remote object is absent locally, selection uses reachable local history. It does not fetch a remote as a side effect. Only the configured named remote and unchanged URL enable automatic context delivery; pushes to other remotes do not retarget context.
+
+When any revision of a recording belongs to pushed history, queued historical revisions of that same recording become eligible. This prevents orphaned queue entries after amend/rebase while preserving original observations. Uploaded SHAs remain unconfirmed at the API until the provider connector verifies them.
+
+Pre-push publication intent is retained for the selected commit SHAs even when native association arrives later. It authorizes context delivery, not a claim that Git transport succeeded: a remote can still reject the push. An authorized recording's future complete revisions and native stream continuations inherit eligibility; another source does not. SQLite schema version 5 preserves prior eligible/delivered sessions, native pins and private recordings.
+
+## Offline delivery and recovery
+
+Current state and the immutable delivery queue live at `<Git common directory>/workgraph/state.sqlite`. They are shared across linked worktrees, while observation and binding identities stay separate. The directory and database are private to the current OS user. SQLite WAL, full synchronous commits and immediate write transactions coordinate independent processes.
+
+Network work holds no recording transaction. Exact repository/session/revision/digest acknowledgements remove only their own queued revision. Redirects are refused. Temporary errors retain retry state with bounded backoff; permanent identity/contract conflicts become blocked. Normal collection continues without the server.
+
+```sh
+gitmora checkpoint
+gitmora sync
+gitmora sync --retry
+gitmora sync --watch
+gitmora sync --include-uncommitted
+```
+
+`checkpoint` seals changed current-worktree observations without automatically authorizing uncommitted delivery. Normal `sync` sends only already eligible records. `--retry` explicitly releases pending/blocked failures for immediate retry. `--watch` runs bounded batches every 15 seconds until interrupted. `--include-uncommitted` explicitly selects only the current worktree's uncommitted context; it does not make unrelated worktrees eligible.
+
+Collector work inside a Git hook has a two-second context deadline. Network/capture errors report a bounded diagnostic and retain data; the existing user hook's exit status remains authoritative. An active native OS-store credential works in a GUI-launched Git process without a bearer environment variable. A missing/locked/unavailable credential leaves data local; manual sync or a correctly configured watch process can deliver it later.
+
+## Hook ownership and disable
+
+Gitmora writes its own wrappers in a private Git-directory folder and stores a private installation manifest. Existing hook files remain in place and are called from their original location. Relative hook directories resolve against Git's actual hook working directory. Standard non-collector hooks forward directly through shell wrappers; they do not start an extra Go collector process.
+
+```sh
+gitmora disable
+```
+
+Disable first persists repository-wide consent, then restores the original repository/worktree `core.hooksPath` setting and removes verified owned wrappers. It stops new capture and future delivery batches; an already in-flight request cannot be recalled. Local capture/queue data remains. A separate private marker keeps consent disabled even if SQLite is damaged or an older enabled database is restored. A changed hook setting or modified wrapper is reported as a conflict and preserved; collection stays disabled. Disable does not require a functioning collector database.
+
+```sh
+gitmora enable
+gitmora agent disable opencode --local
+gitmora agent enable opencode --local
+gitmora status
+```
+
+`enable` explicitly restores repository collection and owned Git hooks. Named agent controls are independent and remain disabled until explicitly enabled. These settings apply to the shared repository ledger across linked worktrees. Disabled agents neither record nor deliver their queued records; other agents continue delivering without queue starvation. The OpenCode plugin checks this consent before acquiring source history. Removing the global plugin is still a separate `agent disable opencode` command. `status` exposes `collection_enabled` and `disabled_agents`. Updating/reinitializing the same destination does not silently clear named agent consent.
+
+Installation uses an OS file lock and writes/syncs wrappers and metadata before selecting the path. An interrupted first install can leave unselected private installation files; automatic repair of that partial initialization remains part of the operational recovery work. Do not remove user hook files while repairing an installation.
+
+## Verification scope
+
+Tests cover real Git worktrees and bare remotes, multi-commit push, rejecting and accepted existing hooks, exact stdin forwarding, amend/rebase, paths containing spaces/quotes, simultaneous capture processes, SQLite restart/ACK/backoff, HTTP redirects and acknowledgement mismatch. `make smoke` additionally runs built CLI + Git + API + PostgreSQL through API shutdown, offline push, API restart and delivery recovery.
+
+`make verify-linux` compiles CGO-disabled artifacts for the Docker host's Linux architecture and runs collector/SQLite/Git tests as an unprivileged user inside the dedicated test container. It installs Git only into that disposable test container when absent. macOS and Linux arm64 execution have been verified; other OS/CPU runtime checks are not implied.
+
+`npm ci` installs the pinned development-only native test toolchain. `make smoke-opencode` checks TypeScript contracts, loads the installed plugin in the real OpenCode binary, executes actual Bash/Git operations and calls its actual compaction API. It verifies typed summary continuation, original task/consent and exact server parent matching. SDK-shaped synthetic history larger than 2 MiB also passes through the shipped normalizer, built CLI, human commit/push and API/PostgreSQL without losing its tail. The deterministic loopback model exercises agent protocol behavior, not model quality or an arbitrary live model provider.
+
+`make smoke-native-history` separately exercises the actual pinned native server/root SDK with 103 synthetic messages exceeding 3 MiB, two API pages and seven windows. Exact full message text/order, explicit publication consent, parent references and unchanged window/revision replay after CLI/API restart are checked. It is included in the full host gate. The same gate now kills real coordinator processes after durable begin/end/target acceptance and verifies frozen-interval recovery without later human commits or broadened consent. Richer attachment/version/scale acceptance remains open.
+
+Typed compatibility origins and historical provenance are described in the [compatibility runbook](compatibility.md). Decoding/window preparation and capture/read/index/UI interoperability are implemented; local Git acquisition and the import CLI are still required. Origin-bearing historical paths never enter the pending edited-file set. The same immutable import plan retains its original task across replay, and existing publication controls remain in force.

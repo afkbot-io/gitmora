@@ -1,0 +1,26 @@
+CREATE TABLE inference_runs (
+ id uuid PRIMARY KEY,
+ user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ token_id uuid NOT NULL REFERENCES api_tokens(id) ON DELETE CASCADE,
+ project_id uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+ request_id uuid NOT NULL,
+ request_hash text NOT NULL CHECK(request_hash ~ '^[0-9a-f]{64}$'),
+ scopes text[] NOT NULL,
+ request jsonb NOT NULL CHECK(jsonb_typeof(request)='object'),
+ configuration jsonb NOT NULL CHECK(jsonb_typeof(configuration)='object'),
+ evidence jsonb NOT NULL CHECK(jsonb_typeof(evidence)='object' AND octet_length(evidence::text)<=70000),
+ output jsonb CHECK(output IS NULL OR (jsonb_typeof(output)='object' AND octet_length(output::text)<=20000)),
+ status text NOT NULL DEFAULT 'pending' CHECK(status IN('pending','running','succeeded','failed','blocked')),
+ diagnostic text NOT NULL DEFAULT '',
+ attempts integer NOT NULL DEFAULT 0 CHECK(attempts BETWEEN 0 AND 3),
+ generation bigint NOT NULL DEFAULT 0,
+ lease_owner uuid,
+ lease_until timestamptz,
+ next_attempt_at timestamptz NOT NULL DEFAULT now(),
+ created_at timestamptz NOT NULL DEFAULT now(),
+ updated_at timestamptz NOT NULL DEFAULT now(),
+ UNIQUE(user_id,request_id),
+ CHECK((status='running')=(lease_owner IS NOT NULL AND lease_until IS NOT NULL)),
+ CHECK((status='succeeded')=(output IS NOT NULL))
+);
+CREATE INDEX inference_ready_idx ON inference_runs(next_attempt_at,created_at) WHERE status IN('pending','running');

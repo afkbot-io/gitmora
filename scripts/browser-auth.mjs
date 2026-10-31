@@ -1,0 +1,81 @@
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+
+/** Real signed local IdP enrollment for owned browser fixtures; never targets production accounts. */
+export async function signInAs(page, fixture, token = fixture.admin) {
+  for (const origin of [fixture.url, fixture.issuer])
+    assert.ok(["localhost", "127.0.0.1"].includes(new URL(origin).hostname));
+  const api = async (path, body, credential = fixture.admin) => {
+    const response = await fetch(fixture.url + path, {
+      method: body ? "POST" : "GET",
+      headers: {
+        Authorization: "Bearer " + credential,
+        "Content-Type": "application/json",
+      },
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    });
+    assert.ok(response.ok, "Synthetic account preparation failed");
+    return response.json();
+  };
+  const me = await api("/v1/me", undefined, token);
+  const subject = "browser-fixture-" + me.user.id;
+  const bindings = await api("/v1/admin/identities");
+  if (
+    !bindings.items.some(
+      (item) =>
+        item.user_id === me.user.id && item.subject === subject && item.enabled,
+    )
+  )
+    await api("/v1/admin/identities", {
+      request_id: randomUUID(),
+      id: randomUUID(),
+      user_id: me.user.id,
+      subject,
+    });
+  const control = await fetch(fixture.issuer + "/control", {
+    method: "POST",
+    body: JSON.stringify({ mode: "good", subject }),
+  });
+  assert.ok(control.ok);
+  await page.goto(fixture.url);
+  await page.getByRole("link", { name: "Войти", exact: true }).click();
+  await page.locator(".sidebar").waitFor();
+}
+
+const workspaceSections = new Set([
+  "Работа",
+  "Контекст",
+  "Репозитории",
+  "Настройки проекта",
+  "Проекты",
+  "Учётные записи",
+  "Привязки входа",
+  "Личные ключи",
+  "Подключение",
+  "Настройки",
+  "Work",
+  "Context",
+  "Repositories",
+  "Project settings",
+  "Projects",
+  "Accounts",
+  "Sign-in bindings",
+  "Personal keys",
+  "Setup",
+  "Settings",
+]);
+export async function clickUI(page, name) {
+  if (workspaceSections.has(name)) {
+    await page.locator(".sidebar").waitFor();
+    const menu = page.getByRole("button", {
+      name: /^(Разделы|Sections)$/,
+      exact: true,
+    });
+    if (
+      (await menu.isVisible()) &&
+      (await menu.getAttribute("aria-expanded")) === "false"
+    )
+      await menu.click();
+    await page.getByRole("link", { name, exact: true }).click();
+  } else await page.getByRole("button", { name, exact: true }).click();
+}

@@ -1,0 +1,1 @@
+{"cli_version":"0.12.2","checkpoint_id":"01M63VCB10XSZD4BQ2PQMWGPXV","session_id":"65f60b2a-3de8-40fb-8c70-60d04b43b155","strategy":"manual-commit","created_at":"2026-10-29T12:50:26.399655Z","agent":"Claude Code","model":"local-fixture","files_touched":["src/main.go"],"compact_transcript_start":1}

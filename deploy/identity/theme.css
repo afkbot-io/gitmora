@@ -1,0 +1,19 @@
+@import "@fontsource/ibm-plex-sans/cyrillic-400.css";
+@import "@fontsource/ibm-plex-sans/cyrillic-500.css";
+@import "@fontsource/ibm-plex-sans/cyrillic-600.css";
+@import "@fontsource/ibm-plex-sans/latin-400.css";
+@import "@fontsource/ibm-plex-sans/latin-500.css";
+@import "@fontsource/ibm-plex-sans/latin-600.css";
+@import "../../web/src/styles.css";
+@source "./themes/gitmora/login/**/*.{ftl,properties}";
+
+@layer components {
+  .password-eye,
+  .password-eye-off {
+    @apply block size-5 bg-current;
+    mask-repeat: no-repeat;
+    mask-size: contain;
+  }
+  .password-eye { mask-image: url("../../web/public/assets/eye.svg"); }
+  .password-eye-off { mask-image: url("../../web/public/assets/eye-off.svg"); }
+}

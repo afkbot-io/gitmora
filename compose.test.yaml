@@ -1,0 +1,17 @@
+name: workgraph-test
+services:
+  postgres:
+    image: gitmora-postgres:18.6-security1
+    environment:
+      POSTGRES_USER: workgraph_test
+      POSTGRES_PASSWORD: workgraph_test_only
+      POSTGRES_DB: workgraph_test
+    ports:
+      - "127.0.0.1:55439:5432"
+    tmpfs:
+      - /var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U workgraph_test -d workgraph_test"]
+      interval: 1s
+      timeout: 3s
+      retries: 30

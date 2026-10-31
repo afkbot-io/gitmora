@@ -1,0 +1,195 @@
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@source "./**/*.{ts,tsx}";
+
+/* Inclusive boundaries retain the existing desktop/tablet/mobile layouts. */
+@custom-variant wide {
+  @media (min-width: 1600px) {
+    @slot;
+  }
+}
+@custom-variant compact {
+  @media (max-width: 1100px) {
+    @slot;
+  }
+}
+@custom-variant mobile {
+  @media (max-width: 700px) {
+    @slot;
+  }
+}
+
+@theme {
+  --shadow-dialog: 0 18px 70px #172b4626;
+  --font-sans: "IBM Plex Sans", sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+  --color-ink: #172b46;
+  --color-canvas: #f5f7fb;
+  --color-paper: #fff;
+  --color-muted: #52647c;
+  --color-accent: #335cde;
+  --color-line: #dee5f0;
+  --color-control: #7d8fa8;
+  --color-placeholder: #65758b;
+  --color-accent-hover: #274bc4;
+  --color-action: #335cde;
+  --color-action-hover: #274bc4;
+  --color-danger-action: #a02a2a;
+  --color-danger-action-hover: #842222;
+  --color-brand: #172b46;
+  --color-on-brand: #c6d3e6;
+  --color-accent-soft: #eaf0ff;
+  --color-danger: #a02a2a;
+  --color-danger-soft: #fff1f0;
+  --color-success: #22633d;
+  --color-success-soft: #edf7ef;
+}
+
+@layer base {
+  :root {
+    @apply font-sans text-ink bg-canvas font-normal leading-normal [font-synthesis:none];
+    color-scheme: light;
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --color-ink: #e7edf7;
+    --color-canvas: #101827;
+    --color-paper: #182333;
+    --color-muted: #acbbcf;
+    --color-accent: #a0b7ff;
+    --color-accent-hover: #c0ceff;
+    --color-action: #3d5ed8;
+    --color-action-hover: #4968e0;
+    --color-accent-soft: #26385e;
+    --color-line: #33445c;
+    --color-control: #687c97;
+    --color-placeholder: #a2b1c6;
+    --color-danger: #ffb4ac;
+    --color-danger-action: #a63838;
+    --color-danger-action-hover: #bb4141;
+    --color-danger-soft: #3c242b;
+    --color-success: #9bdbb4;
+    --color-success-soft: #193a2d;
+    --shadow-dialog: 0 20px 64px #0006;
+  }
+  * {
+    @apply box-border;
+  }
+  body {
+    @apply m-0;
+  }
+  fieldset {
+    @apply min-w-0 m-0 p-0 border-0;
+  }
+  button,
+  input,
+  select,
+  textarea {
+    @apply [font:inherit];
+  }
+  button,
+  a,
+  input,
+  select,
+  summary {
+    @apply [-webkit-tap-highlight-color:transparent] touch-manipulation;
+  }
+  button,
+  summary {
+    @apply cursor-pointer;
+  }
+  button:disabled {
+    @apply opacity-60 cursor-not-allowed;
+  }
+  a {
+    @apply text-accent underline-offset-4;
+  }
+  :is(button, a, input, select, textarea, summary):focus-visible {
+    @apply outline-3 outline-accent outline-offset-3;
+  }
+  :is(h1, h2, h3) {
+    @apply mt-0 wrap-anywhere text-balance;
+    scroll-margin-top: 1rem;
+  }
+  h1 {
+    @apply text-3xl leading-tight tracking-tight font-semibold;
+  }
+  h2 {
+    @apply text-xl leading-snug font-semibold mb-4;
+  }
+  p {
+    @apply mt-0;
+  }
+  :is(input, select, textarea) {
+    @apply border border-control rounded-md bg-paper text-ink min-h-11 px-3 py-2 max-w-full;
+  }
+  :is(input[type="checkbox"], input[type="radio"]) {
+    @apply size-4 min-h-0 p-0 shrink-0 accent-accent;
+  }
+  dialog {
+    @apply bg-paper text-ink overscroll-contain;
+  }
+  input::placeholder,
+  textarea::placeholder {
+    @apply text-placeholder;
+  }
+  label {
+    @apply text-ink text-sm font-medium block mb-2;
+  }
+  button,
+  .action-link {
+    @apply rounded-md px-5 py-2 min-h-11 border border-transparent font-medium no-underline inline-flex justify-center items-center gap-2;
+  }
+  dd {
+    @apply m-0 wrap-anywhere;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      @apply scroll-auto transition-none animate-none;
+    }
+  }
+}
+
+@layer components {
+  .landing-preview {
+    @apply relative py-5 mobile:py-0;
+  }
+  .auth-shell {
+    @apply min-h-dvh bg-paper;
+  }
+  .auth-header {
+    @apply flex items-center justify-between gap-4 mx-auto max-w-320 px-10 py-6 mobile:px-5 mobile:py-4;
+  }
+  .auth-panel {
+    @apply mx-auto w-full max-w-112 px-6 pt-[clamp(2rem,8vh,6rem)] pb-10 mobile:pt-6;
+  }
+  .theme-switch {
+    @apply min-h-11 gap-2 rounded-md border border-control bg-paper px-3 py-2 text-sm text-muted hover:bg-canvas hover:text-ink;
+  }
+  .auth-card {
+    @apply mx-auto w-full max-w-sm;
+  }
+  .auth-card h1,
+  .auth-card #kc-page-title {
+    @apply text-3xl font-semibold tracking-tight mb-3;
+  }
+  .auth-card :is(input[type="checkbox"], input[type="radio"]) {
+    @apply min-h-0 w-auto;
+  }
+  .auth-card .required {
+    @apply text-danger;
+  }
+  .auth-card .alert-error {
+    @apply bg-danger-soft text-danger border-danger;
+  }
+  .auth-card .alert-success {
+    @apply bg-success-soft text-success;
+  }
+  .auth-card #kc-registration {
+    @apply text-sm;
+  }
+  .auth-card ul {
+    @apply pl-5;
+  }
+}

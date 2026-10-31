@@ -1,0 +1,69 @@
+# Development and verification
+
+Use the Go toolchain selected by `go.mod`, Node.js 22.22+, npm, Python 3.11+ and Docker Compose. Native/provider proxy gates also use nginx/OpenSSL. Confirm `python3 --version`: some macOS installations select an obsolete framework interpreter. Put the supported interpreter on PATH before running the make targets. Install dependencies and the pinned browser engines:
+
+```sh
+npm ci
+npx playwright install chromium webkit firefox
+make build
+```
+
+On Linux, Playwright may additionally need its documented system libraries. The Go toolchain can be downloaded automatically when required. Never supply production credentials to automated tests.
+
+## Fast checks
+
+```sh
+npm run check:web
+npm run check:format:web
+npm run test:web
+npm run test:agents
+make vet
+make integration
+python3 -m unittest discover -s scripts/tests -p test_release_cli.py
+```
+
+`make integration` starts isolated PostgreSQL at `127.0.0.1:55439` and runs the Go suite with the race detector. Tests create/drop their own schemas. `npm run test:web` also rejects missing/stale authored translations and mismatched interpolation placeholders. Do not regenerate embedded web assets while Go builds/tests are running.
+
+## Process and browser gates
+
+`make verify` runs the host vet/race, API/collector/agent, GitLab, context, directory, browser, deployment, restore, egress, provider and distribution gates. It takes longer and requires the binaries/browsers above. A full run is different from running only selected targets.
+
+| Target | Scope |
+| --- | --- |
+| `make smoke-codex`, `make smoke-opencode` | Real local agent protocols/hooks, source capture, queue and ordinary Git delivery. OpenCode uses a labelled deterministic loopback model. |
+| `make smoke-native-history`, `make smoke-compatibility` | Complete source windows, replay/restart, immutable Git import and provenance. |
+| `make smoke-forge-subpath`, `make smoke-gitlab-profile` | GitLab fixture reconciliation under `/gitlab`, custom port/CA/CONNECT and explicit Compose policy. |
+| `make smoke-context`, `make smoke-agent-context` | Real index worker, search, exact source/context and external-agent tool workflow. |
+| `make smoke-directory`, `make smoke-identity` | Catalog/account roles, signed OIDC, cookies/CSRF, revocation and recovery. |
+| `make smoke-web`, `make smoke-settings`, `make smoke-credentials`, `make smoke-work` | Signed browser/API/PostgreSQL workflows, races, denied access, uncertainty and mobile layout. |
+| `make smoke-browser-compat` | Chromium/Android, WebKit/iPhone and Firefox layouts, both themes, RU/EN, keyboard, history and accessibility. |
+| `make smoke-keycloak`, `make smoke-keycloak-native`, `make smoke-registration` | Real optimized provider, separate database, bootstrap retirement, signup policy and native account consent. |
+| `make smoke-identity-proxy` | Actual nginx/TLS routes, wrong CA/hostname and private admin denial. |
+| `make smoke-deployment`, `make smoke-recovery`, `make smoke-egress` | Isolated persistent installations, file secrets, outage/reconnect, actual dump/restore and route isolation. |
+| `make smoke-onboarding`, `make smoke-cli-release`, `make smoke-cli-downloads` | Executed checksum-checked installer, exact-byte update, queue/push/restart and public download routes. |
+| `make verify-linux` | Linux runtime/process checks and unprivileged collector/Git/SQLite behavior. |
+| `make verify-release` | Extended release gates, including native OS-store account and cross-browser workflows. |
+
+Test fixtures remain synthetic even when real HTTP/Git/PostgreSQL/browser processes are used. A provider fixture does not establish compatibility with every upstream release. Phone tests are device emulation, not physical-device acceptance. Isolated smoke scripts clean only resources they create; do not use broad shared-host volume/container cleanup.
+
+Tasktopia source compatibility is a separate explicit gate:
+
+```sh
+TASKTOPIA_SOURCE=/absolute/path/to/Tasktopia \
+TASKTOPIA_NODE=/absolute/path/to/node24/bin/node \
+make smoke-tasktopia
+```
+
+`make smoke-settings-tasktopia` and `make smoke-work-tasktopia` use the same inputs for browser workflows. The harness copies only required source into an ignored isolated tree; it must never read the original `.env`, uploads or production database. If you do not have Tasktopia source, do not report these gates as executed.
+
+`python3 scripts/smoke-web.py --serve` keeps a synthetic signed browser fixture alive for manual inspection. Stop it with Ctrl+C/SIGTERM for owned cleanup. Reports/screenshots go under ignored `build/` and `output/`; they do not belong in source control.
+
+## Review and style
+
+Domain packages own invariants and do not import SQL/HTTP/OS adapters. Application services use narrow consumer-owned ports; adapters handle Git, SQLite, PostgreSQL, provider HTTP and the OS secret store. Exported Go declarations need useful GoDoc. Keep stable typed errors and bound inputs; do not expose SQL/provider credentials through transport errors.
+
+For behavior changes, reproduce the issue with a failing observable test, implement the smallest coherent fix, then run focused and affected integration checks. Review access control, races, transaction/replay semantics, cancellation, source fidelity and compatibility. Schema migrations are immutable after release; retire data with a new migration.
+
+Tailwind styling uses complete static utility strings, shared semantic tokens and typed button variants. Theme controls belong only in personal settings. Keep source/user text inert and untranslated; authored UI copy uses the RU/EN catalog. [Web design](web-design.md) and [web behavior](web.md) describe the interface contract.
+
+WebKit's native select and Playwright's screenshot synchronizer have two precisely reproduced style/CSP diagnostics recognized by the test helper. All other violations fail. Do not add broad suppression or weaken product CSP to make a browser gate green. Keep raw axe `incomplete` results and separately assess them rather than treating them as automatic passes.
