@@ -71,25 +71,39 @@ const sourceIdentityProjection = `j.source_kind,j.project_id,j.repository_id,j.s
 // fetch wide source text only for the final bounded selection.
 // Identical language alternatives have the same matches and score, but repeat ranking work.
 // Materialize the single query row once, including when PostgreSQL chooses a generic plan.
-var queryPrefix = `WITH forms AS (
+var queryPrefix = retrievalQuery(false)
+var lexicalQueryPrefix = retrievalQuery(true)
+
+// Identity matching uses GIN before the wide authorization join. The authorization
+// predicate remains inside allowed, before ranking/LIMIT and any source text read.
+func retrievalQuery(lexical bool) string {
+	candidates := ""
+	chunks := "retrieval_chunks d"
+	match := "AND ($8::text='' OR d.lexical@@terms.query)"
+	if lexical {
+		candidates = ", matched AS MATERIALIZED (SELECT id FROM retrieval_chunks WHERE lexical@@(SELECT query FROM terms))"
+		chunks = "matched candidates JOIN retrieval_chunks d ON d.id=candidates.id"
+		match = ""
+	}
+	return `WITH forms AS (
  SELECT plainto_tsquery('simple',$8) AS simple_terms,plainto_tsquery('english',$8) AS english_terms,plainto_tsquery('russian',$8) AS russian_terms
  ), terms AS MATERIALIZED (
  SELECT simple_terms || CASE WHEN english_terms=simple_terms THEN ''::tsquery ELSE english_terms END
  || CASE WHEN russian_terms=simple_terms OR russian_terms=english_terms THEN ''::tsquery ELSE russian_terms END AS query FROM forms
- ),
+ )` + candidates + `,
  allowed AS MATERIALIZED (
  SELECT d.id,` + sourceIdentityProjection + `,
  CASE WHEN j.source_kind='capture' THEN cs.latest_revision=j.revision ELSE true END AS current,
  j.source_observed_at AS observed_at,
  CASE WHEN $8::text='' THEN CASE d.kind WHEN 'session' THEN 0.4 ELSE 0.2 END
  ELSE ts_rank_cd(d.lexical,terms.query,32)+(CASE WHEN position(lower($8) IN lower(d.title_terms))>0 THEN 1.0 ELSE 0.0 END) END::double precision AS score
- FROM retrieval_chunks d JOIN retrieval_jobs j ON j.id=d.job_id ` + sourceJoins + ` CROSS JOIN terms
+ FROM ` + chunks + ` JOIN retrieval_jobs j ON j.id=d.job_id ` + sourceJoins + ` CROSS JOIN terms
  WHERE ` + eligibleSources + ` AND j.completed_at IS NOT NULL
  AND (COALESCE(cardinality($7::text[]),0)=0 OR d.kind=ANY($7::text[]))
  AND ($10::text='' OR d.id=$10)
  AND ($11::text='' OR j.code_path=$11)
  AND ($12::text='' OR (j.source_kind='capture' AND j.session_id::text=$12))
- AND ($8::text='' OR d.lexical@@terms.query)
+ ` + match + `
  AND ` + confirmedReferenceAccess + `
  AND ($6::text='' OR j.code_sha=$6 OR EXISTS(SELECT 1 FROM capture_revision_commits rc JOIN commits c ON c.repository_id=rc.repository_id AND c.sha=rc.sha WHERE rc.repository_id=j.repository_id AND rc.session_id=j.session_id AND rc.revision=j.revision AND rc.sha=$6 AND c.confirmed_at IS NOT NULL))
  ), selected AS (SELECT * FROM allowed ORDER BY score DESC,observed_at DESC,id LIMIT $9)
@@ -100,10 +114,16 @@ var queryPrefix = `WITH forms AS (
  CASE WHEN s.source_kind='code' THEN 1 ELSE (SELECT count(*) FROM capture_revision_commits rc JOIN commits c ON c.repository_id=rc.repository_id AND c.sha=rc.sha WHERE rc.repository_id=s.repository_id AND rc.session_id=s.session_id AND rc.revision=s.revision AND c.confirmed_at IS NOT NULL) END
  FROM selected s JOIN retrieval_chunks d ON d.id=s.id ORDER BY s.score DESC,s.observed_at DESC,s.id`
 
+}
+
 // readChunks returns only the already-authorized bounded candidate set. Source aliases keep task
 // binding fields distinct from source identity; capture citations never acquire a task's digest.
 func readChunks(ctx context.Context, tx pgx.Tx, p access.Principal, q domain.Query, id string) ([]domain.Hit, error) {
-	rows, err := tx.Query(ctx, queryPrefix, q.ProjectID, p.Has(access.ReadCapture), p.Has(access.ReadIntegration), q.RepositoryID, q.History, q.CommitSHA, q.Kinds, q.Terms, q.Limit+1, id, q.FilePath, q.SessionID)
+	statement := queryPrefix
+	if q.Terms != "" {
+		statement = lexicalQueryPrefix
+	}
+	rows, err := tx.Query(ctx, statement, q.ProjectID, p.Has(access.ReadCapture), p.Has(access.ReadIntegration), q.RepositoryID, q.History, q.CommitSHA, q.Kinds, q.Terms, q.Limit+1, id, q.FilePath, q.SessionID)
 	if err != nil {
 		return nil, err
 	}

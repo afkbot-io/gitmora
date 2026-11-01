@@ -1,52 +1,119 @@
-import { t as translate } from "../../domain/locale.js";
-import { buttonStyles, sharedStyles } from "../ui.js";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import type { Selection, SessionRevision } from "../../domain/history.js";
+import { t } from "../../domain/locale.js";
+import type {
+  CaptureWindow,
+  Selection,
+  SessionRevision,
+} from "../../domain/history.js";
+import {
+  conversationItems,
+  transcriptLocation,
+} from "../../domain/conversation.js";
 import type { ApiClient } from "../../transport/api.js";
 import { readableError } from "../../domain/context.js";
 import { LatestRequest } from "../../application/latest.js";
 import { ErrorNotice, aborted, date } from "../shared.js";
+import { buttonStyles, sharedStyles } from "../ui.js";
 import { ImportOriginView } from "./ImportOrigin.js";
+import { ConversationMessage } from "./ConversationMessage.js";
 
-/** Read one exact sanitized revision. Tool source text never becomes executable HTML or proof of successful execution. */
+interface Part {
+  value: SessionRevision;
+  visible: number;
+  segment: number;
+}
+
+/** Fetch one bounded, exact revision at a time. Appending never replaces earlier messages. */
 export function SessionTranscript({
   client,
   selection,
+  windows,
+  moreWindows,
+  onMoreWindows,
   onNavigate,
 }: {
   client: ApiClient;
   selection: Selection;
+  windows: CaptureWindow[];
+  moreWindows: boolean;
+  onMoreWindows: () => Promise<CaptureWindow[]>;
   onNavigate: (q: Selection) => void;
 }) {
-  const [value, setValue] = useState<SessionRevision | null>(null);
+  const [parts, setParts] = useState<Part[]>([]);
   const [revision, setRevision] = useState("");
-  const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [dialogueOnly, setDialogueOnly] = useState(false);
+  const [query, setQuery] = useState("");
   const [requests] = useState(() => new LatestRequest());
+  const [locator] = useState(() => transcriptLocation(location.hash));
+  const target = useRef<number | null>(null);
+  const anchor = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    if (target.current !== null) {
+      const node = document.querySelector<HTMLElement>(
+        `.transcript [data-message-index="${target.current + 1}"]`,
+      );
+      if (node) {
+        let parent = node.parentElement?.closest("details");
+        while (parent) {
+          parent.open = true;
+          parent = parent.parentElement?.closest("details");
+        }
+        if (node instanceof HTMLDetailsElement) node.open = true;
+        node.scrollIntoView({ block: "center" });
+      }
+      target.current = null;
+    } else if (anchor.current !== null) {
+      window.scrollTo({ top: anchor.current, behavior: "instant" });
+      anchor.current = null;
+    }
+  }, [parts]);
+  async function read(
+    session: string,
+    number: number,
+    signal: AbortSignal,
+    digest?: string,
+  ) {
+    const result = await client.request<SessionRevision>(
+      `/v1/repositories/${selection.repository_id}/sessions/${session}`,
+      undefined,
+      signal,
+      number ? { revision: number } : undefined,
+    );
+    if (
+      result.snapshot.repository_id !== selection.repository_id ||
+      result.snapshot.session_id !== session ||
+      (number && result.snapshot.revision !== number) ||
+      (digest && result.digest !== digest)
+    )
+      throw new Error("Ответ не совпал с выбранной сессией и ревизией.");
+    return result;
+  }
   async function load(number = 0) {
     const request = requests.begin();
-    setValue(null);
-    setOffset(0);
     setLoading(true);
     setError("");
     try {
-      const result = await client.request<SessionRevision>(
-        `/v1/repositories/${selection.repository_id}/sessions/${selection.session_id}`,
-        undefined,
-        request.signal,
-        number ? { revision: number } : undefined,
-      );
+      const value = await read(selection.session_id!, number, request.signal);
       if (!request.current()) return;
-      if (
-        result.snapshot.repository_id !== selection.repository_id ||
-        result.snapshot.session_id !== selection.session_id ||
-        (number && result.snapshot.revision !== number)
-      )
-        throw new Error("Ответ не совпал с выбранной сессией и ревизией.");
-      setValue(result);
-      setRevision(String(result.snapshot.revision));
+      setParts([
+        {
+          value,
+          visible: Math.min(
+            value.snapshot.messages.length,
+            Math.max(20, locator.message !== null ? locator.message + 1 : 20),
+          ),
+          segment:
+            windows.find((w) => w.source.session_id === selection.session_id)
+              ?.segment ??
+            value.snapshot.continuation?.segment ??
+            1,
+        },
+      ]);
+      target.current = locator.message;
+      setRevision(String(value.snapshot.revision));
     } catch (e) {
       if (request.current() && !aborted(e)) setError(readableError(e));
     } finally {
@@ -54,7 +121,7 @@ export function SessionTranscript({
     }
   }
   useEffect(() => {
-    void load();
+    void load(locator.revision);
     return () => requests.cancel();
   }, [client, selection.repository_id, selection.session_id, requests]);
   function select(event: FormEvent) {
@@ -65,185 +132,254 @@ export function SessionTranscript({
     }
     void load(Number(revision));
   }
-  const s = value?.snapshot;
+  const first = parts[0]?.value;
+  const last = parts.at(-1);
+  const nextWindow = (items: CaptureWindow[]) =>
+    items.find(
+      (w) =>
+        w.chain_verified &&
+        w.source.repository_id === selection.repository_id &&
+        w.continuation?.previous_session_id === last?.value.snapshot.session_id,
+    );
+  const filtered = dialogueOnly || !!query.trim();
+  const hasMore =
+    !!last &&
+    ((!filtered && last.visible < last.value.snapshot.messages.length) ||
+      !!nextWindow(windows) ||
+      moreWindows);
+  async function append() {
+    if (!last || loading) return;
+    if (!filtered && last.visible < last.value.snapshot.messages.length) {
+      anchor.current = window.scrollY;
+      setParts((current) =>
+        current.map((p, i) =>
+          i === current.length - 1
+            ? {
+                ...p,
+                visible: Math.min(
+                  p.visible + 20,
+                  p.value.snapshot.messages.length,
+                ),
+              }
+            : p,
+        ),
+      );
+      return;
+    }
+    const request = requests.begin();
+    setLoading(true);
+    setError("");
+    try {
+      let available = windows;
+      let next = nextWindow(available);
+      if (!next && moreWindows) {
+        available = await onMoreWindows();
+        next = nextWindow(available);
+      }
+      if (!request.current()) return;
+      if (!next) return;
+      const value = await read(
+        next.source.session_id!,
+        next.source.revision!,
+        request.signal,
+        next.source.digest,
+      );
+      if (!request.current()) return;
+      anchor.current = window.scrollY;
+      setParts((current) => [
+        ...current,
+        { value, visible: 20, segment: next.segment },
+      ]);
+    } catch (e) {
+      if (request.current() && !aborted(e)) setError(readableError(e));
+    } finally {
+      if (request.current()) setLoading(false);
+    }
+  }
+  const shown = parts.reduce(
+    (n, p) =>
+      n +
+      (filtered
+        ? p.value.snapshot.messages.length
+        : Math.min(p.visible, p.value.snapshot.messages.length)),
+    0,
+  );
   return (
-    <section
-      className={`
-        work-section transcript [&_li]:wrap-anywhere border-t border-line px-0 py-4
-        [&_h3]:mx-0 [&_h3]:mt-6 [&_h3]:mb-3 [&_h3]:text-lg [&_h3]:font-medium [&_h4]:mx-0
-        [&_h4]:mt-4 [&_h4]:mb-2 [&_h4]:text-sm [&_details]:mx-0 [&_details]:my-4
-        [&_summary]:cursor-pointer [&_summary]:px-0 [&_summary]:py-2 [&_.source-prose]:[font-family:inherit]
-        [&_.source-prose]:[font-size:inherit] [&_.source-prose]:[font-weight:inherit] [&_.source-prose]:leading-[1.65]
-        [&_.source-prose]:whitespace-pre-wrap [&_.source-prose]:max-w-[76ch]
-      `}
-      aria-label={translate("Запись сессии")}
-    >
-      <h2>{translate("Запись сессии агента")}</h2>
-
-      <form
-        className="revision-form flex flex-wrap items-end gap-3 mx-0 my-4 [&_label]:max-w-45 [&_label]:m-0 [&_input]:w-full"
-        onSubmit={select}
-      >
-        <label>
-          {translate("Ревизия сессии")}
-          <input
-            type="number"
-            min="1"
-            max="1000000000"
-            step="1"
-            required
-            value={revision}
-            onChange={(e) => setRevision(e.target.value)}
-          />
-        </label>
-        <button className={buttonStyles.secondary} disabled={loading}>
-          {translate("Открыть версию")}
-        </button>
-        <button
-          type="button"
-          className={buttonStyles.secondary}
-          disabled={loading}
-          onClick={() => void load()}
-        >
-          {translate("Последняя версия")}
-        </button>
-      </form>
+    <section className="transcript min-w-0" aria-label={t("Запись сессии")}>
+      <header className="mb-5 flex flex-wrap items-start justify-between gap-3 border-b border-line pb-4">
+        <div>
+          <h2 className="mb-1">{t("Диалог с агентом")}</h2>
+          {first && (
+            <p className="mb-0 text-xs text-muted">
+              {first.snapshot.agent.name} · {date(first.snapshot.started_at)}
+              {first.snapshot.agent.model &&
+              !["unknown", "unreported", "no-model-needed"].includes(
+                first.snapshot.agent.model,
+              )
+                ? ` · ${first.snapshot.agent.model}`
+                : ""}
+            </p>
+          )}
+        </div>
+        <span className="text-xs text-muted" role="status">
+          {t("Загружено сообщений: {0}", shown)}
+        </span>
+      </header>
       <ErrorNotice>{error}</ErrorNotice>
-      {loading && <p role="status">{translate("Читаем запись сессии…")}</p>}
-      {s && value && (
+      {!first && loading && <p role="status">{t("Читаем запись сессии…")}</p>}
+      {first && (
         <>
-          <dl className={sharedStyles.sourceDetails}>
-            <dt>{translate("Сессия")}</dt>
-            <dd className="mono font-mono text-xs wrap-anywhere">
-              {s.session_id}
-            </dd>
-            <dt>{translate("Ревизия")}</dt>
-            <dd>{s.revision}</dd>
-            <dt>{translate("Агент / модель")}</dt>
-            <dd>
-              {s.agent.name} / {s.agent.model}
-            </dd>
-            <dt>
-              {s.origin?.time_kind === "checkpoint_created"
-                ? "Checkpoint"
-                : s.origin?.time_kind === "commit_recorded"
-                  ? translate("Время коммита")
-                  : translate("Начало")}
-            </dt>
-            <dd>{date(s.started_at)}</dd>
-            {s.ended_at && (
-              <>
-                <dt>{translate("Окончание")}</dt>
-                <dd>{date(s.ended_at)}</dd>
-              </>
+          <div className="mb-5 flex flex-wrap items-center gap-3">
+            <label className="m-0 min-w-40 flex-1">
+              <span className="sr-only">{t("Найти в загруженных частях")}</span>
+              <input
+                className="w-full text-sm"
+                type="search"
+                placeholder={t("Найти в загруженных частях")}
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </label>
+            <label className="m-0 flex min-h-11 items-center gap-2 text-sm font-normal">
+              <input
+                type="checkbox"
+                checked={dialogueOnly}
+                onChange={(e) => setDialogueOnly(e.target.checked)}
+              />
+              {t("Только переписка")}
+            </label>
+          </div>
+          <div className="conversation-timeline mx-auto grid w-full max-w-240 gap-5">
+            {parts.map((part, i) => {
+              const items = conversationItems(
+                part.value.snapshot.messages,
+                filtered ? part.value.snapshot.messages.length : part.visible,
+                dialogueOnly,
+                query,
+              );
+              return (
+                <section
+                  className="conversation-part min-w-0 space-y-4"
+                  key={part.value.snapshot.session_id}
+                  aria-label={t("Часть {0}", part.segment)}
+                >
+                  {i > 0 && (
+                    <h3 className="my-6 border-y border-line py-3 text-center text-xs font-normal text-muted">
+                      {t("Продолжение диалога · часть {0}", part.segment)}
+                    </h3>
+                  )}
+                  {items.map((item) => (
+                    <ConversationMessage key={item.key} item={item} />
+                  ))}
+                  {!items.length && (
+                    <p className="text-sm text-muted">
+                      {query
+                        ? t("В этой части совпадений нет.")
+                        : t("В этой части только действия инструментов.")}
+                    </p>
+                  )}
+                </section>
+              );
+            })}
+            {hasMore && (
+              <div className="border-t border-line pt-4">
+                <button
+                  className={buttonStyles.secondary + " w-full"}
+                  disabled={loading}
+                  onClick={() => void append()}
+                >
+                  {loading ? t("Загрузка…") : t("Загрузить ещё сообщения")}
+                </button>
+                <p className="mt-2 mb-0 text-center text-xs text-muted">
+                  {t("Новые сообщения появятся ниже.")}
+                </p>
+              </div>
             )}
-            <dt>Digest</dt>
-            <dd className="mono font-mono text-xs wrap-anywhere">
-              {value.digest}
-            </dd>
-          </dl>
-
-          <details>
-            <summary>
-              {translate("Коммиты, указанные агентом:")} {s.commits.length}
+          </div>
+          <details className="session-source mt-8 border-t border-line pt-3 text-sm">
+            <summary className="cursor-pointer py-2 text-muted">
+              {t("Сведения об источнике")}
             </summary>
-            <ul className="source-links wrap-anywhere pl-5 [&_li_>_span]:block">
-              {s.commits.map((sha) => (
-                <li key={sha}>
+            <dl className={sharedStyles.sourceDetails}>
+              <dt>{t("Сессия")}</dt>
+              <dd className="font-mono">{first.snapshot.session_id}</dd>
+              <dt>{t("Ревизия")}</dt>
+              <dd>{first.snapshot.revision}</dd>
+              <dt>Digest</dt>
+              <dd className="font-mono">{first.digest}</dd>
+            </dl>
+            <form
+              onSubmit={select}
+              className="my-4 flex flex-wrap items-end gap-3"
+            >
+              <label className="m-0 max-w-40">
+                {t("Ревизия сессии")}
+                <input
+                  className="mt-2 w-full"
+                  type="number"
+                  min="1"
+                  max="1000000000"
+                  required
+                  value={revision}
+                  onChange={(e) => setRevision(e.target.value)}
+                />
+              </label>
+              <button className={buttonStyles.secondary} disabled={loading}>
+                {t("Открыть версию")}
+              </button>
+              <button
+                type="button"
+                className={buttonStyles.secondary}
+                disabled={loading}
+                onClick={() => void load()}
+              >
+                {t("Последняя версия")}
+              </button>
+            </form>
+            <details className="my-3">
+              <summary className="py-2">
+                {t("Коммиты, указанные агентом:")}{" "}
+                {first.snapshot.commits.length}
+              </summary>
+              <div className="flex flex-wrap gap-2">
+                {first.snapshot.commits.map((sha) => (
                   <button
-                    className={`
-                      text-button mono px-0 py-1 min-h-8 bg-transparent border-0 text-accent justify-start font-mono
-                      text-xs wrap-anywhere [&.mono]:whitespace-normal [&.mono]:text-left
-                      [&.mono]:wrap-anywhere [&.mono]:max-w-full
-                    `}
+                    key={sha}
+                    className={buttonStyles.text + " font-mono"}
+                    title={sha}
                     onClick={() =>
                       onNavigate({
                         project_id: selection.project_id,
-                        repository_id: s.repository_id,
+                        repository_id: first.snapshot.repository_id,
                         commit_sha: sha,
                       })
                     }
                   >
-                    {sha}
+                    {sha.slice(0, 10)} ·{" "}
+                    {first.confirmed_commits.includes(sha)
+                      ? t("Подтверждён провайдером")
+                      : t("Коммит ещё не проверен")}
                   </button>
-                  <span className="small text-sm">
-                    {value.confirmed_commits.includes(sha)
-                      ? translate("Подтверждён провайдером")
-                      : translate("Коммит ещё не проверен")}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </details>
-          <details>
-            <summary>
-              {translate("Пути, указанные агентом:")} {s.files.length}
-            </summary>
-            <p className="small muted text-muted text-sm">
-              {translate(
-                "Это пути из записи агента; наличие файла в репозитории проверяется отдельно.",
-              )}
-            </p>
-            <ul>
-              {s.files.map((file) => (
-                <li className="mono font-mono text-xs wrap-anywhere" key={file}>
-                  {file}
-                </li>
-              ))}
-            </ul>
-          </details>
-          {s.origin && (
-            <ImportOriginView key={value.digest} origin={s.origin} />
-          )}
-          <h3>
-            {translate("Сообщения")} {offset + 1}–
-            {Math.min(offset + 20, s.messages.length)} {translate("из")}{" "}
-            {s.messages.length}
-          </h3>
-          {s.messages.slice(offset, offset + 20).map((m, i) => (
-            <article
-              className={`
-                transcript-message mx-0 my-4 [&_pre]:font-mono [&_pre]:text-sm [&_pre]:leading-[1.65]
-                [&_pre]:whitespace-pre-wrap [&_pre]:wrap-anywhere [&_pre]:max-h-[32rem] [&_pre]:overflow-auto
-                [&_pre]:p-4 [&_pre]:bg-paper [&_pre]:border border-line
-              `}
-              key={offset + i}
-            >
-              <h4>
-                {offset + i + 1}.{" "}
-                {m.kind === "provenance_report"
-                  ? translate("заявление источника Git AI")
-                  : m.kind === "import_notice"
-                    ? translate("сведения об импорте")
-                    : m.role}
-                {m.tool_name ? ` / ${m.tool_name}` : ""}
-                {m.kind === "agent_summary"
-                  ? translate(" / резюме агента")
-                  : ""}
-              </h4>
-              <pre tabIndex={0}>
-                {m.text || translate("(пустое сообщение)")}
-              </pre>
-            </article>
-          ))}
-          <div className="transcript-pages flex flex-wrap items-end gap-3 mx-0 my-4">
-            {offset > 0 && (
-              <button
-                className={buttonStyles.secondary}
-                onClick={() => setOffset(Math.max(0, offset - 20))}
-              >
-                {translate("Предыдущие сообщения")}
-              </button>
+                ))}
+              </div>
+            </details>
+            <details className="my-3">
+              <summary className="py-2">
+                {t("Пути, указанные агентом:")} {first.snapshot.files.length}
+              </summary>
+              <ul className="pl-5 font-mono text-xs wrap-anywhere">
+                {first.snapshot.files.map((file) => (
+                  <li key={file}>{file}</li>
+                ))}
+              </ul>
+            </details>
+            {first.snapshot.origin && (
+              <ImportOriginView
+                key={first.digest}
+                origin={first.snapshot.origin}
+              />
             )}
-            {offset + 20 < s.messages.length && (
-              <button
-                className={buttonStyles.secondary}
-                onClick={() => setOffset(offset + 20)}
-              >
-                {translate("Следующие сообщения")}
-              </button>
-            )}
-          </div>
+          </details>
         </>
       )}
     </section>

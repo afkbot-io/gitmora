@@ -147,6 +147,7 @@ async function exerciseImportedOrigin() {
   };
   assert.equal((await api("/v1/captures", snapshot)).status, 201);
   await openSession(id);
+  await page.locator(".session-source > summary").click();
   const origin = page.getByRole("region", { name: "Происхождение импорта" });
   await visible(
     origin.getByRole("heading", { name: "Импорт: Git AI", exact: true }),
@@ -217,13 +218,45 @@ try {
   await visible(transcript.getByText("<img src=x", { exact: false }));
   assert.equal(await transcript.locator("img").count(), 0);
   assert.equal(await page.evaluate(() => window.untrustedExecuted), undefined);
+  // Append keeps exact earlier messages and the scroll position, with tools collapsed.
+  assert.equal(await transcript.locator(".tool-activity[open]").count(), 0);
+  assert.equal(
+    await transcript.locator('[data-message-index="20"]').count(),
+    1,
+  );
+  const firstNode = await transcript
+    .locator(".transcript-message")
+    .first()
+    .elementHandle();
+  for (const end of [40, 60, 65]) {
+    const more = transcript.getByRole("button", {
+      name: "Загрузить ещё сообщения",
+      exact: true,
+    });
+    await more.scrollIntoViewIfNeeded();
+    const before = await page.evaluate(() => scrollY);
+    await more.click();
+    assert.equal(
+      await transcript.locator(`[data-message-index="${end}"]`).count(),
+      1,
+    );
+    assert(await firstNode.evaluate((node) => node.isConnected));
+    assert(
+      Math.abs((await page.evaluate(() => scrollY)) - before) < 4,
+      "append moved reading position",
+    );
+  }
   await transcript
-    .getByRole("button", { name: "Следующие сообщения", exact: true })
+    .locator(".tool-activity")
+    .first()
+    .locator(":scope > summary")
     .click();
-  await visible(transcript.getByText("QuotedToolMessage 24", { exact: true }));
-  await transcript
-    .getByRole("button", { name: "Предыдущие сообщения", exact: true })
-    .click();
+  const tool = transcript.locator(".tool-entry").first();
+  await tool.locator(":scope > summary").click();
+  await visible(
+    tool.locator("pre").filter({ hasText: /^git status --short$/ }),
+  );
+  await transcript.locator(".session-source > summary").click();
   await transcript.getByLabel("Ревизия сессии", { exact: true }).fill("1");
   await transcript
     .getByRole("button", { name: "Открыть версию", exact: true })
@@ -237,23 +270,25 @@ try {
     .getByRole("button", { name: "Последняя версия", exact: true })
     .click();
   await visible(transcript.getByText("<img src=x", { exact: false }));
+  await transcript.getByLabel("Только переписка", { exact: true }).check();
+  assert.equal(await transcript.locator(".tool-activity").count(), 0);
+  // Dialogue-only skips tool pages; the next verified part appends directly.
+  for (let i = 0; i < 7; i++)
+    await transcript
+      .getByRole("button", { name: "Загрузить ещё сообщения", exact: true })
+      .click();
+  await visible(transcript.getByText("Archive marker 7", { exact: true }));
+  assert.equal(await transcript.locator(".conversation-part").count(), 8);
+  await transcript.getByLabel("Только переписка", { exact: true }).uncheck();
   await auditUI(page, "history-session", { enabled: true });
-  const continuation = page.locator(".context-detail details").filter({
-    has: page.locator("summary").filter({ hasText: "Продолжение сессии" }),
+  await page.screenshot({
+    path: "output/playwright/history-conversation.png",
+    fullPage: false,
   });
-  await continuation.locator("summary").click();
-  await continuation
-    .getByRole("button", { name: "Следующие сессии", exact: true })
-    .click();
-  await visible(
-    continuation.getByRole("button").filter({ hasText: "Сегмент 7" }),
-  );
-  assert.equal(await continuation.getAttribute("open"), "");
-  await auditUI(page, "history-continuation-page", { enabled: true });
   await exerciseImportedOrigin();
   await click("Назад к поиску");
-  await visible(page.getByRole("searchbox"));
-  await page.getByRole("searchbox").fill("abcdef0");
+  await visible(page.locator(".context-view #search"));
+  await page.locator(".context-view #search").fill("abcdef0");
   await click("Найти");
   await visible(
     page.getByRole("alert").filter({ hasText: "Вставьте полный SHA" }),

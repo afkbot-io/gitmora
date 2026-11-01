@@ -84,7 +84,11 @@ def main():
         assert call("/v1/captures", capture)[0] == 201
         capture.update(revision=2, messages=[dict(role="assistant", text=text)])
         if args.history:
-            capture["messages"] += [dict(role="tool", tool_name="bash", text=f"QuotedToolMessage {i}") for i in range(25)]
+            capture["messages"] += [dict(role="tool", tool_name="bash", text=f"QuotedToolMessage {i}") for i in range(64)]
+            capture["messages"][1] = dict(role="tool", tool_name="Bash", text=json.dumps(dict(cmd="git status --short", output="M web/src/views/history/SessionTranscript.tsx", exit_code=0)))
+        if args.history:
+            capture["messages"][0] = dict(role="user", text="Проверь авторизацию и обнови CLI. Сохрани совместимость.\n\n<img src=x onerror=window.untrustedExecuted=true>\n[unsafe](javascript:alert(1))\n![remote image](https://tracking.invalid/pixel)")
+            capture["messages"][2] = dict(role="assistant", text="## Проверка refreshToken\n\nПроверю настройки сервера и запись сессий. Результаты будут привязаны к коммиту.\n\n- Вход через браузер\n- Отправка истории через CLI\n\n```sh\ngitmora auth status --server https://gitmora.example.com\n```\n\n| Компонент | Результат |\n| --- | --- |\n| CLI | Готово |\n| MCP | Готово |")
         assert call("/v1/captures", capture)[0] == 201
         if args.history:
             digest = call(f'/v1/repositories/{identity["repository_id"]}/sessions/{session}')[1]["digest"]
