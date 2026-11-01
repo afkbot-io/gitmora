@@ -218,7 +218,7 @@ verify-ui:
 	GITMORA_UI_AUDIT=1 $(MAKE) smoke-design smoke-web smoke-work smoke-settings smoke-credentials smoke-cli-consent smoke-registration
 
 # Source-backed Tasktopia gates additionally require TASKTOPIA_SOURCE and Node 24+; see development.md.
-verify-release: smoke-github smoke-github-ui verify verify-linux smoke-cli-auth test-native-secret-store-linux smoke-forge-subpath smoke-gitlab-profile smoke-onboarding smoke-design smoke-browser-compat
+verify-release: smoke-github-profile smoke-github smoke-github-ui verify verify-linux smoke-cli-auth test-native-secret-store-linux smoke-forge-subpath smoke-gitlab-profile smoke-onboarding smoke-design smoke-browser-compat
 
 smoke-browser-compat: build test-web build-postgres-image
 	mkdir -p bin/verification
@@ -249,3 +249,7 @@ smoke-github-ui: build test-web build-postgres-image
 smoke-load: build build-postgres-image
 	docker compose -f compose.test.yaml up -d --wait
 	python3 scripts/smoke-load.py --output build/load/report.json
+
+.PHONY: smoke-github-profile
+smoke-github-profile:
+	python3 scripts/smoke-github-profile.py
