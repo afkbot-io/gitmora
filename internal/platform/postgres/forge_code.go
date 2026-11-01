@@ -33,11 +33,11 @@ func (s *ForgeStore) ClaimCode(ctx context.Context) (application.CodeWork, bool,
 		return w, false, err
 	}
 	defer tx.Rollback(ctx)
-	err = tx.QueryRow(ctx, `SELECT r.id::text,r.gitlab_url,r.gitlab_project_id,c.generation,c.secret_envelope FROM forge_connections c JOIN repositories r ON r.id=c.repository_id
+	err = tx.QueryRow(ctx, `SELECT r.id::text,r.gitlab_url,r.gitlab_project_id,r.provider,c.generation,c.secret_envelope FROM forge_connections c JOIN repositories r ON r.id=c.repository_id
  WHERE c.enabled AND NOT c.blocked AND NOT c.code_blocked AND c.code_next_at<=now() AND (c.code_lease_until IS NULL OR c.code_lease_until<=now())
  AND (EXISTS(SELECT 1 FROM forge_code_runs x WHERE x.repository_id=c.repository_id AND `+codeRunDue+`)
  OR(c.code_probe_at<=now() AND EXISTS(SELECT 1 FROM forge_code_snapshots f JOIN forge_code_runs x ON x.repository_id=f.repository_id AND x.sha=f.sha WHERE f.repository_id=c.repository_id AND x.provider_available)))
- ORDER BY c.code_next_at,c.repository_id LIMIT 1 FOR UPDATE OF c SKIP LOCKED FOR SHARE OF r`).Scan(&w.Repository.ID, &w.Repository.BaseURL, &w.Repository.ProjectID, &w.Generation, &w.Envelope)
+ ORDER BY c.code_next_at,c.repository_id LIMIT 1 FOR UPDATE OF c SKIP LOCKED FOR SHARE OF r`).Scan(&w.Repository.ID, &w.Repository.BaseURL, &w.Repository.ProjectID, &w.Repository.Provider, &w.Generation, &w.Envelope)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return w, false, nil
 	}
@@ -85,7 +85,7 @@ func (s *ForgeStore) FinishCode(ctx context.Context, w application.CodeWork, out
 	}
 	defer tx.Rollback(ctx)
 	var repo string
-	err = tx.QueryRow(ctx, `SELECT c.repository_id::text FROM forge_connections c JOIN repositories r ON r.id=c.repository_id WHERE c.repository_id=$1 AND c.enabled AND NOT c.blocked AND NOT c.code_blocked AND c.generation=$2 AND c.code_lease_owner=$3 AND c.code_lease_until>now() AND r.gitlab_url=$4 AND r.gitlab_project_id=$5 FOR UPDATE OF c FOR SHARE OF r`, w.Repository.ID, w.Generation, w.Owner, w.Repository.BaseURL, w.Repository.ProjectID).Scan(&repo)
+	err = tx.QueryRow(ctx, `SELECT c.repository_id::text FROM forge_connections c JOIN repositories r ON r.id=c.repository_id WHERE c.repository_id=$1 AND c.enabled AND NOT c.blocked AND NOT c.code_blocked AND c.generation=$2 AND c.code_lease_owner=$3 AND c.code_lease_until>now() AND r.gitlab_url=$4 AND r.gitlab_project_id=$5 AND r.provider=$6 FOR UPDATE OF c FOR SHARE OF r`, w.Repository.ID, w.Generation, w.Owner, w.Repository.BaseURL, w.Repository.ProjectID, w.Repository.Provider).Scan(&repo)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.ErrConflict
 	}

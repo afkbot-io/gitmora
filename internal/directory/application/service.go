@@ -7,10 +7,12 @@ import (
 
 	"workgraph.local/platform/internal/access"
 	"workgraph.local/platform/internal/directory/domain"
+	"workgraph.local/platform/internal/endpoint"
 )
 
 // Store reauthorizes every operation and commits a command receipt atomically with its state change.
 type Store interface {
+	AuthorizeRepositoryCreate(context.Context, access.Principal, string) error
 	Apply(context.Context, access.Principal, domain.Command) (domain.Receipt, bool, error)
 	Me(context.Context, access.Principal) (domain.Me, error)
 	Projects(context.Context, access.Principal, domain.Cursor) (domain.Page[domain.Project], error)
@@ -27,11 +29,39 @@ type Store interface {
 
 // Service normalizes writes and coordinates hash-only credential issuance. Reads retain storage reauthorization.
 type Service struct {
-	store Store
-	now   func() time.Time
+	store    Store
+	now      func() time.Time
+	resolver RepositoryResolver
 }
 
-func NewService(store Store, now func() time.Time) *Service { return &Service{store, now} }
+func NewService(store Store, now func() time.Time) *Service { return &Service{store: store, now: now} }
+
+// RepositoryResolver reads public provider metadata without receiving user credentials.
+type RepositoryResolver interface {
+	LookupRepository(context.Context, string) (domain.ResolvedRepository, error)
+}
+
+// WithRepositoryResolver installs the optional public GitHub lookup adapter during construction.
+func (s *Service) WithRepositoryResolver(resolver RepositoryResolver) *Service {
+	s.resolver = resolver
+	return s
+}
+
+// LookupRepository authorizes current catalog administration before external I/O.
+// Its resolved ID is included in the later immutable command, so uncertain retries never re-resolve it.
+func (s *Service) LookupRepository(ctx context.Context, p access.Principal, project, raw string) (domain.ResolvedRepository, error) {
+	url, ok := endpoint.GitHubRepository(raw)
+	if !ok {
+		return domain.ResolvedRepository{}, domain.ErrInvalid
+	}
+	if err := s.store.AuthorizeRepositoryCreate(ctx, p, project); err != nil {
+		return domain.ResolvedRepository{}, err
+	}
+	if s.resolver == nil {
+		return domain.ResolvedRepository{}, domain.ErrProviderUnavailable
+	}
+	return s.resolver.LookupRepository(ctx, url)
+}
 func (s *Service) Apply(ctx context.Context, p access.Principal, c domain.Command) (domain.Receipt, bool, error) {
 	c, e := domain.Normalize(c)
 	if e != nil {

@@ -164,6 +164,8 @@ func NormalizeDeployment(d Deployment) (Deployment, error) {
 
 // MRCommitPage is a guarded source-commit page or a replacement for a concurrently changed diff.
 type MRCommitPage struct {
+	// Truncated records a provider cap without certifying a complete commit set.
+	Truncated   bool
 	Commits     []string
 	NextPage    int
 	Replacement *MergeRequest

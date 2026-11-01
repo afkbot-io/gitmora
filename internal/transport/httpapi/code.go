@@ -26,7 +26,7 @@ func registerCode(mux *http.ServeMux, config Config) {
 	wrap := func(permission access.Permission, next func(http.ResponseWriter, *http.Request, access.Principal)) http.HandlerFunc {
 		return authorize(config.Authenticator, permission, func(w http.ResponseWriter, r *http.Request, p access.Principal) {
 			if config.Code == nil {
-				writeError(w, 503, "integration_unconfigured", "GitLab code ingestion is not configured")
+				writeError(w, 503, "integration_unconfigured", "Repository code ingestion is not configured")
 				return
 			}
 			if r.URL.RawQuery != "" {

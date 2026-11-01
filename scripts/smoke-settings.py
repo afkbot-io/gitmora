@@ -26,12 +26,14 @@ def module(name, file):
 
 api = module("api_settings", "scripts/smoke-api.py")
 forge = module("forge_settings", "scripts/smoke-forge.py")
+github_fixture = module("github_settings", "scripts/github-fixture.py")
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--serve", action="store_true")
     parser.add_argument("--design", action="store_true")
+    parser.add_argument("--github", action="store_true")
     args = parser.parse_args()
     schema = "settings_smoke_" + uuid.uuid4().hex
     api.sql(f'CREATE SCHEMA "{schema}"')
@@ -42,6 +44,11 @@ def main():
     environment.update(WORKGRAPH_DATABASE_URL=api.BASE_DSN + "&search_path=" + schema,
                        WORKGRAPH_ENCRYPTION_KEYS=json.dumps({"test": base64.b64encode(bytes([3]) * 32).decode()}),
                        WORKGRAPH_ENCRYPTION_ACTIVE_KEY="test", WORKGRAPH_GITLAB_ALLOWLIST=gitlab)
+    github_provider = None
+    if args.github:
+        github_provider = http.server.ThreadingHTTPServer(("127.0.0.1", 0), github_fixture.GitHubFixture)
+        threading.Thread(target=github_provider.serve_forever, daemon=True).start()
+        environment.update(WORKGRAPH_GITHUB_ENABLED="true", WORKGRAPH_GITHUB_API_URL=f"http://127.0.0.1:{github_provider.server_port}")
     process = fixture = None
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
@@ -78,11 +85,14 @@ def main():
             write_key = api.command(["issue-token", "--user-id", identity["user_id"], "--scopes", "directory:read,integration:manage"], environment)
             assert write_key.returncode == 0
             payload["write_only_token"] = json.loads(write_key.stdout)["token"]
-            result = subprocess.run(["node", "scripts/smoke-design.mjs" if args.design else "scripts/smoke-settings.mjs"], input=json.dumps(payload), text=True, env=environment, cwd=ROOT, timeout=600 if args.design or os.environ.get("GITMORA_UI_AUDIT") == "1" else 180)
+            result = subprocess.run(["node", "scripts/smoke-github.mjs" if args.github else "scripts/smoke-design.mjs" if args.design else "scripts/smoke-settings.mjs"], input=json.dumps(payload), text=True, env=environment, cwd=ROOT, timeout=600 if args.design or os.environ.get("GITMORA_UI_AUDIT") == "1" else 180)
             assert result.returncode == 0, "Browser setup workflow failed"
     except KeyboardInterrupt:
         pass
     finally:
+        if github_provider is not None:
+            github_provider.shutdown()
+            github_provider.server_close()
         provider.shutdown()
         provider.server_close()
         for child in [process, fixture]:

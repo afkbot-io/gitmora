@@ -378,3 +378,57 @@ func TestUnavailableStreamRetainsIncompleteStateWhileCommitVerificationContinues
 		}
 	}
 }
+
+func TestTruncatedProviderCommitSetNeverPublishesCompletionOrLineage(t *testing.T) {
+	service, store, pool, _ := forgeFixture(t)
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, "UPDATE memberships SET role='admin' WHERE user_id=$1", subject); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Connect(ctx, subject, repository, providerSecrets()); err != nil {
+		t.Fatal(err)
+	}
+	lease, found, err := store.Claim(ctx)
+	if err != nil || !found {
+		t.Fatal("missing lease", err)
+	}
+	model := domain.MergeRequest{ID: 107, IID: 7, ProjectID: 42, SourceProjectID: 42, State: "merged", UpdatedAt: time.Now(), Head: strings.Repeat("a", 40), Base: strings.Repeat("b", 40), Start: strings.Repeat("b", 40), Merge: strings.Repeat("c", 40)}
+	applied := false
+	for range 12 {
+		unit, found, err := store.NextMetadata(ctx, lease)
+		if err != nil || !found {
+			t.Fatal("missing metadata unit", err)
+		}
+		if unit.MR != nil {
+			if unit.MR.Stage == "detail" {
+				err = store.ApplyMR(ctx, lease, unit, &model)
+			} else {
+				err = store.ApplyMRCommits(ctx, lease, unit, domain.MRCommitPage{Commits: []string{model.Head}, Truncated: true})
+				applied = true
+			}
+		} else {
+			page := domain.ChangePage{}
+			if unit.Cursor.Kind == domain.MergeRequests {
+				page.MergeRequests = []domain.MRHint{{IID: 7, UpdatedAt: model.UpdatedAt}}
+			}
+			err = store.ApplyChanges(ctx, lease, unit, page)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if applied {
+			break
+		}
+	}
+	if !applied {
+		t.Fatal("commit page was not exercised")
+	}
+	view, err := store.ReadMR(ctx, subject, repository, forgeapp.MetadataQuery{IID: 7})
+	if err != nil || view.CommitsComplete || len(view.Results) != 0 {
+		t.Fatal("partial set became complete", view, err)
+	}
+	var count int
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM forge_commit_lineage WHERE repository_id=$1", repository).Scan(&count); err != nil || count != 0 {
+		t.Fatal("partial set published lineage", count, err)
+	}
+}

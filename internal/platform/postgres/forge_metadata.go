@@ -14,8 +14,16 @@ import (
 )
 
 func resetMetadata(ctx context.Context, tx pgx.Tx, repository string) error {
+	var provider string
+	if err := tx.QueryRow(ctx, "SELECT provider FROM repositories WHERE id=$1", repository).Scan(&provider); err != nil {
+		return err
+	}
+	kinds := []string{"merge_requests", "pipelines", "child_pipelines", "deployments"}
+	if provider == "github" {
+		kinds = kinds[:2]
+	}
 	_, err := tx.Exec(ctx, `INSERT INTO forge_sync_streams(repository_id,kind) SELECT $1,kind FROM unnest($2::text[]) kind
- ON CONFLICT(repository_id,kind) DO UPDATE SET version=forge_sync_streams.version+1,watermark='1970-01-01 UTC',cycle_after=NULL,cycle_before=NULL,next_page=1,last_complete_at=NULL,full_due_at=now(),retry_at='1970-01-01 UTC',last_error_code=NULL,refresh_requested=false`, repository, []string{"merge_requests", "pipelines", "child_pipelines", "deployments"})
+ ON CONFLICT(repository_id,kind) DO UPDATE SET version=forge_sync_streams.version+1,watermark='1970-01-01 UTC',cycle_after=NULL,cycle_before=NULL,next_page=1,last_complete_at=NULL,full_due_at=now(),retry_at='1970-01-01 UTC',last_error_code=NULL,refresh_requested=false`, repository, kinds)
 	return err
 }
 
@@ -46,6 +54,9 @@ func (s *ForgeStore) NextMetadata(ctx context.Context, lease application.Lease) 
 				unit = application.MetadataWork{Lane: candidate, MR: job}
 				found = true
 				return nil
+			}
+			if lease.Repository.Provider == "github" && (candidate == 2 || candidate == 3) {
+				continue
 			}
 			kind := domain.StreamKinds()[candidate]
 			var due bool
@@ -283,6 +294,12 @@ func (s *ForgeStore) ApplyMRCommits(ctx context.Context, lease application.Lease
 		}
 		if _, err := tx.Exec(ctx, `INSERT INTO forge_mr_commits(repository_id,iid,code_key,source_project_id,sha) SELECT $1,$2,$3,$4,sha FROM unnest($5::text[]) sha ON CONFLICT DO NOTHING`, lease.Repository.ID, model.IID, model.CodeKey(), model.SourceProjectID, page.Commits); err != nil {
 			return err
+		}
+		if page.Truncated {
+			if _, err := tx.Exec(ctx, "UPDATE forge_mr_jobs SET available_at=now()+interval '15 minutes' WHERE repository_id=$1 AND iid=$2", lease.Repository.ID, model.IID); err != nil {
+				return err
+			}
+			return advanceLane(ctx, tx, lease, unit.Lane)
 		}
 		if page.NextPage != 0 {
 			if _, err := tx.Exec(ctx, "UPDATE forge_mr_jobs SET next_page=$3,version=version+1 WHERE repository_id=$1 AND iid=$2", lease.Repository.ID, model.IID, page.NextPage); err != nil {

@@ -17,13 +17,14 @@ import (
 )
 
 var (
-	ErrInvalid      = errors.New("invalid directory input")
-	ErrNotFound     = errors.New("directory entry unavailable")
-	ErrConflict     = errors.New("directory version or identity conflict")
-	ErrRetired      = errors.New("directory identity retired")
-	ErrLastAdmin    = errors.New("last enabled project administrator")
-	ErrLastOperator = errors.New("last enabled installation operator")
-	ErrDelegation   = errors.New("credential delegation exceeds parent grant")
+	ErrInvalid             = errors.New("invalid directory input")
+	ErrNotFound            = errors.New("directory entry unavailable")
+	ErrConflict            = errors.New("directory version or identity conflict")
+	ErrRetired             = errors.New("directory identity retired")
+	ErrLastAdmin           = errors.New("last enabled project administrator")
+	ErrLastOperator        = errors.New("last enabled installation operator")
+	ErrDelegation          = errors.New("credential delegation exceeds parent grant")
+	ErrProviderUnavailable = errors.New("repository lookup unavailable")
 )
 
 // MaxVersion keeps directory versions/cursors exact in JavaScript clients.
@@ -50,17 +51,20 @@ const (
 
 // Command is an internal discriminated union. HTTP uses separate strict body types and route-owned actions/identities.
 type Command struct {
-	RequestID       string  `json:"request_id"`
-	Action          Action  `json:"action"`
-	ProjectID       string  `json:"project_id,omitempty"`
-	EntityID        string  `json:"entity_id"`
-	ExpectedVersion int64   `json:"expected_version,omitempty"`
-	Name            *string `json:"name,omitempty"`
-	GitLabURL       string  `json:"gitlab_url,omitempty"`
-	GitLabProjectID int64   `json:"gitlab_project_id,omitempty"`
-	Role            string  `json:"role,omitempty"`
-	Enabled         *bool   `json:"enabled,omitempty"`
-	Operator        *bool   `json:"operator,omitempty"`
+	RequestID            string  `json:"request_id"`
+	Action               Action  `json:"action"`
+	ProjectID            string  `json:"project_id,omitempty"`
+	EntityID             string  `json:"entity_id"`
+	ExpectedVersion      int64   `json:"expected_version,omitempty"`
+	Name                 *string `json:"name,omitempty"`
+	GitLabURL            string  `json:"gitlab_url,omitempty"`
+	GitLabProjectID      int64   `json:"gitlab_project_id,omitempty"`
+	Provider             string  `json:"provider,omitempty"`
+	ProviderURL          string  `json:"provider_url,omitempty"`
+	ProviderRepositoryID int64   `json:"provider_repository_id,omitempty"`
+	Role                 string  `json:"role,omitempty"`
+	Enabled              *bool   `json:"enabled,omitempty"`
+	Operator             *bool   `json:"operator,omitempty"`
 }
 
 // Normalize rejects mixed commands and normalizes/redacts before command fingerprinting.
@@ -92,11 +96,20 @@ func Normalize(c Command) (Command, error) {
 		extra.Name = nil
 		extra.GitLabURL = ""
 		extra.GitLabProjectID = 0
-		base, ok := endpoint.GitLabBase(c.GitLabURL)
-		if !ok || c.GitLabProjectID < 1 {
-			return Command{}, ErrInvalid
+		extra.Provider, extra.ProviderURL, extra.ProviderRepositoryID = "", "", 0
+		if c.Provider == "github" {
+			base, ok := endpoint.GitHubRepository(c.ProviderURL)
+			if !ok || c.ProviderRepositoryID < 1 || c.GitLabURL != "" || c.GitLabProjectID != 0 {
+				return Command{}, ErrInvalid
+			}
+			c.ProviderURL = base
+		} else {
+			base, ok := endpoint.GitLabBase(c.GitLabURL)
+			if !ok || c.GitLabProjectID < 1 || c.Provider != "" || c.ProviderURL != "" || c.ProviderRepositoryID != 0 {
+				return Command{}, ErrInvalid
+			}
+			c.GitLabURL = base
 		}
-		c.GitLabURL = base
 	case RenameRepository:
 		requiredName = true
 		projectScoped = true
@@ -285,13 +298,24 @@ type Project struct {
 
 // Repository pins a Workgraph project and provider origin/numeric ID; only its display name can change.
 type Repository struct {
-	ID              string    `json:"id"`
-	ProjectID       string    `json:"project_id"`
-	Name            string    `json:"name"`
-	GitLabURL       string    `json:"gitlab_url"`
-	GitLabProjectID int64     `json:"gitlab_project_id"`
-	Version         int64     `json:"version"`
-	CreatedAt       time.Time `json:"created_at"`
+	ID                   string    `json:"id"`
+	ProjectID            string    `json:"project_id"`
+	Name                 string    `json:"name"`
+	GitLabURL            string    `json:"gitlab_url,omitempty"`
+	GitLabProjectID      int64     `json:"gitlab_project_id,omitempty"`
+	Provider             string    `json:"provider,omitempty"`
+	ProviderURL          string    `json:"provider_url,omitempty"`
+	ProviderRepositoryID int64     `json:"provider_repository_id,omitempty"`
+	Version              int64     `json:"version"`
+	CreatedAt            time.Time `json:"created_at"`
+}
+
+// ResolvedRepository is public provider identity, resolved before a versioned catalog command.
+type ResolvedRepository struct {
+	Provider string `json:"provider"`
+	URL      string `json:"provider_url"`
+	ID       int64  `json:"provider_repository_id"`
+	Name     string `json:"name"`
 }
 
 // User retains an opaque historical actor ID after logical deletion; enabling never restores revoked credentials.

@@ -202,7 +202,7 @@ export function TaskPanel({
 }
 
 const bases: Record<string, string> = {
-  explicit_provider_mr: "Явно выбранный MR GitLab",
+  explicit_provider_mr: "Явно выбранный MR/PR",
   captured_stream_commits: "Подтверждённые коммиты связанного потока сессии",
   capture_task_binding_and_confirmed_commit:
     "Привязка агента к задаче и подтверждённое членство коммита",
@@ -239,7 +239,7 @@ export function MRPanel({
       </h3>
       <p>
         {m.state} ·{" "}
-        <SourceLink url={m.url}>{translate("Открыть в GitLab")}</SourceLink>
+        <SourceLink url={m.url}>{translate("Открыть у провайдера")}</SourceLink>
       </p>
       <p className="small text-sm">
         {translate("Основание связи:")}{" "}
@@ -247,7 +247,7 @@ export function MRPanel({
       </p>
       <p className="small muted text-muted text-sm">
         {translate("Наблюдение")} {date(m.observed_at)}
-        {translate(". Обновлено в GitLab")} {date(m.provider_updated_at)}.
+        {translate(". Обновлено у провайдера")} {date(m.provider_updated_at)}.
       </p>
       {m.expected_head_matches === false && (
         <p
@@ -264,7 +264,7 @@ export function MRPanel({
         <dd className="mono font-mono text-xs wrap-anywhere">
           {m.observed_head_sha || translate("Нет наблюдаемого SHA")}
         </dd>
-        <dt>{translate("Проект источника GitLab")}</dt>
+        <dt>{translate("ID репозитория источника")}</dt>
         <dd>{observedNumber(m.source_project_id)}</dd>
         <dt>{translate("Наблюдение")}</dt>
         <dd className="mono font-mono text-xs wrap-anywhere">
@@ -302,8 +302,8 @@ export function MRPanel({
           </p>
           <p className="mono small font-mono text-xs wrap-anywhere">{p.sha}</p>
           <p className="small text-sm">
-            GitLab project {observedNumber(p.project_id)}, {p.ref},{" "}
-            {p.source ?? ""}.{" "}
+            {translate("ID репозитория источника")}{" "}
+            {observedNumber(p.project_id)}, {p.ref}, {p.source ?? ""}.{" "}
             {p.matches_observed_head
               ? translate("Совпадает с наблюдаемым head.")
               : translate("Не применяется к наблюдаемому head.")}{" "}
@@ -313,9 +313,7 @@ export function MRPanel({
       ))}
       {m.pipelines_have_more && (
         <p className="notice px-4 py-4 mx-0 my-3 text-muted">
-          {translate(
-            "Показана часть CI. Откройте MR в GitLab для полного списка.",
-          )}
+          {translate("Показана часть CI. Полный список доступен у провайдера.")}
         </p>
       )}
       <h4>{translate("Наблюдения deployment")}</h4>

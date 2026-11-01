@@ -1,12 +1,12 @@
 # Supported core scope
 
-The current product is development context, described by [requirements C01–C18](requirements.md) and the [architecture](system-analysis.md). Server/UI version is 0.2.1; the existing standalone client release is 0.2.0.
+The current product is development context, described by [requirements C01–C18](requirements.md) and the [architecture](system-analysis.md). Server/UI version is 0.3.0; the existing standalone client release is 0.2.0.
 
 | Area | Delivered behavior |
 | --- | --- |
 | Collection | Opt-in Codex/OpenCode adapters, sanitized immutable sessions, local SQLite queue and explicit disable/recovery. |
-| Git | Ordinary commit/push, existing hooks, linked worktrees and exact source windows; GitLab independently verifies commit/MR/CI metadata. |
-| Sources | GitLab API/webhooks, scoped Tasktopia MCP, versioned Entire/Git AI imports and preserved source provenance. |
+| Git | Ordinary commit/push, existing hooks, linked worktrees and exact source windows; GitLab/GitHub independently verify commit/MR/CI metadata. |
+| Sources | GitLab API/webhooks, GitHub.com API, scoped Tasktopia MCP, versioned Entire/Git AI imports and preserved source provenance. |
 | Search | PostgreSQL lexical retrieval, current authorization before results and exact version/fragment expansion. |
 | Agent access | JSON CLI actions and six read-only MCP context tools. AI work uses the external agent's own configuration. |
 | Accounts | Shared web/CLI account, cookie/CSRF browser sessions, native OS-store CLI roots and bounded revocable credentials. |

@@ -43,7 +43,7 @@ func TestForgeAPIOnlyMigrationPreservesExistingWebhookPolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 	var before, after string
-	if err := pool.QueryRow(ctx, "SELECT row_to_json(c)::text FROM forge_connections c WHERE repository_id=$1", repository).Scan(&before); err != nil {
+	if err := pool.QueryRow(ctx, "SELECT to_jsonb(c)::text FROM forge_connections c WHERE repository_id=$1", repository).Scan(&before); err != nil {
 		t.Fatal(err)
 	}
 	if err := postgres.Migrate(ctx, pool); err != nil {
@@ -52,8 +52,12 @@ func TestForgeAPIOnlyMigrationPreservesExistingWebhookPolicy(t *testing.T) {
 	if err := postgres.VerifySchema(ctx, pool); err != nil {
 		t.Fatal(err)
 	}
-	if err := pool.QueryRow(ctx, "SELECT row_to_json(c)::text FROM forge_connections c WHERE repository_id=$1", repository).Scan(&after); err != nil || before != after {
+	if err := pool.QueryRow(ctx, "SELECT (to_jsonb(c)-'anonymous')::text FROM forge_connections c WHERE repository_id=$1", repository).Scan(&after); err != nil || before != after {
 		t.Fatal("upgrade changed existing webhook authority or reconciliation state")
+	}
+	var anonymous bool
+	if err := pool.QueryRow(ctx, "SELECT anonymous FROM forge_connections WHERE repository_id=$1", repository).Scan(&anonymous); err != nil || anonymous {
+		t.Fatal("upgrade changed old token authentication", err)
 	}
 	if _, err := pool.Exec(ctx, "UPDATE forge_connections SET webhook_mode='disabled' WHERE repository_id=$1", repository); err != nil {
 		t.Fatal("upgrade did not admit explicit API-only policy", err)

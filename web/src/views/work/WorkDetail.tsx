@@ -93,7 +93,7 @@ export function WorkDetail({
           {!pack.merge_requests.items.length && (
             <p className="muted text-muted">
               {translate(
-                "Доступных подтверждённых связей с MR пока нет. Это не доказывает отсутствие MR в GitLab.",
+                "Подтверждённых связей с MR/PR пока нет. Проверьте состояние синхронизации репозитория.",
               )}
             </p>
           )}
@@ -170,9 +170,7 @@ export function WorkDetail({
         <>
           <p className="small muted text-muted text-sm">
             {translate("Прочитано")} {date(pack.read_at)}
-            {translate(
-              ". Данные отражают последние доступные наблюдения источников и не являются единым снимком GitLab и Tasktopia.",
-            )}
+            {translate(". Показаны последние доступные наблюдения источников.")}
           </p>
           {(pack.pending_sources_in_project > 0 ||
             pack.failed_sources_in_project > 0) && (

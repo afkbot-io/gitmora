@@ -347,14 +347,14 @@ try {
       .getByRole("region", { name: "Потоки синхронизации GitLab" })
       .or(page.locator(".stream-list")),
   );
-  assert((await call(`/v1/repositories/${repository}/gitlab`)).last_synced_at);
-  const apiOnly = await call(`/v1/repositories/${repository}/gitlab`);
+  assert((await call(`/v1/repositories/${repository}/forge`)).last_synced_at);
+  const apiOnly = await call(`/v1/repositories/${repository}/forge`);
   assert.equal(apiOnly.webhook_mode, "disabled");
   assert.equal(apiOnly.webhook_path, "");
   await visible(
     page.getByText("Только API, вебхуки отключены", { exact: true }),
   );
-  await click("Заменить ключи GitLab");
+  await click("Изменить соединение GitLab");
   assert.equal(await connectionMode.inputValue(), "disabled");
   await page
     .getByLabel("API-ключ GitLab", { exact: true })
@@ -365,10 +365,10 @@ try {
     .fill("synthetic-webhook-secret");
   await click("Проверить и сохранить GitLab");
   await visible(page.getByText("Секретный заголовок", { exact: true }));
-  const withHook = await call(`/v1/repositories/${repository}/gitlab`);
+  const withHook = await call(`/v1/repositories/${repository}/forge`);
   assert.equal(withHook.webhook_mode, "legacy");
   assert(withHook.webhook_path);
-  await click("Заменить ключи GitLab");
+  await click("Изменить соединение GitLab");
   assert.equal(await connectionMode.inputValue(), "legacy");
   await page
     .getByLabel("API-ключ GitLab", { exact: true })
@@ -384,7 +384,7 @@ try {
   const replacement = page.waitForRequest(
     (request) =>
       request.method() === "PUT" &&
-      request.url().endsWith(`/v1/repositories/${repository}/gitlab`),
+      request.url().endsWith(`/v1/repositories/${repository}/forge`),
   );
   await click("Проверить и сохранить GitLab");
   assert.deepEqual((await replacement).postDataJSON(), {
@@ -395,7 +395,7 @@ try {
     page.getByText("Только API, вебхуки отключены", { exact: true }),
   );
   assert.equal(
-    (await call(`/v1/repositories/${repository}/gitlab`)).webhook_path,
+    (await call(`/v1/repositories/${repository}/forge`)).webhook_path,
     "",
   );
   if (fixture.tasktopia) {
@@ -482,7 +482,7 @@ try {
   assert.equal(
     await readerPage
       .getByRole("button", {
-        name: /Настроить GitLab|Заменить ключи GitLab|Изменить Tasktopia|Добавить участника|Удалить проект/,
+        name: /Настроить GitLab|Изменить соединение GitLab|Изменить Tasktopia|Добавить участника|Удалить проект/,
       })
       .count(),
     0,
@@ -498,7 +498,7 @@ try {
   );
   await readerContext.close();
 
-  await click("Заменить ключи GitLab");
+  await click("Изменить соединение GitLab");
   await page
     .getByLabel("API-ключ GitLab", { exact: true })
     .fill("secret-that-must-clear");
@@ -544,7 +544,7 @@ try {
   await click("Отключить GitLab");
   await confirm("Отключить GitLab");
   assert.equal(
-    (await call(`/v1/repositories/${repository}/gitlab`)).enabled,
+    (await call(`/v1/repositories/${repository}/forge`)).enabled,
     false,
   );
   assert(

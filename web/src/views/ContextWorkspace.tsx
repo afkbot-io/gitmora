@@ -251,7 +251,7 @@ export function ContextWorkspace({
                           : hit.source.kind === "capture"
                             ? translate("Запись агента")
                             : hit.source.kind === "code"
-                              ? translate("Проверен blob GitLab")
+                              ? translate("Проверен Git blob")
                               : translate("Наблюдение Tasktopia")}
                       </span>
                     </span>

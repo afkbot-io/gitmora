@@ -42,46 +42,48 @@ func registerForge(mux *http.ServeMux, config Config) {
 			next(w, r, principal)
 		})
 	}
-	route := "/v1/repositories/{repository}/gitlab"
-	mux.HandleFunc("PUT "+route, admin(access.ManageIntegration, func(w http.ResponseWriter, r *http.Request, principal access.Principal) {
-		raw, ok := forgeBody(w, r, 16384)
-		if !ok {
-			return
-		}
-		var input domain.Secrets
-		if jsonwire.DecodeObject(raw, &input) != nil {
-			writeError(w, 400, "invalid_request", "Invalid provider configuration JSON")
-			return
-		}
-		result, err := config.Forge.Connect(r.Context(), principal.UserID, r.PathValue("repository"), input)
-		if err != nil {
-			forgeError(w, err)
-			return
-		}
-		writeJSON(w, 200, result)
-	}))
-	mux.HandleFunc("GET "+route, admin(access.ReadIntegration, func(w http.ResponseWriter, r *http.Request, principal access.Principal) {
-		result, err := config.Forge.Status(r.Context(), principal.UserID, r.PathValue("repository"))
-		if err != nil {
-			forgeError(w, err)
-			return
-		}
-		writeJSON(w, 200, result)
-	}))
-	mux.HandleFunc("DELETE "+route, admin(access.ManageIntegration, func(w http.ResponseWriter, r *http.Request, principal access.Principal) {
-		if err := config.Forge.Disconnect(r.Context(), principal.UserID, r.PathValue("repository")); err != nil {
-			forgeError(w, err)
-			return
-		}
-		w.WriteHeader(204)
-	}))
-	mux.HandleFunc("POST "+route+"/sync", admin(access.ManageIntegration, func(w http.ResponseWriter, r *http.Request, principal access.Principal) {
-		if err := config.Forge.RequestSync(r.Context(), principal.UserID, r.PathValue("repository")); err != nil {
-			forgeError(w, err)
-			return
-		}
-		writeJSON(w, 202, map[string]bool{"scheduled": true})
-	}))
+	// The catalog selects the provider; /gitlab remains a compatibility alias.
+	for _, route := range []string{"/v1/repositories/{repository}/gitlab", "/v1/repositories/{repository}/forge"} {
+		mux.HandleFunc("PUT "+route, admin(access.ManageIntegration, func(w http.ResponseWriter, r *http.Request, principal access.Principal) {
+			raw, ok := forgeBody(w, r, 16384)
+			if !ok {
+				return
+			}
+			var input domain.Secrets
+			if jsonwire.DecodeObject(raw, &input) != nil {
+				writeError(w, 400, "invalid_request", "Invalid provider configuration JSON")
+				return
+			}
+			result, err := config.Forge.Connect(r.Context(), principal.UserID, r.PathValue("repository"), input)
+			if err != nil {
+				forgeError(w, err)
+				return
+			}
+			writeJSON(w, 200, result)
+		}))
+		mux.HandleFunc("GET "+route, admin(access.ReadIntegration, func(w http.ResponseWriter, r *http.Request, principal access.Principal) {
+			result, err := config.Forge.Status(r.Context(), principal.UserID, r.PathValue("repository"))
+			if err != nil {
+				forgeError(w, err)
+				return
+			}
+			writeJSON(w, 200, result)
+		}))
+		mux.HandleFunc("DELETE "+route, admin(access.ManageIntegration, func(w http.ResponseWriter, r *http.Request, principal access.Principal) {
+			if err := config.Forge.Disconnect(r.Context(), principal.UserID, r.PathValue("repository")); err != nil {
+				forgeError(w, err)
+				return
+			}
+			w.WriteHeader(204)
+		}))
+		mux.HandleFunc("POST "+route+"/sync", admin(access.ManageIntegration, func(w http.ResponseWriter, r *http.Request, principal access.Principal) {
+			if err := config.Forge.RequestSync(r.Context(), principal.UserID, r.PathValue("repository")); err != nil {
+				forgeError(w, err)
+				return
+			}
+			writeJSON(w, 202, map[string]bool{"scheduled": true})
+		}))
+	}
 	mux.HandleFunc("POST /v1/integrations/gitlab/{repository}/webhook", func(w http.ResponseWriter, r *http.Request) {
 		if config.Forge == nil {
 			writeError(w, 503, "integration_unconfigured", "Provider integration is not configured")

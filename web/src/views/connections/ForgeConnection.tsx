@@ -2,8 +2,9 @@ import { t as translate } from "../../domain/locale.js";
 import { buttonStyles, sharedStyles } from "../ui.js";
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
+import { repositoryURL, repositoryProviderID } from "../../domain/context.js";
 import type { Repository } from "../../domain/context.js";
-import type { GitLabStatus } from "../../domain/settings.js";
+import type { ForgeStatus } from "../../domain/settings.js";
 import { diagnostic, providerLabel } from "../../domain/settings.js";
 import { useMutation } from "../../application/useMutation.js";
 import type { ApiClient } from "../../transport/api.js";
@@ -15,7 +16,7 @@ import {
 } from "../SettingsShared.js";
 import { ErrorNotice, date } from "../shared.js";
 
-export function GitLabConnection({
+export function ForgeConnection({
   client,
   repository,
   canRead,
@@ -26,14 +27,17 @@ export function GitLabConnection({
   canRead: boolean;
   canManage: boolean;
 }) {
-  const path = `/v1/repositories/${repository.id}/gitlab`;
-  const status = useConnection<GitLabStatus>(client, path, canRead);
+  const github = repository.provider === "github";
+  const label = github ? "GitHub" : "GitLab";
+  const [anonymous, setAnonymous] = useState(github);
+  const path = `/v1/repositories/${repository.id}/forge`;
+  const status = useConnection<ForgeStatus>(client, path, canRead);
   const action = useMutation(client);
   const [editing, setEditing] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [token, setToken] = useState("");
   const [webhook, setWebhook] = useState("");
-  const [mode, setMode] = useState<GitLabStatus["webhook_mode"]>("disabled");
+  const [mode, setMode] = useState<ForgeStatus["webhook_mode"]>("disabled");
   useEffect(() => {
     if (!canManage) {
       setEditing(false);
@@ -46,8 +50,8 @@ export function GitLabConnection({
   async function save(event: FormEvent) {
     event.preventDefault();
     const body = {
-      api_token: token,
-      webhook_mode: mode,
+      ...(github && anonymous ? { anonymous: true } : { api_token: token }),
+      webhook_mode: github ? "disabled" : mode,
       ...(mode === "signature"
         ? { webhook_signing_token: webhook }
         : mode === "legacy"
@@ -56,11 +60,11 @@ export function GitLabConnection({
     };
     setToken("");
     setWebhook("");
-    const saved = await action.run<GitLabStatus>("PUT", path, body);
+    const saved = await action.run<ForgeStatus>("PUT", path, body);
     if (saved) {
       status.setValue(saved.value);
       setEditing(false);
-      action.setMessage("Соединение GitLab сохранено после проверки доступа.");
+      action.setMessage("Соединение сохранено после проверки доступа.");
     }
   }
   async function sync() {
@@ -75,9 +79,7 @@ export function GitLabConnection({
     if (await action.run("DELETE", path)) {
       setRemoving(false);
       status.clear();
-      action.setMessage(
-        "GitLab отключён. Сохранённые ключи соединения удалены.",
-      );
+      action.setMessage("Соединение отключено. Сохранённые ключи удалены.");
       await status.refresh();
     }
   }
@@ -86,19 +88,23 @@ export function GitLabConnection({
     <div className="connection-detail mt-6">
       <dl className={sharedStyles.connectionScope}>
         <dt>{translate("Сервер")}</dt>
-        <dd>{repository.gitlab_url}</dd>
-        <dt>{translate("Проект GitLab")}</dt>
+        <dd>{repositoryURL(repository)}</dd>
+        <dt>
+          {github
+            ? translate("Репозиторий GitHub")
+            : translate("Проект GitLab")}
+        </dt>
         <dd className="mono font-mono text-xs wrap-anywhere">
-          {providerLabel(repository.gitlab_project_id)}
+          {providerLabel(repositoryProviderID(repository))}
         </dd>
       </dl>
       <ErrorNotice>{status.error}</ErrorNotice>
       {status.loading && (
-        <p role="status">{translate("Читаем состояние GitLab…")}</p>
+        <p role="status">{translate("Читаем состояние {0}…", label)}</p>
       )}
       {status.missing && (
         <p className="muted text-muted">
-          {translate("Соединение GitLab ещё не настроено.")}
+          {translate("Соединение {0} ещё не настроено.", label)}
         </p>
       )}
       {!canRead && !value && (
@@ -134,6 +140,16 @@ export function GitLabConnection({
             </dd>
             <dt>{translate("Следующая попытка")}</dt>
             <dd>{date(value.next_sync_at)}</dd>
+            {github && (
+              <>
+                <dt>{translate("Способ доступа")}</dt>
+                <dd>
+                  {value.anonymous
+                    ? translate("Публичный доступ")
+                    : translate("Токен чтения")}
+                </dd>
+              </>
+            )}
             <dt>{translate("Диагностика")}</dt>
             <dd className="mono font-mono text-xs wrap-anywhere">
               {diagnostic(value.last_error_code)}
@@ -168,7 +184,7 @@ export function GitLabConnection({
                 [&_strong]:text-ink [&_strong]:font-medium mobile:[&_article]:grid-cols-[1fr]
               `}
               role="region"
-              aria-label={translate("Потоки синхронизации GitLab")}
+              aria-label={translate("Потоки синхронизации {0}", label)}
             >
               {value.streams.map((stream) => (
                 <article key={stream.kind}>
@@ -201,7 +217,7 @@ export function GitLabConnection({
             disabled={status.loading}
             onClick={() => void status.refresh()}
           >
-            {translate("Обновить состояние GitLab")}
+            {translate("Обновить состояние {0}", label)}
           </button>
         )}
         {canManage && (
@@ -213,13 +229,16 @@ export function GitLabConnection({
                 setToken("");
                 setWebhook("");
                 setMode(value?.webhook_mode ?? "disabled");
+                setAnonymous(
+                  github && (value ? value.anonymous === true : true),
+                );
               }}
             >
               {editing
                 ? translate("Отменить настройку")
                 : value?.enabled
-                  ? translate("Заменить ключи GitLab")
-                  : translate("Настроить GitLab")}
+                  ? translate("Изменить соединение {0}", label)
+                  : translate("Настроить {0}", label)}
             </button>
             {value?.enabled && (
               <>
@@ -228,13 +247,13 @@ export function GitLabConnection({
                   disabled={action.pending}
                   onClick={() => void sync()}
                 >
-                  {translate("Запросить сверку GitLab")}
+                  {translate("Запросить сверку {0}", label)}
                 </button>
                 <button
                   className={sharedStyles.destructiveText}
                   onClick={() => setRemoving(true)}
                 >
-                  {translate("Отключить GitLab")}
+                  {translate("Отключить {0}", label)}
                 </button>
               </>
             )}
@@ -247,47 +266,80 @@ export function GitLabConnection({
           className={sharedStyles.setup}
           onSubmit={(event) => void save(event)}
         >
-          <h3>{translate("Доступ к GitLab")}</h3>
-          <p className="text-sm text-muted leading-relaxed">
-            {translate(
-              "Создайте в GitLab токен с ограниченным сроком и правами",
-            )}
-            <code> read_api</code> {translate("и")} <code>read_repository</code>{" "}
-            {translate(
-              "для этого проекта. Подойдёт Project Access Token с ролью Reporter или Personal Access Token участника проекта. Для синхронизации достаточно режима «Только API».",
-            )}
-          </p>
-          <label>
-            {translate("API-ключ GitLab")}
-            <input
-              type="password"
-              required
-              minLength={8}
-              maxLength={4096}
-              autoComplete="off"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-            />
-          </label>
-          <label>
-            {translate("Режим подключения GitLab")}
-            <select
-              value={mode}
-              onChange={(e) => {
-                setMode(e.target.value as GitLabStatus["webhook_mode"]);
-                setWebhook("");
-              }}
-            >
-              <option value="disabled">
-                {translate("Только API, без вебхуков")}
-              </option>
-              <option value="signature">{translate("Подпись HMAC")}</option>
-              <option value="legacy">
-                {translate("Секретный заголовок GitLab")}
-              </option>
-            </select>
-          </label>
-          {mode !== "disabled" && (
+          <h3>{translate("Доступ к {0}", label)}</h3>
+          {github ? (
+            <>
+              <p className="text-sm text-muted leading-relaxed">
+                {translate(
+                  "Для публичного репозитория можно начать без токена. Для регулярной синхронизации используйте отдельный токен чтения этого репозитория.",
+                )}
+              </p>
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={anonymous}
+                  onChange={(event) => {
+                    setAnonymous(event.target.checked);
+                    setToken("");
+                  }}
+                />
+                {translate("Читать публичный репозиторий без токена")}
+              </label>
+              {!anonymous && (
+                <p className="text-sm text-muted">
+                  {translate(
+                    "Fine-grained token: Contents, Pull requests и Actions — Read-only. Metadata предоставляется автоматически.",
+                  )}
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-muted leading-relaxed">
+              {translate(
+                "Создайте в GitLab токен с ограниченным сроком и правами",
+              )}
+              <code> read_api</code> {translate("и")}{" "}
+              <code>read_repository</code>{" "}
+              {translate(
+                "для этого проекта. Подойдёт Project Access Token с ролью Reporter или Personal Access Token участника проекта. Для синхронизации достаточно режима «Только API».",
+              )}
+            </p>
+          )}
+          {(!github || !anonymous) && (
+            <label>
+              {translate("API-ключ {0}", label)}
+              <input
+                type="password"
+                required
+                minLength={8}
+                maxLength={4096}
+                autoComplete="off"
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+              />
+            </label>
+          )}
+          {!github && (
+            <label>
+              {translate("Режим подключения GitLab")}
+              <select
+                value={mode}
+                onChange={(e) => {
+                  setMode(e.target.value as ForgeStatus["webhook_mode"]);
+                  setWebhook("");
+                }}
+              >
+                <option value="disabled">
+                  {translate("Только API, без вебхуков")}
+                </option>
+                <option value="signature">{translate("Подпись HMAC")}</option>
+                <option value="legacy">
+                  {translate("Секретный заголовок GitLab")}
+                </option>
+              </select>
+            </label>
+          )}
+          {!github && mode !== "disabled" && (
             <label>
               {mode === "signature"
                 ? "Signing token GitLab"
@@ -309,30 +361,34 @@ export function GitLabConnection({
             </label>
           )}
           <p className="field-help text-sm text-muted mx-0 mt-2 mb-5 leading-[1.5]">
-            {mode === "disabled"
+            {github
               ? translate(
-                  "Синхронизация работает автоматически. Вебхуки ускоряют обновления.",
+                  "Без токена действует небольшой общий лимит GitHub API. При его достижении очередь сохранится и сверка продолжится позже.",
                 )
-              : translate(
-                  "Возьмите ключ подписи из настроек вебхука GitLab. Для старой схемы задайте одинаковый секрет в GitLab и здесь.",
-                )}{" "}
+              : mode === "disabled"
+                ? translate(
+                    "Синхронизация работает автоматически. Вебхуки ускоряют обновления.",
+                  )
+                : translate(
+                    "Возьмите ключ подписи из настроек вебхука GitLab. Для старой схемы задайте одинаковый секрет в GitLab и здесь.",
+                  )}{" "}
             {translate(
               "Поля очищаются после отправки; повторная настройка заменяет ключи и режим подключения.",
             )}
           </p>
           <button className={buttonStyles.primary} disabled={action.pending}>
-            {translate("Проверить и сохранить GitLab")}
+            {translate("Проверить и сохранить {0}", label)}
           </button>
         </MutationForm>
       )}
       {canManage && removing && (
         <ConfirmAction
-          title={translate("Отключить GitLab?")}
+          title={translate("Отключить {0}?", label)}
           pending={action.pending}
           error={action.error}
           onClose={() => setRemoving(false)}
           onConfirm={() => void remove()}
-          label={translate("Отключить GitLab")}
+          label={translate("Отключить {0}", label)}
         >
           <p>
             {translate(

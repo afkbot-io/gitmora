@@ -214,18 +214,18 @@ func contextMRRefs(ctx context.Context, tx pgx.Tx, q domain.Query) ([]mrRef, *do
 		}
 	} else {
 		prefix := contextTree + `, bound AS (
- SELECT DISTINCT r.id AS source_repository_id,r.gitlab_url,r.gitlab_project_id,rc.sha FROM wanted w JOIN repositories r ON r.id=w.repository_id JOIN capture_revision_commits rc ON rc.repository_id=w.repository_id AND rc.session_id=w.session_id JOIN commits c ON c.repository_id=rc.repository_id AND c.sha=rc.sha AND c.confirmed_at IS NOT NULL
+ SELECT DISTINCT r.id AS source_repository_id,r.gitlab_url,r.gitlab_project_id,r.provider,rc.sha FROM wanted w JOIN repositories r ON r.id=w.repository_id JOIN capture_revision_commits rc ON rc.repository_id=w.repository_id AND rc.session_id=w.session_id JOIN commits c ON c.repository_id=rc.repository_id AND c.sha=rc.sha AND c.confirmed_at IS NOT NULL
  )`
 		args := contextArgs(q)
 		cursorFilter := ` AND ($7::text='' OR (tr.id::text,o.iid)>($7,$8))`
 		if q.CommitSHA != "" {
-			prefix = `WITH bound AS (SELECT r.id AS source_repository_id,r.gitlab_url,r.gitlab_project_id,c.sha FROM repositories r JOIN commits c ON c.repository_id=r.id AND c.confirmed_at IS NOT NULL WHERE r.project_id=$1 AND r.id::text=$2 AND c.sha=$3)`
+			prefix = `WITH bound AS (SELECT r.id AS source_repository_id,r.gitlab_url,r.gitlab_project_id,r.provider,c.sha FROM repositories r JOIN commits c ON c.repository_id=r.id AND c.confirmed_at IS NOT NULL WHERE r.project_id=$1 AND r.id::text=$2 AND c.sha=$3)`
 			args = []any{q.ProjectID, q.RepositoryID, q.CommitSHA}
 			cursorFilter = ` AND ($4::text='' OR (tr.id::text,o.iid)>($4,$5))`
 		}
 		args = append(args, after.RepositoryID, after.IID)
 		rows, err := tx.Query(ctx, prefix+` SELECT DISTINCT tr.id::text,o.iid FROM bound b JOIN forge_connections sc ON sc.repository_id=b.source_repository_id AND sc.enabled AND NOT sc.blocked AND sc.last_synced_at>now()-interval '10 minutes'
- JOIN repositories tr ON tr.project_id=$1 AND tr.gitlab_url=b.gitlab_url JOIN forge_connections tc ON tc.repository_id=tr.id AND tc.enabled AND NOT tc.blocked AND tc.last_synced_at>now()-interval '10 minutes'
+ JOIN repositories tr ON tr.project_id=$1 AND tr.provider=b.provider AND (tr.provider='github' OR tr.gitlab_url=b.gitlab_url) JOIN forge_connections tc ON tc.repository_id=tr.id AND tc.enabled AND NOT tc.blocked AND tc.last_synced_at>now()-interval '10 minutes'
  JOIN forge_merge_requests m ON m.repository_id=tr.id AND m.available JOIN forge_mr_observations o ON (o.repository_id,o.iid,o.digest)=(m.repository_id,m.iid,m.digest) AND o.model->>'project_id'=tr.gitlab_project_id::text
  JOIN forge_mr_codes k ON (k.repository_id,k.iid,k.code_key)=(o.repository_id,o.iid,o.code_key) AND k.complete
  WHERE (EXISTS(SELECT 1 FROM forge_mr_commits mc WHERE (mc.repository_id,mc.iid,mc.code_key)=(o.repository_id,o.iid,o.code_key) AND mc.source_project_id=b.gitlab_project_id AND o.model->>'source_project_id'=b.gitlab_project_id::text AND mc.sha=b.sha)
@@ -290,7 +290,7 @@ func readContextMR(ctx context.Context, tx pgx.Tx, project, repo string, iid int
 			}
 		}
 	}
-	err = tx.QueryRow(ctx, `SELECT r.id::text FROM repositories r JOIN forge_connections f ON f.repository_id=r.id AND f.enabled AND NOT f.blocked AND f.last_synced_at>now()-interval '10 minutes' WHERE r.project_id=$1 AND r.gitlab_url=$2 AND r.gitlab_project_id=$3`, project, base, model.SourceProjectID).Scan(&out.SourceRepositoryID)
+	err = tx.QueryRow(ctx, `SELECT r.id::text FROM repositories r JOIN forge_connections f ON f.repository_id=r.id AND f.enabled AND NOT f.blocked AND f.last_synced_at>now()-interval '10 minutes' WHERE r.project_id=$1 AND (r.gitlab_url=$2 OR(r.provider='github' AND $2 LIKE 'https://github.com/%')) AND r.gitlab_project_id=$3`, project, base, model.SourceProjectID).Scan(&out.SourceRepositoryID)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return out, false, err
 	}

@@ -32,6 +32,8 @@ python3 -m unittest discover -s scripts/tests -p test_release_cli.py
 | --- | --- |
 | `make smoke-codex`, `make smoke-opencode` | Real local agent protocols/hooks, source capture, queue and ordinary Git delivery. OpenCode uses a labelled deterministic loopback model. |
 | `make smoke-native-history`, `make smoke-compatibility` | Complete source windows, replay/restart, immutable Git import and provenance. |
+| `make smoke-github`, `make smoke-github-ui` | Real Git/standalone CLI/offline push/API/worker/DB/search/MCP with a Git-backed GitHub protocol fixture; signed browser URL registration, public/token modes, RU/EN and desktop/iPhone layouts. |
+| `make smoke-load` | Isolated 1,000-session dataset, 1/10/25/50 concurrent authenticated clients, bounded search/browse/expand/pack/MCP mix, durable restart, replay and membership revocation. |
 | `make smoke-forge-subpath`, `make smoke-gitlab-profile` | GitLab fixture reconciliation under `/gitlab`, custom port/CA/CONNECT and explicit Compose policy. |
 | `make smoke-context`, `make smoke-agent-context` | Real index worker, search, exact source/context and external-agent tool workflow. |
 | `make smoke-directory`, `make smoke-identity` | Catalog/account roles, signed OIDC, cookies/CSRF, revocation and recovery. |
@@ -67,3 +69,9 @@ For behavior changes, reproduce the issue with a failing observable test, implem
 Tailwind styling uses complete static utility strings, shared semantic tokens and typed button variants. Theme controls belong only in personal settings. Keep source/user text inert and untranslated; authored UI copy uses the RU/EN catalog. [Web design](web-design.md) and [web behavior](web.md) describe the interface contract.
 
 WebKit's native select and Playwright's screenshot synchronizer have two precisely reproduced style/CSP diagnostics recognized by the test helper. All other violations fail. Do not add broad suppression or weaken product CSP to make a browser gate green. Keep raw axe `incomplete` results and separately assess them rather than treating them as automatic passes.
+
+## Bounded load checks
+
+Run `make smoke-load` separately from other CPU/database-heavy tests. It never accepts a production URL, credential or database: the real API and worker use an owned schema in the dedicated Compose test database. The default dataset contains 1,000 synthetic sessions and distinct identities for up to 50 simultaneous clients. Each stage lasts 20 seconds. The report records per-operation p50/p95/p99, throughput, errors and dataset bytes under ignored `build/load/`.
+
+For a short diagnostic run, use `python3 scripts/smoke-load.py --sessions 100 --seconds 2 --clients 1 5`. Bounds are 50–5,000 sessions, 2–60 seconds and 1–50 clients. This loopback Python client does not measure public TLS, network delay, browser rendering or the capacity of a different production machine. Report the host and resource limits alongside results; concurrency is not a count of supported employees.
