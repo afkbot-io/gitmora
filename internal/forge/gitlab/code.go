@@ -36,7 +36,9 @@ func (c *Client) CodeDiff(ctx context.Context, repo domain.Repository, token, sh
 		return domain.DiffPage{}, invalidResponse()
 	}
 	base, _ := normalizeBase(repo.BaseURL)
-	next, err := nextPage(headers, base+"/api/v4/projects/"+strconv.FormatInt(repo.ProjectID, 10)+suffix, page, len(items))
+	next, err := nextPage(headers, base+"/api/v4/projects/"+strconv.FormatInt(repo.ProjectID, 10)+suffix, page, len(items), map[string]string{
+		"id": strconv.FormatInt(repo.ProjectID, 10), "sha": sha, "unidiff": "false",
+	})
 	if err != nil {
 		return domain.DiffPage{}, err
 	}

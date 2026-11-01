@@ -105,3 +105,61 @@ func TestCodeProviderMarksMissingAndOversizedWithoutDownloadingBodies(t *testing
 		t.Fatal(result, err)
 	}
 }
+
+func TestCommitDiffPaginationAcceptsGitLabRouteDefaultsWithoutRelaxingScope(t *testing.T) {
+	sha := strings.Repeat("a", 40)
+	for _, test := range []struct {
+		name, extra string
+		valid       bool
+	}{
+		{"legacy", "", true},
+		{"GitLab expanded route", "&id=42&sha=" + sha + "&unidiff=false", true},
+		{"different project", "&id=43&sha=" + sha + "&unidiff=false", false},
+		{"different commit", "&id=42&sha=" + strings.Repeat("b", 40) + "&unidiff=false", false},
+		{"different format", "&id=42&sha=" + sha + "&unidiff=true", false},
+		{"duplicate identity", "&id=42&id=42&sha=" + sha, false},
+		{"duplicate format", "&unidiff=false&unidiff=false", false},
+		{"unknown filter", "&id=42&sha=" + sha + "&unexpected=1", false},
+		{"different page size", "&per_page=100", false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			calls := 0
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls++
+				if r.Header.Get("PRIVATE-TOKEN") != "synthetic-token" || r.URL.Path != "/gitlab/api/v4/projects/42/repository/commits/"+sha+"/diff" {
+					t.Error("Request escaped the selected source")
+				}
+				page := r.URL.Query().Get("page")
+				if page == "1" {
+					w.Header().Set("X-Next-Page", "2")
+					w.Header().Set("Link", "<http://"+r.Host+r.URL.Path+"?page=2&per_page=50"+test.extra+">; rel=\"next\"")
+				} else if page == "2" {
+					w.Header().Set("X-Next-Page", "")
+				} else {
+					t.Error("Unexpected page")
+				}
+				_ = json.NewEncoder(w).Encode([]map[string]string{{"new_path": "src/file.go", "b_mode": "100644"}})
+			}))
+			defer server.Close()
+			client, err := gitlab.NewWithProxy([]string{server.URL + "/gitlab"}, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			repo := domain.Repository{ID: "11111111-1111-4111-8111-111111111111", BaseURL: server.URL + "/gitlab", ProjectID: 42}
+			first, err := client.CodeDiff(context.Background(), repo, "synthetic-token", sha, 1)
+			if !test.valid {
+				if err == nil || calls != 1 {
+					t.Fatal("Unsafe pagination was accepted", err, calls)
+				}
+				return
+			}
+			if err != nil || first.NextPage != 2 || len(first.Files) != 1 {
+				t.Fatal(first, err)
+			}
+			last, err := client.CodeDiff(context.Background(), repo, "synthetic-token", sha, first.NextPage)
+			if err != nil || last.NextPage != 0 || len(last.Files) != 1 || calls != 2 {
+				t.Fatal(last, err, calls)
+			}
+		})
+	}
+}

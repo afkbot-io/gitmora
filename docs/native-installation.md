@@ -14,14 +14,14 @@ The explicit `--server` is required: the installer has no fallback to another Gi
 
 ## Select and verify a release
 
-The selected installation publishes **0.4.0**: [release metadata](https://gitmora.tasktopia.online/downloads/cli/0.4.0/release.json) and [checksums](https://gitmora.tasktopia.online/downloads/cli/0.4.0/SHA256SUMS). Your installation can publish its own reviewed artifacts using the build procedure below. Versioned public artifacts live under `https://gitmora.tasktopia.online/downloads/cli/<release-version>/`. Each directory contains those two manifests and four standalone files:
+The selected installation publishes **0.4.3**: [release metadata](https://gitmora.tasktopia.online/downloads/cli/0.4.3/release.json) and [checksums](https://gitmora.tasktopia.online/downloads/cli/0.4.3/SHA256SUMS). Your installation can publish its own reviewed artifacts using the build procedure below. Versioned public artifacts live under `https://gitmora.tasktopia.online/downloads/cli/<release-version>/`. Each directory contains those two manifests and four standalone files:
 
 | Machine             | File                                                                                                        |
 | ------------------- | ----------------------------------------------------------------------------------------------------------- |
-| macOS Apple Silicon | [gitmora_darwin_arm64](https://gitmora.tasktopia.online/downloads/cli/0.4.0/gitmora_darwin_arm64) |
-| macOS Intel         | [gitmora_darwin_amd64](https://gitmora.tasktopia.online/downloads/cli/0.4.0/gitmora_darwin_amd64) |
-| Linux arm64         | [gitmora_linux_arm64](https://gitmora.tasktopia.online/downloads/cli/0.4.0/gitmora_linux_arm64)   |
-| Linux x86-64        | [gitmora_linux_amd64](https://gitmora.tasktopia.online/downloads/cli/0.4.0/gitmora_linux_amd64)   |
+| macOS Apple Silicon | [gitmora_darwin_arm64](https://gitmora.tasktopia.online/downloads/cli/0.4.3/gitmora_darwin_arm64) |
+| macOS Intel         | [gitmora_darwin_amd64](https://gitmora.tasktopia.online/downloads/cli/0.4.3/gitmora_darwin_amd64) |
+| Linux arm64         | [gitmora_linux_arm64](https://gitmora.tasktopia.online/downloads/cli/0.4.3/gitmora_linux_arm64)   |
+| Linux x86-64        | [gitmora_linux_amd64](https://gitmora.tasktopia.online/downloads/cli/0.4.3/gitmora_linux_amd64)   |
 
 Use a private new download directory. Download the selected executable, `release.json` and `SHA256SUMS` from the same reviewed versioned HTTPS path. Validate their exact named checksums **before** making the client executable or running it. macOS has `shasum -a 256 -c`; Linux normally has `sha256sum -c`. For Apple Silicon:
 
@@ -29,11 +29,11 @@ Use a private new download directory. Download the selected executable, `release
 gitmora_download_directory=$(mktemp -d)
 cd "$gitmora_download_directory"
 curl --proto '=https' --tlsv1.2 --fail --show-error --output gitmora_darwin_arm64 \
-  https://gitmora.tasktopia.online/downloads/cli/0.4.0/gitmora_darwin_arm64
+  https://gitmora.tasktopia.online/downloads/cli/0.4.3/gitmora_darwin_arm64
 curl --proto '=https' --tlsv1.2 --fail --show-error --output release.json \
-  https://gitmora.tasktopia.online/downloads/cli/0.4.0/release.json
+  https://gitmora.tasktopia.online/downloads/cli/0.4.3/release.json
 curl --proto '=https' --tlsv1.2 --fail --show-error --output SHA256SUMS \
-  https://gitmora.tasktopia.online/downloads/cli/0.4.0/SHA256SUMS
+  https://gitmora.tasktopia.online/downloads/cli/0.4.3/SHA256SUMS
 awk '$2 == "gitmora_darwin_arm64" {binary_count++; print} $2 == "release.json" {manifest_count++; print} END {if (binary_count != 1 || manifest_count != 1) exit 1}' SHA256SUMS > selected.sha256
 shasum -a 256 -c selected.sha256
 chmod 700 gitmora_darwin_arm64
@@ -93,7 +93,7 @@ From clean committed source with the pinned Go toolchain and existing output par
 python3 scripts/release-cli.py --version <numeric-release-version> --output /absolute/new-release-directory
 ```
 
-For a fresh server 0.4.1, the [deployment guide](deployment.md#7-раздать-cli-и-подключить-агенты-к-своему-адресу) deliberately publishes the compatible official client 0.4.0. If distributing a different client version, align `publicClientVersion` in `web/src/domain/onboarding.ts` and `gitmora_version` in `web/public/install.sh`, rebuild the web/server image, then publish the matching six files using `scripts/publish-cli.py`. Runtime env does not change the pinned download version.
+For a fresh server 0.4.3, the [deployment guide](deployment.md#7-раздать-cli-и-подключить-агенты-к-своему-адресу) publishes the matching official client 0.4.3. If distributing a different client version, align `publicClientVersion` in `web/src/domain/onboarding.ts` and `gitmora_version` in `web/public/install.sh`, rebuild the web/server image, then publish the matching six files using `scripts/publish-cli.py`. Runtime env does not change the pinned download version.
 
 The script refuses dirty source/existing output and exports only the selected committed revision into a new owned build tree; ignored compiler/embed inputs never enter it. It verifies module checksums, builds CGO-disabled baseline-CPU targets, checks embedded module/platform/toolchain settings and emits complete public manifests. Native-host execution also checks the exact version/revision stamp. Go deliberately omits linker flags from build info under `-trimpath`; other-platform runtime stamps need actual execution, not an assumption that these flags are inspectable. No timestamp/host path is included in release metadata. It does not publish or install. `--target linux/amd64` can prepare a deliberate subset; normal distribution uses all four.
 

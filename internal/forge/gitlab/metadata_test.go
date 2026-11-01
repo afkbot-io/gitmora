@@ -25,6 +25,12 @@ func TestProviderMetadataPaginationIsScopedAndUsesRequiredFilters(t *testing.T) 
 			w.Header().Set("Link", `<https://outside.invalid/api/v4/projects/42/merge_requests?page=2>; rel="next"`)
 		} else {
 			w.Header().Set("X-Next-Page", "2")
+			query := r.URL.Query()
+			query.Set("page", "2")
+			query.Set("id", "42")
+			query.Set("with_labels_details", "false")
+			query.Set("with_merge_status_recheck", "false")
+			w.Header().Set("Link", "<http://"+r.Host+r.URL.Path+"?"+query.Encode()+">; rel=\"next\"")
 		}
 		_ = json.NewEncoder(w).Encode([]map[string]any{{"iid": 7, "project_id": 42, "updated_at": "2026-10-29T10:00:00Z"}})
 	}))
@@ -82,5 +88,38 @@ func TestUnavailableCollectionIsExplicitAndDoesNotPretendToBeAnEmptySnapshot(t *
 	page, err := provider.Changes(context.Background(), domain.Repository{BaseURL: server.URL, ProjectID: 42}, "synthetic-token", domain.Cursor{Kind: domain.Pipelines, Page: 1, After: time.Unix(0, 0), Before: time.Now()})
 	if err != nil || !page.Unavailable {
 		t.Fatal("disabled/missing collection was conflated with a completed empty stream")
+	}
+}
+
+func TestMRCommitPaginationAcceptsOnlyTheSelectedProjectAndIID(t *testing.T) {
+	head := strings.Repeat("a", 40)
+	for _, iid := range []string{"7", "8"} {
+		t.Run(iid, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if strings.HasSuffix(r.URL.Path, "/commits") {
+					w.Header().Set("X-Next-Page", "2")
+					w.Header().Set("Link", "<http://"+r.Host+r.URL.Path+"?page=2&per_page=50&id=42&merge_request_iid="+iid+">; rel=\"next\"")
+					_ = json.NewEncoder(w).Encode([]map[string]string{{"id": head}})
+					return
+				}
+				_ = json.NewEncoder(w).Encode(map[string]any{"id": 100, "iid": 7, "project_id": 42, "source_project_id": 42, "state": "opened", "sha": head, "updated_at": "2026-10-29T10:00:00Z", "diff_refs": map[string]string{"head_sha": head, "base_sha": strings.Repeat("b", 40), "start_sha": strings.Repeat("c", 40)}})
+			}))
+			defer server.Close()
+			provider, err := gitlab.NewWithProxy([]string{server.URL}, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			expected := domain.MergeRequest{ID: 100, IID: 7, ProjectID: 42, SourceProjectID: 42, State: "opened", Head: head, Base: strings.Repeat("b", 40), Start: strings.Repeat("c", 40), UpdatedAt: time.Date(2026, 10, 29, 10, 0, 0, 0, time.UTC)}
+			page, err := provider.MRCommits(context.Background(), domain.Repository{BaseURL: server.URL, ProjectID: 42}, "synthetic-token", expected, 1)
+			if iid == "8" {
+				if err == nil {
+					t.Fatal("Foreign MR route accepted")
+				}
+				return
+			}
+			if err != nil || page.NextPage != 2 || len(page.Commits) != 1 || page.Commits[0] != head {
+				t.Fatal(page, err)
+			}
+		})
 	}
 }
