@@ -27,7 +27,11 @@ func pageNumber(value string) (int, error) {
 	}
 	return n, nil
 }
-func nextPage(headers http.Header, requestURL string, current, count int) (int, error) {
+
+// nextPage accepts only exact endpoint identity/default values which
+// GitLab may materialize in Link even when absent from the original query.
+// It returns a page number; the provider URL is never followed as a destination.
+func nextPage(headers http.Header, requestURL string, current, count int, implicit map[string]string) (int, error) {
 	if len(headers.Values("X-Next-Page")) > 1 {
 		return 0, invalidResponse()
 	}
@@ -90,6 +94,17 @@ func nextPage(headers http.Header, requestURL string, current, count int) (int, 
 			prior := original.Query()
 			delete(query, "page")
 			delete(prior, "page")
+			for key, expected := range implicit {
+				if _, supplied := prior[key]; supplied {
+					continue
+				}
+				if values, present := query[key]; present {
+					if len(values) != 1 || values[0] != expected {
+						return 0, invalidResponse()
+					}
+					delete(query, key)
+				}
+			}
 			if !reflect.DeepEqual(query, prior) {
 				return 0, invalidResponse()
 			}
@@ -120,7 +135,7 @@ func safeProviderURL(base, value string) bool {
 	target, err := url.Parse(value)
 	return err == nil && target.Scheme == root.Scheme && target.Host == root.Host && target.User == nil && target.RawQuery == "" && target.Fragment == "" && strings.HasPrefix(target.Path, strings.TrimSuffix(root.Path, "/")+"/")
 }
-func (c *Client) array(ctx context.Context, repo domain.Repository, token, path string, query url.Values, page int) ([]json.RawMessage, int, error) {
+func (c *Client) array(ctx context.Context, repo domain.Repository, token, path string, query url.Values, page int, implicit map[string]string) ([]json.RawMessage, int, error) {
 	if page < 1 || page > 1_000_000 {
 		return nil, 0, domain.ErrInvalid
 	}
@@ -138,7 +153,7 @@ func (c *Client) array(ctx context.Context, repo domain.Repository, token, path 
 	if jsonwire.DecodeExternalArray(raw, &rows) != nil || len(rows) > providerPageSize {
 		return nil, 0, invalidResponse()
 	}
-	next, err := nextPage(headers, strings.TrimSuffix(repo.BaseURL, "/")+"/api/v4/projects/"+strconv.FormatInt(repo.ProjectID, 10)+suffix, page, len(rows))
+	next, err := nextPage(headers, strings.TrimSuffix(repo.BaseURL, "/")+"/api/v4/projects/"+strconv.FormatInt(repo.ProjectID, 10)+suffix, page, len(rows), implicit)
 	return rows, next, err
 }
 
@@ -150,9 +165,12 @@ func (c *Client) Changes(ctx context.Context, repo domain.Repository, token stri
 	}
 	query := url.Values{"order_by": {"updated_at"}, "sort": {"asc"}, "updated_after": {cursor.After.UTC().Format(time.RFC3339Nano)}, "updated_before": {cursor.Before.UTC().Format(time.RFC3339Nano)}}
 	endpoint := ""
+	implicit := map[string]string{"id": strconv.FormatInt(repo.ProjectID, 10)}
 	switch cursor.Kind {
 	case domain.MergeRequests:
 		endpoint = "/merge_requests"
+		implicit["with_labels_details"] = "false"
+		implicit["with_merge_status_recheck"] = "false"
 		query.Set("scope", "all")
 		query.Set("state", "all")
 	case domain.Pipelines:
@@ -165,7 +183,7 @@ func (c *Client) Changes(ctx context.Context, repo domain.Repository, token stri
 	default:
 		return result, domain.ErrInvalid
 	}
-	rows, next, err := c.array(ctx, repo, token, endpoint, query, cursor.Page)
+	rows, next, err := c.array(ctx, repo, token, endpoint, query, cursor.Page, implicit)
 	if errors.Is(err, missingCollection) {
 		result.Unavailable = true
 		return result, nil
@@ -295,7 +313,7 @@ func (c *Client) MRCommits(ctx context.Context, repo domain.Repository, token st
 		result.Replacement = &before
 		return result, nil
 	}
-	rows, next, err := c.array(ctx, repo, token, "/merge_requests/"+strconv.FormatInt(expected.IID, 10)+"/commits", url.Values{}, page)
+	rows, next, err := c.array(ctx, repo, token, "/merge_requests/"+strconv.FormatInt(expected.IID, 10)+"/commits", url.Values{}, page, map[string]string{"id": strconv.FormatInt(repo.ProjectID, 10), "merge_request_iid": strconv.FormatInt(expected.IID, 10)})
 	if errors.Is(err, missingCollection) {
 		result.Missing = true
 		return result, nil

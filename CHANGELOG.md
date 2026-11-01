@@ -3,6 +3,7 @@
 ## 0.4.2
 
 - Unified source/server and standalone CLI release 0.4.2, with matching checked macOS/Linux downloads and onboarding version.
+- Fix GitLab diff/MR/pipeline pagination when the provider expands exact route identities and unchanged defaults into Link parameters; reject altered identities, duplicated keys and unexpected filters.
 - Includes the portable self-hosting and own-domain configuration improvements from 0.4.1.
 
 ## 0.4.1
