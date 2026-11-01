@@ -76,6 +76,7 @@ make integration
 - [GitHub и Enterprise](docs/github.md), [собственный GitLab](docs/gitlab-self-managed.md).
 - [Адаптеры агентов](docs/collector.md), [настройка Codex](docs/codex.md) и [совместимость форматов](docs/compatibility.md).
 - [Архитектура](docs/system-analysis.md), [API](docs/api.md), [проверки](docs/development.md) и [изменения](CHANGELOG.md).
+- [Проверка безопасности и остаточные риски релиза](docs/security-review.md).
 
 Для нескольких серверов, собственного центра сертификации и настройки MCP
 используйте [инструкцию подключения](docs/custom-server.md). Старые имена
