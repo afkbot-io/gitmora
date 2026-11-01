@@ -68,19 +68,13 @@ func (s *Service) Pack(parent context.Context, p access.Principal, q domain.Quer
 	}
 	base := rd.Query{ProjectID: q.ProjectID, RepositoryID: q.RepositoryID, Limit: q.Limit}
 	var remaining []rd.Hit
-	if q.TaskID != "" || q.CommitSHA != "" {
-		base.CountryID = q.CountryID
-		base.TaskID = q.TaskID
+	if q.CommitSHA != "" {
 		base.CommitSHA = q.CommitSHA
 		found, err := search(base)
 		if err != nil {
 			return domain.Pack{}, err
 		}
 		remaining = found
-		if q.TaskID != "" && len(found) > 0 {
-			add(found[0], "direct_filter")
-			remaining = found[1:]
-		}
 	}
 	if p.Has(access.ReadCapture) {
 		for _, capture := range result.Captures.Items {
@@ -90,9 +84,6 @@ func (s *Service) Pack(parent context.Context, p access.Principal, q domain.Quer
 			}
 			for _, hit := range found {
 				reason := "capture_stream"
-				if q.TaskID != "" {
-					reason = "task_binding"
-				}
 				add(hit, reason)
 			}
 		}

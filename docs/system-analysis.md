@@ -1,16 +1,14 @@
 # Core architecture
 
-Current scope: [requirements C01–C18](requirements.md). The target is 10–50 developers with Gitmora on their server, GitLab and Tasktopia as upstream authorities, and AI running in developer-selected agents.
 
 ## Flow and ownership
 
-1. A developer enables capture for an agent/repository and binds work to a task when appropriate.
+1. A developer enables capture for an agent/repository and selects the repository.
 2. The adapter records only exposed conversation and observed tool/file activity. It does not infer hidden reasoning or claim line-level authorship from a transcript.
 3. The local collector sanitizes, checkpoints and queues immutable revisions in SQLite. Ordinary Git hooks link eligible checkpoints to exact commits; existing hooks retain their behavior.
 4. Push flushes queued context with bounded network work. An unavailable server leaves a recoverable queue; a successful code push is not evidence of successful context delivery.
 5. GitLab API reconciliation verifies commit/MR/CI metadata. Webhooks can accelerate discovery; they never replace verification or periodic reconciliation.
-6. Tasktopia supplies task requirements and authorized work links through its supported APIs/MCP. Gitmora never writes its database.
-7. A separate ordinary worker indexes captured sessions, task observations and verified code. PostgreSQL full-text search applies current project/source access before ranking and limits.
+7. A separate ordinary worker indexes captured sessions and verified code. PostgreSQL full-text search applies current project/source access before ranking and limits.
 8. People browse exact evidence in the web workspace. External agents use CLI/MCP to discover sources, retrieve bounded packs and expand exact versions. They run their own AI.
 
 | Boundary | Authority |
@@ -18,7 +16,6 @@ Current scope: [requirements C01–C18](requirements.md). The target is 10–50 
 | Identity / directory | One browser/CLI account, local membership, operators and scoped credential trees |
 | Capture / collector | Immutable sanitized sessions, offline events and explicit provenance |
 | Forge | Verified GitLab commits, MR heads, CI and code observations |
-| Work | Tasktopia connection, task observations and guarded evidence publication |
 | Retrieval / context | Derived searchable projections and bounded source packs |
 | Distribution / operations | Private deployment, signed-in native clients, exact release bytes and recovery |
 

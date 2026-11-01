@@ -4,7 +4,7 @@ RELEASE_REVISION ?=
 BUILD_INFO = workgraph.local/platform/internal/distribution/buildinfo
 GO_RELEASE_FLAGS = -X $(BUILD_INFO).version=$(RELEASE_VERSION) -X $(BUILD_INFO).revision=$(RELEASE_REVISION)
 
-.PHONY: build build-web test-web smoke-web smoke-work smoke-work-tasktopia smoke-settings smoke-settings-tasktopia smoke-credentials test vet integration smoke smoke-context smoke-agent-context smoke-directory smoke-identity smoke-forge smoke-tasktopia smoke-opencode test-agents verify verify-linux clean
+.PHONY: build build-web test-web smoke-web smoke-history smoke-settings smoke-credentials test vet integration smoke smoke-context smoke-agent-context smoke-directory smoke-identity smoke-forge smoke-opencode test-agents verify verify-linux clean
 .PHONY: smoke-cli-consent smoke-cli-auth test-native-secret-store-linux
 .PHONY: build-image smoke-deployment smoke-recovery
 .PHONY: test-egress-linux smoke-egress
@@ -33,9 +33,9 @@ build-postgres-image:
 	docker build --file deploy/postgres/Dockerfile --tag gitmora-postgres:18.6-security1 .
 
 smoke smoke-opencode smoke-codex smoke-native-history smoke-compatibility smoke-forge \
-smoke-tasktopia smoke-context smoke-agent-context smoke-directory smoke-identity \
-smoke-web smoke-settings smoke-settings-tasktopia smoke-credentials smoke-cli-consent \
-smoke-cli-auth smoke-work smoke-work-tasktopia smoke-cli-release: build-postgres-image
+smoke-context smoke-agent-context smoke-directory smoke-identity \
+smoke-web smoke-settings smoke-credentials smoke-cli-consent \
+smoke-cli-auth smoke-history smoke-cli-release: build-postgres-image
 
 build-image: build-postgres-image
 	docker build --file deploy/Dockerfile --tag gitmora:local --build-arg RELEASE_VERSION=$(RELEASE_VERSION) --build-arg RELEASE_REVISION=$(RELEASE_REVISION) .
@@ -160,9 +160,6 @@ smoke-settings: build test-web
 	docker compose -f compose.test.yaml up -d --wait
 	python3 scripts/smoke-settings.py
 
-smoke-settings-tasktopia: build
-	docker compose -f compose.test.yaml up -d --wait
-	WORKGRAPH_TASKTOPIA_BROWSER=1 python3 scripts/smoke-tasktopia.py
 
 smoke-credentials: build test-web
 	mkdir -p bin/verification
@@ -185,17 +182,14 @@ smoke-cli-auth: build
 test-native-secret-store-linux: build-postgres-image
 	bash scripts/test-native-secret-store-linux.sh
 
-smoke-work: build test-web
+smoke-history: build test-web
 	mkdir -p bin/verification
 	go build -trimpath -o bin/verification/oidc-fixture ./internal/identity/oidc/testdata/fixture.go
 	docker compose -f compose.test.yaml up -d --wait
-	python3 scripts/smoke-web.py --work
+	python3 scripts/smoke-web.py --history
 
-smoke-work-tasktopia: build
-	docker compose -f compose.test.yaml up -d --wait
-	WORKGRAPH_WORK_BROWSER=1 python3 scripts/smoke-tasktopia.py
 
-verify: check-config vet integration smoke smoke-opencode smoke-codex smoke-native-history smoke-compatibility smoke-forge smoke-context smoke-agent-context smoke-directory smoke-identity smoke-web smoke-settings smoke-credentials smoke-cli-consent smoke-work smoke-deployment smoke-recovery smoke-egress smoke-keycloak smoke-registration smoke-identity-proxy smoke-cli-downloads smoke-cli-release
+verify: check-config vet integration smoke smoke-opencode smoke-codex smoke-native-history smoke-compatibility smoke-forge smoke-context smoke-agent-context smoke-directory smoke-identity smoke-web smoke-settings smoke-credentials smoke-cli-consent smoke-history smoke-deployment smoke-recovery smoke-egress smoke-keycloak smoke-registration smoke-identity-proxy smoke-cli-downloads smoke-cli-release
 
 verify-linux: build-web build-postgres-image
 	bash scripts/test-linux.sh
@@ -221,9 +215,8 @@ smoke-design: build test-web build-postgres-image
 	python3 scripts/smoke-settings.py --design
 
 verify-ui:
-	GITMORA_UI_AUDIT=1 $(MAKE) smoke-design smoke-web smoke-work smoke-settings smoke-credentials smoke-cli-consent smoke-registration
+	GITMORA_UI_AUDIT=1 $(MAKE) smoke-design smoke-web smoke-history smoke-settings smoke-credentials smoke-cli-consent smoke-registration
 
-# Source-backed Tasktopia gates additionally require TASKTOPIA_SOURCE and Node 24+; see development.md.
 verify-release: smoke-self-host-config smoke-custom-server smoke-github-profile smoke-github smoke-github-ui verify verify-linux smoke-cli-auth test-native-secret-store-linux smoke-forge-subpath smoke-gitlab-profile smoke-onboarding smoke-design smoke-browser-compat
 
 smoke-browser-compat: build test-web build-postgres-image
@@ -236,9 +229,9 @@ smoke-browser-compat: build test-web build-postgres-image
 	GITMORA_BROWSER=firefox GITMORA_UI_AUDIT_LABEL=firefox-desktop python3 scripts/smoke-settings.py --design
 
 	GITMORA_UI_AUDIT=0 GITMORA_BROWSER=webkit GITMORA_MOBILE_DEVICE=1 python3 scripts/smoke-web.py
-	GITMORA_UI_AUDIT=0 GITMORA_BROWSER=webkit GITMORA_MOBILE_DEVICE=1 python3 scripts/smoke-web.py --work
+	GITMORA_UI_AUDIT=0 GITMORA_BROWSER=webkit GITMORA_MOBILE_DEVICE=1 python3 scripts/smoke-web.py --history
 	GITMORA_UI_AUDIT=0 GITMORA_BROWSER=chromium GITMORA_MOBILE_DEVICE=1 python3 scripts/smoke-web.py
-	GITMORA_UI_AUDIT=0 GITMORA_BROWSER=chromium GITMORA_MOBILE_DEVICE=1 python3 scripts/smoke-web.py --work
+	GITMORA_UI_AUDIT=0 GITMORA_BROWSER=chromium GITMORA_MOBILE_DEVICE=1 python3 scripts/smoke-web.py --history
 
 .PHONY: smoke-github smoke-github-ui smoke-load
 smoke-github: build build-postgres-image

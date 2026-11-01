@@ -15,7 +15,7 @@ func TestSelectorsAreBoundedAndCannotCrossScope(t *testing.T) {
 	if got, err := domain.Normalize(valid); err != nil || got.Limit != 6 {
 		t.Fatal(got, err)
 	}
-	for _, bad := range []domain.Query{{ProjectID: project}, {ProjectID: project, MR: 7}, {ProjectID: project, RepositoryID: repository, SessionID: "bad"}, {ProjectID: project, RepositoryID: repository, MR: 7, ExpectedHead: "short"}, {ProjectID: project, RepositoryID: repository, MR: 7, Limit: 13}, {ProjectID: project, CountryID: repository}, {ProjectID: project, RepositoryID: repository, CommitSHA: strings.Repeat("b", 40), ExpectedHead: strings.Repeat("a", 40)}} {
+	for _, bad := range []domain.Query{{ProjectID: project}, {ProjectID: project, MR: 7}, {ProjectID: project, RepositoryID: repository, SessionID: "bad"}, {ProjectID: project, RepositoryID: repository, MR: 7, ExpectedHead: "short"}, {ProjectID: project, RepositoryID: repository, MR: 7, Limit: 13}, {ProjectID: project, RepositoryID: repository, CommitSHA: strings.Repeat("b", 40), ExpectedHead: strings.Repeat("a", 40)}} {
 		if _, err := domain.Normalize(bad); err == nil {
 			t.Fatal("accepted", bad)
 		}

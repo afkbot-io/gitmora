@@ -28,7 +28,7 @@ func TestBrowseDoesNotBroadenIndependentSourceCapabilities(t *testing.T) {
 	if _, err := s.Browse(context.Background(), p, q); !errors.Is(err, access.ErrDenied) || r.calls != 0 {
 		t.Fatal("integration capability exposed sessions", err)
 	}
-	q.Kind = "task"
+	q.Kind = "merge_request"
 	if _, err := s.Browse(context.Background(), p, q); err != nil || r.calls != 1 || r.query.Limit != 20 {
 		t.Fatal(r, err)
 	}

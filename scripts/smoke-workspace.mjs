@@ -133,13 +133,45 @@ try {
     403,
   );
   await audit("first-project");
+  let failProjectOpen = true;
+  await page.route("**/v1/projects/*", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (
+      failProjectOpen &&
+      route.request().method() === "GET" &&
+      /^\/v1\/projects\/[0-9a-f-]{36}$/.test(path)
+    ) {
+      failProjectOpen = false;
+      return route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: '{"error":"unavailable"}',
+      });
+    }
+    await route.continue();
+  });
   const projectName = "Browser team " + randomUUID().slice(0, 8);
   await page.getByLabel("Название проекта", { exact: true }).fill(projectName);
   await page
     .getByRole("button", { name: "Создать проект", exact: true })
     .click();
   await page
-    .getByRole("heading", { name: "Подключить репозиторий", exact: true })
+    .getByRole("button", { name: "Открыть проект", exact: true })
+    .waitFor();
+  const afterCreate = await call("/v1/projects");
+  assert.equal(
+    afterCreate.items.filter((p) => p.name === projectName).length,
+    1,
+  );
+  await page
+    .getByRole("button", { name: "Открыть проект", exact: true })
+    .click();
+  await page.unroute("**/v1/projects/*");
+  await page
+    .getByRole("heading", {
+      name: "Подключите первый репозиторий",
+      exact: true,
+    })
     .waitFor();
   const project = await page.locator("#project").inputValue();
   assert.notEqual(project, fixture.project);
@@ -181,6 +213,18 @@ try {
     await page.getByLabel("Токен чтения", { exact: true }).inputValue(),
     "",
   );
+  let failConnection = true;
+  await page.route("**/v1/repositories/*/forge", async (route) => {
+    if (failConnection && route.request().method() === "PUT") {
+      failConnection = false;
+      return route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: '{"error":"unavailable"}',
+      });
+    }
+    await route.continue();
+  });
   const empty = await call(`/v1/projects/${project}/repositories`);
   assert.equal(empty.items.length, 0);
   await page
@@ -191,13 +235,29 @@ try {
   await page
     .getByRole("button", { name: "Подключить репозиторий", exact: true })
     .click();
-  await page.locator(".settings-resource").waitFor();
+  await page
+    .getByRole("button", { name: "Сохранить подключение", exact: true })
+    .waitFor();
+  await page
+    .getByLabel("Токен чтения", { exact: true })
+    .fill(
+      fixture.github ? "synthetic-github-read-token" : "synthetic-gitlab-token",
+    );
+  assert.equal(
+    (await call(`/v1/projects/${project}/repositories`)).items.length,
+    1,
+  );
+  await page
+    .getByRole("button", { name: "Сохранить подключение", exact: true })
+    .click();
+  await page.unroute("**/v1/repositories/*/forge");
+  await page.getByRole("heading", { name: "CLI и MCP", exact: true }).waitFor();
   const catalog = await call(`/v1/projects/${project}/repositories`);
   assert.equal(catalog.items.length, 1);
   const repository = catalog.items[0];
   assert.equal(repository.provider ?? "", fixture.github ? "github" : "");
-  await nav("Настройки проекта");
-  await page.getByRole("link", { name: "Интеграции", exact: true }).click();
+  await nav("Репозитории");
+  await page.getByRole("button", { name: "Настроить", exact: true }).click();
   await page.getByText("Подключено", { exact: true }).waitFor();
   await audit("integrations");
   const current = await call(`/v1/repositories/${repository.id}/forge`);
@@ -259,6 +319,7 @@ try {
       },
     );
     await page.reload();
+    await page.getByRole("button", { name: "Настроить", exact: true }).click();
     await page
       .getByRole("button", { name: "Подключить токен", exact: true })
       .waitFor();
@@ -275,19 +336,6 @@ try {
     await page.unroute(`**/v1/repositories/${repository.id}/forge`);
     await page.getByRole("button", { name: "Отмена", exact: true }).click();
   }
-  await page
-    .getByRole("button", { name: "Подключить Tasktopia", exact: true })
-    .click();
-  await page
-    .getByLabel("URL Tasktopia", { exact: true })
-    .fill("https://tasks.example.com/mcp");
-  assert.equal(
-    await page
-      .getByLabel("URL Tasktopia", { exact: true })
-      .getAttribute("readonly"),
-    null,
-  );
-  await audit("tasktopia-form");
   await nav("Участники");
   await audit("members");
   await page
@@ -307,8 +355,8 @@ try {
     .getByRole("button", { name: "Добавить участника", exact: true })
     .click();
   await page.getByRole("alert").filter({ hasText: "уже в проекте" }).waitFor();
-  await nav("Работа");
-  await audit("work");
+  await nav("Поиск");
+  await audit("history");
   assert.doesNotMatch(
     await page.locator(".main").innerText(),
     /Показаны принятые локальные|Пустой список не означает/,
@@ -317,7 +365,7 @@ try {
   await audit("search");
   await page.getByRole("searchbox").fill("history");
   await page.getByRole("button", { name: "Найти", exact: true }).click();
-  await page.getByText("Совпадений пока нет", { exact: true }).waitFor();
+  await page.getByText("Ничего не найдено", { exact: true }).waitFor();
   await nav("CLI и MCP");
   assert.match(await page.locator(".setup-guide").innerText(), /\/install.sh/);
   await audit("cli");
@@ -336,7 +384,6 @@ try {
     "Members",
     "Repositories",
     "Search",
-    "Work",
     "CLI and MCP",
     "Project settings",
   ]) {
@@ -346,7 +393,6 @@ try {
   await nav("Personal settings");
   await page.getByLabel("Language", { exact: true }).selectOption("ru");
   await nav("Настройки проекта");
-  await page.getByRole("link", { name: "Основное", exact: true }).click();
   await page
     .getByRole("button", { name: "Удалить проект", exact: true })
     .click();

@@ -113,7 +113,7 @@ func interruptionMessage(args []string) string {
 
 func run(parent context.Context, args []string, input io.Reader, output, diagnostic io.Writer) error {
 	if len(args) == 0 || args[0] == "--help" || args[0] == "help" {
-		_, err := fmt.Fprintln(output, "Usage: gitmora init | capture | import | frontier | bind | checkpoint | sync | status | disable | enable | agent | auth | api | mcp | version | self install")
+		_, err := fmt.Fprintln(output, "Usage: gitmora init | capture | import | frontier | checkpoint | sync | status | disable | enable | agent | auth | api | mcp | version | self install")
 		return err
 	}
 	if args[0] == "version" || args[0] == "--version" {
@@ -148,7 +148,7 @@ func run(parent context.Context, args []string, input io.Reader, output, diagnos
 	}
 	command := args[0]
 	switch command {
-	case "init", "capture", "bind", "checkpoint", "sync", "status", "disable", "enable":
+	case "init", "capture", "checkpoint", "sync", "status", "disable", "enable":
 	default:
 		return domain.ErrInvalid
 	}
@@ -160,8 +160,8 @@ func run(parent context.Context, args []string, input io.Reader, output, diagnos
 		flags.PrintDefaults()
 		flags.SetOutput(io.Discard)
 	}
-	var server, repositoryID, remote, tokenEnv, countryID, taskID, headFrom string
-	var clear, include, retry, watch, pinSource, captureSync, physical bool
+	var server, repositoryID, remote, tokenEnv, headFrom string
+	var include, retry, watch, pinSource, captureSync, physical bool
 	var frontiers frontierIDs
 	if command == "capture" || command == "status" {
 		flags.BoolVar(&physical, "physical-worktree", false, "Isolate native-source queries to the physical current worktree")
@@ -172,16 +172,12 @@ func run(parent context.Context, args []string, input io.Reader, output, diagnos
 		flags.StringVar(&repositoryID, "repository-id", "", "Gitmora repository UUID")
 		flags.StringVar(&remote, "remote", "origin", "Named Git push remote")
 		flags.StringVar(&tokenEnv, "token-env", "WORKGRAPH_TOKEN", "Environment variable containing the scoped token")
-	case "bind":
-		flags.StringVar(&countryID, "country-id", "", "Tasktopia country UUID")
-		flags.StringVar(&taskID, "task-id", "", "Tasktopia task UUID")
-		flags.BoolVar(&clear, "clear", false, "Clear binding for new sessions")
 	case "sync":
 		flags.BoolVar(&include, "include-uncommitted", false, "Explicitly permit current uncommitted session delivery")
 		flags.BoolVar(&retry, "retry", false, "Retry queued and blocked failures immediately")
 		flags.BoolVar(&watch, "watch", false, "Retry eligible delivery every 15 seconds until interrupted")
 	case "capture":
-		flags.BoolVar(&pinSource, "pin-source", false, "Keep the native conversation's initial task binding")
+		flags.BoolVar(&pinSource, "pin-source", false, "Keep the native conversation's initial source scope")
 		flags.StringVar(&headFrom, "observe-head-from", "", "Observe commits since a native tool's prior HEAD (or unborn)")
 		flags.BoolVar(&captureSync, "sync", false, "Attempt bounded delivery of already eligible context after durable capture")
 		flags.Var(&frontiers, "frontier", "Bind a completed durable native tool to this exact window; repeat for multiple tools")
@@ -344,15 +340,6 @@ func run(parent context.Context, args []string, input io.Reader, output, diagnos
 			}
 		}
 		return json.NewEncoder(output).Encode(reply)
-	case "bind":
-		if clear && (countryID != "" || taskID != "") {
-			return domain.ErrInvalid
-		}
-		var task *capture.TaskRef
-		if !clear {
-			task = &capture.TaskRef{CountryID: countryID, TaskID: taskID}
-		}
-		return service.Bind(ctx, repository.WorktreeKey(), task)
 	case "checkpoint":
 		return service.Checkpoint(ctx, repository.WorktreeKey(), false)
 	case "status":

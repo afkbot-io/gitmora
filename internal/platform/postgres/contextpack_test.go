@@ -20,7 +20,7 @@ func contextPrincipal(scopes ...access.Permission) access.Principal {
 }
 
 func TestGitHubInstancesDoNotAssociateEqualIDsAndCommits(t *testing.T) {
-	pool, _, _, _ := automationFixture(t)
+	pool := contextFixture(t)
 	ctx := context.Background()
 	// GitHub.com source and Enterprise target deliberately reuse the same numeric ID/SHA.
 	if _, err := pool.Exec(ctx, `UPDATE repositories SET provider='github',gitlab_url='https://github.com/team/source' WHERE id=$1`, repository); err != nil {
@@ -126,13 +126,10 @@ func TestContextPackExpandsOnlyFullyVerifiedNativeStreamsAndPaginates(t *testing
 }
 
 func TestContextPackUsesCurrentHeadAndScopeWithPermissionAndSourceGates(t *testing.T) {
-	pool, _, tasks, _ := automationFixture(t)
+	pool := contextFixture(t)
 	ctx := context.Background()
 	seedLinkedMR(t, pool, true, 42)
 	if _, err := pool.Exec(ctx, "UPDATE commits SET confirmed_at=now()"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := tasks.ReconcileOnce(ctx); err != nil {
 		t.Fatal(err)
 	}
 	for i, sha := range []string{strings.Repeat("a", 40), strings.Repeat("b", 40)} {
@@ -151,15 +148,6 @@ func TestContextPackUsesCurrentHeadAndScopeWithPermissionAndSourceGates(t *testi
 	mr := result.MergeRequests.Items[0]
 	if mr.ExpectedHeadMatches == nil || *mr.ExpectedHeadMatches || len(mr.Pipelines) != 1 || !mr.Pipelines[0].MatchesObservedHead || mr.Pipelines[0].MatchesExpectedHead || mr.Pipelines[0].SHA != strings.Repeat("a", 40) {
 		t.Fatal("stale CI applied", mr)
-	}
-	taskQuery := pack.Query{ProjectID: project, CountryID: taskCountry, TaskID: taskUUID, Limit: 6}
-	result, err = store.Read(ctx, contextPrincipal(access.ReadCapture, access.ReadIntegration), taskQuery)
-	if err != nil || result.Task == nil || len(result.MergeRequests.Items) != 1 || len(result.Captures.Items) != 1 {
-		t.Fatal(result, err)
-	}
-	narrow, err := store.Read(ctx, contextPrincipal(access.ReadIntegration), taskQuery)
-	if err != nil || narrow.Task == nil || len(narrow.MergeRequests.Items) != 0 || len(narrow.Captures.Items) != 0 {
-		t.Fatal("capture-derived MR discovery leaked", narrow, err)
 	}
 	bySHA, err := store.Read(ctx, contextPrincipal(access.ReadIntegration), pack.Query{ProjectID: project, RepositoryID: repository, CommitSHA: strings.Repeat("a", 40), Limit: 6})
 	if err != nil || len(bySHA.MergeRequests.Items) != 1 || len(bySHA.Captures.Items) != 0 || bySHA.MergeRequests.Omitted {
@@ -190,22 +178,18 @@ func TestContextPackUsesCurrentHeadAndScopeWithPermissionAndSourceGates(t *testi
 	if err != nil || len(changed.MergeRequests.Items) != 1 || len(changed.MergeRequests.Items[0].Pipelines) != 1 || changed.MergeRequests.Items[0].Pipelines[0].ID != 2 || !*changed.MergeRequests.Items[0].ExpectedHeadMatches || changed.MergeRequests.Items[0].CommitsComplete {
 		t.Fatal("old pipeline survived head change", changed, err)
 	}
-	if _, err := pool.Exec(ctx, "UPDATE forge_connections SET blocked=true; UPDATE work_tasks SET available=false"); err != nil {
+	if _, err := pool.Exec(ctx, "UPDATE forge_connections SET blocked=true"); err != nil {
 		t.Fatal(err)
 	}
-	hidden, err := store.Read(ctx, contextPrincipal(access.ReadCapture, access.ReadIntegration), taskQuery)
-	if err != nil || hidden.Task != nil || len(hidden.MergeRequests.Items) != 0 || len(hidden.Captures.Items) != 1 {
+	hidden, err := store.Read(ctx, contextPrincipal(access.ReadCapture, access.ReadIntegration), pack.Query{ProjectID: project, RepositoryID: repository, SessionID: snapshot().SessionID, Limit: 6})
+	if err != nil || len(hidden.MergeRequests.Items) != 0 || len(hidden.Captures.Items) != 1 {
 		t.Fatal("unavailable provider source disclosed", hidden, err)
 	}
-	taskQuery.CountryID = repository
-	hidden, err = store.Read(ctx, contextPrincipal(access.ReadIntegration), taskQuery)
-	if err != nil || hidden.Task != nil {
-		t.Fatal("cross-country task disclosed", hidden, err)
-	}
+
 }
 
 func TestContextPackMRDiscoveryHasIndependentAuthorizedPagination(t *testing.T) {
-	pool, _, _, _ := automationFixture(t)
+	pool := contextFixture(t)
 	ctx := context.Background()
 	seedLinkedMR(t, pool, true, 42)
 	if _, err := pool.Exec(ctx, "UPDATE commits SET confirmed_at=now()"); err != nil {
@@ -238,7 +222,7 @@ func TestContextPackMRDiscoveryHasIndependentAuthorizedPagination(t *testing.T) 
 		}
 	}
 	store := postgres.NewContextStore(pool)
-	q := pack.Query{ProjectID: project, CountryID: taskCountry, TaskID: taskUUID, Limit: 6}
+	q := pack.Query{ProjectID: project, RepositoryID: repository, SessionID: snapshot().SessionID, Limit: 6}
 	first, err := store.Read(ctx, contextPrincipal(access.ReadCapture, access.ReadIntegration), q)
 	if err != nil || len(first.MergeRequests.Items) != 4 || first.MergeRequests.Next == nil {
 		t.Fatal(first, err)

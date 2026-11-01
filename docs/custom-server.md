@@ -1,6 +1,5 @@
 # CLI и MCP со своим сервером Gitmora
 
-Везде используйте **адрес самой Gitmora**, например `https://gitmora.company.ru`, без `/auth`, `/v1` или `/mcp`. Адрес GitLab/GitHub/Tasktopia вводится отдельно в интеграции проекта. Свой публичный сертификат HTTPS проверяется обычным способом; обход TLS не требуется.
 
 ## Установка и вход
 
@@ -75,7 +74,7 @@ args = ["mcp", "--server", "https://gitmora.company.ru"]
 
 ## Проверить работу
 
-После перезапуска агента должны появиться шесть инструментов: `context.browse`, `context.search`, `context.pack`, `context.expand`, `context.task`, `context.file`. Сначала получите UUID проекта через `gitmora api get /v1/projects --server …`. Затем попросите агента вызвать `context.browse` с этим `project_id`, найти сессии через `context.search` и открыть источник через `context.expand`. Пустой новый проект возвращает пустую историю, а не ошибку подключения.
+После перезапуска агента должны появиться шесть инструментов: `context.browse`, `context.search`, `context.pack`, `context.expand`, `context.resolve`, `context.file`. Сначала получите UUID проекта через `gitmora api get /v1/projects --server …`. Затем попросите агента вызвать `context.browse` с этим `project_id`, найти сессии через `context.search` и открыть источник через `context.expand`. Пустой новый проект возвращает пустую историю, а не ошибку подключения.
 
 Строка запуска `gitmora mcp --server …` использует **stdio**, поэтому ручной запуск в терминале будет ждать MCP-сообщения. Его stdout — только протокол, без текста приветствия/логина. Отдельного HTTP OAuth-подключения через `codex mcp login` для рекомендуемого stdio-моста нет: сначала выполните обычный `gitmora auth login`.
 
@@ -90,4 +89,4 @@ args = ["mcp", "--server", "https://gitmora.company.ru"]
 | API работает, но MCP не виден | Перезапуск агента, уникальное имя подключения, корректная TOML/JSON-структура, отсутствие stdout-логов |
 | Новые данные не находятся | `status`/`sync --retry`, серверный worker/index, сохранённая интеграция и подтверждение коммита |
 
-Сервисные GitHub/GitLab/Tasktopia токены и CLI-доступ разработчика независимы. В MCP-конфиге нет ни одного из этих секретов. [Справочник env](configuration.md), [формат JSON API/MCP](native-context.md).
+Сервисные GitHub/GitLab токены и CLI-доступ разработчика независимы. В MCP-конфиге нет ни одного из этих секретов. [Справочник env](configuration.md), [формат JSON API/MCP](native-context.md).

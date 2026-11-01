@@ -2,7 +2,7 @@ import { t as translate } from "../domain/locale.js";
 import { buttonStyles, sharedStyles } from "./ui.js";
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import type { Me, Page, Project, Repository } from "../domain/context.js";
+import type { Me, Page, Project } from "../domain/context.js";
 import { readableError } from "../domain/context.js";
 import { capabilities } from "../domain/settings.js";
 import type { Member } from "../domain/settings.js";
@@ -16,39 +16,20 @@ import {
   MutationForm,
 } from "./SettingsShared.js";
 import { Empty, ErrorNotice, aborted } from "./shared.js";
-import { Connections } from "./connections/Connections.js";
 export function ProjectSettings({
   client,
   me,
   project,
-  repositories,
   refreshProject,
 }: {
   client: ApiClient;
   me: Me;
   project: Project;
-  repositories: Repository[];
   refreshProject: (deleted?: boolean) => Promise<void>;
 }) {
   const rights = capabilities(me, project);
   const [deleting, setDeleting] = useState(false);
   const action = useMutation(client);
-  const [tab, setTab] = useState(() =>
-    new URLSearchParams(location.hash.slice(1)).get("tab") === "integrations"
-      ? "integrations"
-      : "general",
-  );
-  useEffect(() => {
-    const read = () =>
-      setTab(
-        new URLSearchParams(location.hash.slice(1)).get("tab") ===
-          "integrations"
-          ? "integrations"
-          : "general",
-      );
-    window.addEventListener("hashchange", read);
-    return () => window.removeEventListener("hashchange", read);
-  }, []);
   async function remove() {
     if (
       await action.run(
@@ -65,74 +46,43 @@ export function ProjectSettings({
   return (
     <section className="settings-view">
       <h1>{translate("Настройки проекта")}</h1>
-      <nav
-        aria-label={translate("Настройки проекта")}
-        className="flex gap-6 border-b border-line mb-6"
-      >
-        {[
-          ["general", "Основное"],
-          ["integrations", "Интеграции"],
-        ].map(([key, label]) => (
-          <a
-            key={key}
-            href={`#view=settings&project=${project.id}&tab=${key}`}
-            aria-current={tab === key ? "page" : undefined}
-            className={`py-3 text-sm no-underline border-b-2 ${tab === key ? "border-accent font-medium text-accent" : "border-transparent text-muted"}`}
-            onClick={() => setTab(key!)}
-          >
-            {translate(label!)}
-          </a>
-        ))}
-      </nav>
-      {tab === "general" ? (
-        <>
-          <section className="settings-section grid grid-cols-[220px_minmax(0,1fr)] gap-6 border-b border-line pb-8 mobile:grid-cols-1">
-            <h2 className="text-base">{translate("Проект")}</h2>
-            <div>
-              {rights.catalog ? (
-                <Rename
-                  key={project.version}
-                  client={client}
-                  path={`/v1/projects/${project.id}`}
-                  name={project.name}
-                  version={project.version}
-                  onSaved={() => refreshProject()}
-                  label={translate("Название проекта")}
-                />
-              ) : (
-                <p>{project.name}</p>
-              )}
-              <details className="mt-5 text-xs text-muted">
-                <summary>{translate("Идентификатор проекта")}</summary>
-                <code className="block mt-3 break-all">{project.id}</code>
-              </details>
-            </div>
-          </section>
-          {rights.catalog && (
-            <section className="settings-section grid grid-cols-[220px_minmax(0,1fr)] gap-6 py-8 mobile:grid-cols-1">
-              <h2 className="text-base">{translate("Удаление проекта")}</h2>
-              <div>
-                <p className="text-sm text-muted">
-                  {translate("Удаляет историю и настройки проекта в Gitmora.")}
-                </p>
-                <button
-                  className={buttonStyles.dangerOutline}
-                  onClick={() => setDeleting(true)}
-                >
-                  {translate("Удалить проект")}
-                </button>
-              </div>
-            </section>
+      <section className="settings-section grid grid-cols-[180px_minmax(0,1fr)] gap-6 border-b border-line pb-8 mobile:grid-cols-1">
+        <h2 className="text-base">{translate("Проект")}</h2>
+        <div>
+          {rights.catalog ? (
+            <Rename
+              key={project.version}
+              client={client}
+              path={`/v1/projects/${project.id}`}
+              name={project.name}
+              version={project.version}
+              onSaved={() => refreshProject()}
+              label={translate("Название проекта")}
+            />
+          ) : (
+            <p>{project.name}</p>
           )}
-        </>
-      ) : (
-        <Connections
-          client={client}
-          project={project}
-          repositories={repositories}
-          canRead={rights.integrationRead}
-          canManage={rights.integrations}
-        />
+          <details className="mt-5 text-xs text-muted">
+            <summary>{translate("Идентификатор проекта")}</summary>
+            <code className="block mt-3 break-all">{project.id}</code>
+          </details>
+        </div>
+      </section>
+      {rights.catalog && (
+        <section className="settings-section grid grid-cols-[180px_minmax(0,1fr)] gap-6 py-6 mobile:grid-cols-1">
+          <h2 className="text-base">{translate("Удаление проекта")}</h2>
+          <div>
+            <p className="text-sm text-muted">
+              {translate("Удаляет историю и настройки проекта в Gitmora.")}
+            </p>
+            <button
+              className={buttonStyles.dangerOutline}
+              onClick={() => setDeleting(true)}
+            >
+              {translate("Удалить проект")}
+            </button>
+          </div>
+        </section>
       )}
       {deleting && (
         <ConfirmAction
@@ -145,7 +95,7 @@ export function ProjectSettings({
         >
           <p>
             {translate(
-              "История Gitmora будет удалена. Исходный код и задачи во внешних сервисах сохранятся.",
+              "История Gitmora будет удалена. Репозитории в GitHub и GitLab сохранятся.",
             )}
           </p>
         </ConfirmAction>

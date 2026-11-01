@@ -2,9 +2,9 @@
 
 The [OIDC/browser-session contract](identity.md) documents `/v1/auth/*`, explicit operator identity binding, same-origin CSRF and raw bearer/MCP separation. Existing keys remain api-kind credentials; browser cookies are a separate authority transport.
 
-The additive `POST /v1/context/pack` route and `context.pack` MCP tool are documented in [agent context](context.md), including independent permissions, task/session/MR selectors, exact-head CI, continuation/MR pagination and explicit completeness limits.
+The additive `POST /v1/context/pack` route and `context.pack` MCP tool are documented in [agent context](context.md), including independent permissions, session/MR selectors, exact-head CI, continuation/MR pagination and explicit completeness limits.
 
-`POST /v1/context/browse` and read-only `context.browse` discover authorized cached task/session-window/MR headers with stable typed pagination. The [work navigation contract](work-navigation.md) describes independent capabilities, availability gates, decimal cursors and human task/session/MR workflows.
+`POST /v1/context/browse` and read-only `context.browse` discover authorized cached session-window/MR headers with stable typed pagination. The [work navigation contract](work-navigation.md) describes independent capabilities, availability gates, decimal cursors and human session/MR workflows.
 
 ## Authentication and isolation
 
@@ -37,23 +37,19 @@ Capture reads and writes use `Cache-Control: no-store`. Error bodies have a stab
   "agent": {"name": "local-agent", "version": "1", "model": "local-model"},
   "started_at": "2026-10-30T10:00:00Z",
   "ended_at": "2026-10-30T10:01:00Z",
-  "task": {
-    "country_id": "33333333-3333-4333-8333-333333333333",
-    "task_id": "44444444-4444-4444-8444-444444444444"
-  },
   "messages": [{"role": "user", "text": "Preserve retry state"}],
   "files": ["src/queue.go"],
   "commits": ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]
 }
 ```
 
-`task`, `ended_at` and agent `version` are optional. Revision is 1–1,000,000,000. Message roles are `system`, `user`, `assistant`, `tool`; tool messages require `tool_name`. Limits: 5,000 messages, 128 KiB per message text, 5,000 normalized relative file paths, 2,000 full lowercase SHA-1/SHA-256 commit IDs. Git internals and parent/absolute paths are rejected. Name/model/version and tool-name bounds are defined by the domain types.
+`ended_at` and agent `version` are optional. Revision is 1–1,000,000,000. Message roles are `system`, `user`, `assistant`, `tool`; tool messages require `tool_name`. Limits: 5,000 messages, 128 KiB per message text, 5,000 normalized relative file paths, 2,000 full lowercase SHA-1/SHA-256 commit IDs. Git internals and parent/absolute paths are rejected. Name/model/version and tool-name bounds are defined by the domain types.
 
 The server sanitizes recognized credential patterns, canonicalizes timestamps to UTC and sorts/deduplicates file/commit associations before hashing. Message order is preserved. The returned digest identifies stored sanitized content; it may differ from a client's raw input digest.
 
-Session identity fixes the originator, start time, integration name and task binding. Start a new session when switching task bindings. Complete snapshots may arrive out of order: latest means the largest accepted revision. Reusing an existing revision for changed content returns `409`. Revisions never overwrite earlier evidence.
+Session identity fixes the originator, start time, integration name and immutable legacy source scope. Complete snapshots may arrive out of order: latest means the largest accepted revision. Reusing an existing revision for changed content returns `409`. Revisions never overwrite earlier evidence.
 
-Optional `continuation` fixes an exact previous session/revision/digest, root UUID, segment number and bounded reason as part of the child's immutable identity. Children can arrive before parents. A read reports `parent_reference_verified: true` only after matching that edge's bytes, owner, source/task scope and sequence; it does not verify the entire ancestor graph or a summary's correctness. Messages may carry `kind: agent_summary` only with the assistant role; unknown kinds are rejected. Legacy snapshots without these fields keep their canonical representation. See [native continuation](native-continuation.md) for exact fields, budgets and deployment order.
+Optional `continuation` fixes an exact previous session/revision/digest, root UUID, segment number and bounded reason as part of the child's immutable identity. Children can arrive before parents. A read reports `parent_reference_verified: true` only after matching that edge's bytes, owner, source scope and sequence; it does not verify the entire ancestor graph or a summary's correctness. Messages may carry `kind: agent_summary` only with the assistant role; unknown kinds are rejected. Legacy snapshots without these fields keep their canonical representation. See [native continuation](native-continuation.md) for exact fields, budgets and deployment order.
 
 ## Status and retry semantics
 
@@ -77,3 +73,5 @@ Native agents can use [CLI API access and the stdio MCP bridge](native-context.m
 GitHub catalog registration uses `provider: "github"`, the canonical full `provider_url` and positive `provider_repository_id`. Legacy GitLab registration keeps `gitlab_url` and `gitlab_project_id`. Mixed/unknown provider fields are rejected. Public URL resolution is `POST /v1/projects/{project}/repositories/lookup` with `{ "url": "https://github.com/owner/repository" }`, authorized before external I/O.
 
 Both providers use `/v1/repositories/{id}/forge` for connection health/configuration and its metadata subpaths. The legacy `/gitlab` route remains an alias; the route name never overrides immutable provider identity. GitHub accepts only `webhook_mode: "disabled"`, with either explicit `anonymous: true` or an `api_token`. It advertises PR and Actions streams; GitLab additionally has child-pipeline/deployment streams and optional authenticated webhooks. See [GitHub setup and limits](github.md).
+
+Legacy `task` metadata inside historical capture envelopes remains an opaque immutable source-identity field for digest/replay compatibility. There is no task integration, bind command, task search, task API or task MCP tool. New recordings do not require a task binding. Resolve MR/PR links with [context.resolve](context.md).

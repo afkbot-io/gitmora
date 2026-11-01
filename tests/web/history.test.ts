@@ -6,7 +6,7 @@ import {
   packQuery,
   sameSelection,
   observedNumber,
-} from "../../web/src/domain/work.js";
+} from "../../web/src/domain/history.js";
 
 const project = "11111111-1111-4111-8111-111111111111";
 const repository = "22222222-2222-4222-8222-222222222222";
@@ -14,12 +14,12 @@ const session = "33333333-3333-4333-8333-333333333333";
 test("source navigation preserves exact project, repository and expected head, with typed cursors", () => {
   assert.equal(observedNumber(7), "7");
   assert.match(observedNumber(9007199254740993), /диапазона/);
-  assert.deepEqual(browseQuery(project, "task", ""), {
+  assert.deepEqual(browseQuery(project, "session", ""), {
     project_id: project,
-    kind: "task",
+    kind: "session",
     limit: 20,
   });
-  assert.throws(() => browseQuery(project, "task", repository));
+  assert.throws(() => browseQuery(project, "invalid" as never, repository));
   const q = {
     project_id: project,
     repository_id: repository,
@@ -49,7 +49,7 @@ test("source navigation preserves exact project, repository and expected head, w
   assert(sameSelection(q, { ...q, limit: 6 }));
   assert(!sameSelection(q, { ...q, expected_head_sha: "b".repeat(40) }));
 });
-test("selection accepts exactly one explicit task, session, commit or MR and rejects ambiguity", () => {
+test("selection accepts exactly one explicit session, commit or MR and rejects ambiguity", () => {
   assert.equal(
     packQuery({
       project_id: project,

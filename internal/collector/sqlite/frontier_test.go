@@ -26,7 +26,7 @@ func TestFrontierRestartPinsTaskEndAndExactReplayTarget(t *testing.T) {
 	}
 	service := application.NewService(store, nil, time.Now)
 	task := &capture.TaskRef{CountryID: config.RepositoryID, TaskID: "22222222-2222-4222-8222-222222222222"}
-	if err := service.Bind(ctx, "tree", task); err != nil {
+	if err := bindLegacyFixture(ctx, store, "tree", task); err != nil {
 		t.Fatal(err)
 	}
 	source := domain.NativeSource{Worktree: "tree", Agent: "local-agent", SessionID: "native"}
@@ -35,7 +35,7 @@ func TestFrontierRestartPinsTaskEndAndExactReplayTarget(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := service.Bind(ctx, "tree", nil); err != nil {
+	if err := bindLegacyFixture(ctx, store, "tree", nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.Close(); err != nil {

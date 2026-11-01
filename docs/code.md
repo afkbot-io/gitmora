@@ -4,7 +4,7 @@ Gitmora retains bounded text files from provider-reported changed paths of indep
 
 ## Ingestion and verification
 
-Use the existing encrypted [GitLab connection](gitlab.md), its exact destination allowlist and a token that can read the repository files and commit APIs. Run migrations, then the API and worker. A separate code lane shares the connection authority but has its own durable lease, retry schedule and health; code failures do not block ordinary MR/CI reconciliation. `worker --once` attempts one due GitLab metadata unit, one code unit, one Tasktopia unit when configured, and one index source.
+Use the existing encrypted [GitLab connection](gitlab.md), its exact destination allowlist and a token that can read the repository files and commit APIs. Run migrations, then the API and worker. A separate code lane shares the connection authority but has its own durable lease, retry schedule and health; code failures do not block ordinary MR/CI reconciliation. `worker --once` attempts one due GitLab metadata unit, one code unit, and one index source.
 
 Provider confirmation creates one durable code run per repository/commit in the same transaction. Migration backfills runs for already confirmed commits. Each claim reads one diff page or one file, alternating discovery and file work. No provider request holds a database transaction. Completion checks connection generation, lease owner/expiry, current catalog tuple and run version/page. Rotation, disablement and explicit retry fence stale workers.
 

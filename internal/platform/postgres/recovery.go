@@ -168,23 +168,6 @@ func (s *RecoveryStore) Quarantine(ctx context.Context, input domain.Plan) (rece
 	if receipt.Counts.GitLabConnections, e = change(`UPDATE forge_connections SET enabled=false,blocked=true,generation=generation+1,lease_owner=NULL,lease_until=NULL,code_lease_owner=NULL,code_lease_until=NULL,code_blocked=true,last_error_code='recovery_quarantine',code_error='recovery_quarantine',updated_at=now()`); e != nil {
 		return receipt, e
 	}
-	if receipt.Counts.TasktopiaConnections, e = change(`UPDATE work_connections SET enabled=false,blocked=true,generation=generation+1,auto_link_merge_requests=false,last_error_code='recovery_quarantine',updated_at=now()`); e != nil {
-		return receipt, e
-	}
-	for _, kind := range []struct {
-		filter string
-		count  *int64
-	}{
-		{`kind IN('publication','link')`, &receipt.Counts.TaskWrites}, {`kind='refresh'`, &receipt.Counts.TaskReads},
-	} {
-		*kind.count, e = change(`UPDATE work_jobs SET state='blocked',lease_owner=NULL,lease_until=NULL,last_error_code='recovery_quarantine'WHERE state='pending'AND ` + kind.filter)
-		if e != nil {
-			return receipt, e
-		}
-	}
-	if _, e = tx.Exec(ctx, `UPDATE work_jobs SET lease_owner=NULL,lease_until=NULL WHERE lease_owner IS NOT NULL OR lease_until IS NOT NULL`); e != nil {
-		return receipt, e
-	}
 	// Local indexing can resume from durable pending work without inheriting stale process leases.
 	for _, table := range []string{"outbox_events", "retrieval_jobs"} {
 		if _, e = tx.Exec(ctx, `UPDATE `+table+` SET lease_owner=NULL,lease_until=NULL WHERE completed_at IS NULL`); e != nil {

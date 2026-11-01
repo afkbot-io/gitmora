@@ -15,7 +15,7 @@ export interface CLIView {
 export const cliScopeNames: Readonly<Record<string, string>> = {
   "capture:read": "Читать сессии агента",
   "capture:write": "Отправлять сессии агента",
-  "integration:read": "Читать задачи и данные репозиториев",
+  "integration:read": "Читать данные репозиториев",
   "directory:read": "Читать доступные проекты и репозитории",
   "credentials:manage": "Управлять своими ключами",
 };

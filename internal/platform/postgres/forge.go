@@ -298,9 +298,7 @@ func (s *ForgeStore) MarkCommit(ctx context.Context, lease application.Lease, sh
 			return domain.ErrConflict
 		}
 		if err == nil && confirmed {
-			if err = enqueueCodeCommit(ctx, tx, lease.Repository.ID, sha); err == nil {
-				err = wakeTaskDiscovery(ctx, tx, lease.Repository.ID)
-			}
+			err = enqueueCodeCommit(ctx, tx, lease.Repository.ID, sha)
 		}
 		return err
 	})

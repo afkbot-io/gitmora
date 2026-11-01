@@ -28,8 +28,6 @@ type Source struct {
 	RepositoryID string `json:"repository_id,omitempty"`
 	SessionID    string `json:"session_id,omitempty"`
 	Revision     int64  `json:"revision,omitempty"`
-	CountryID    string `json:"country_id,omitempty"`
-	TaskID       string `json:"task_id,omitempty"`
 	Digest       string `json:"digest"`
 	CommitSHA    string `json:"commit_sha,omitempty"`
 	FilePath     string `json:"file_path,omitempty"`
@@ -43,15 +41,11 @@ func (s Source) Validate() error {
 	}
 	switch s.Kind {
 	case "capture":
-		if s.CommitSHA != "" || s.FilePath != "" || s.BlobID != "" || !identifier.Valid(s.RepositoryID) || !identifier.Valid(s.SessionID) || s.Revision < 1 || s.Revision > 1_000_000_000 || s.CountryID != "" || s.TaskID != "" {
-			return ErrInvalid
-		}
-	case "task":
-		if s.CommitSHA != "" || s.FilePath != "" || s.BlobID != "" || !identifier.Valid(s.CountryID) || !identifier.Valid(s.TaskID) || s.RepositoryID != "" || s.SessionID != "" || s.Revision != 0 {
+		if s.CommitSHA != "" || s.FilePath != "" || s.BlobID != "" || !identifier.Valid(s.RepositoryID) || !identifier.Valid(s.SessionID) || s.Revision < 1 || s.Revision > 1_000_000_000 {
 			return ErrInvalid
 		}
 	case "code":
-		if !identifier.Valid(s.RepositoryID) || !identifier.ValidCommit(s.CommitSHA) || !identifier.ValidCommit(s.BlobID) || !identifier.ValidGitPath(s.FilePath) || s.SessionID != "" || s.Revision != 0 || s.CountryID != "" || s.TaskID != "" {
+		if !identifier.Valid(s.RepositoryID) || !identifier.ValidCommit(s.CommitSHA) || !identifier.ValidCommit(s.BlobID) || !identifier.ValidGitPath(s.FilePath) || s.SessionID != "" || s.Revision != 0 {
 			return ErrInvalid
 		}
 	default:
@@ -71,8 +65,6 @@ type Chunk struct {
 	Title         string `json:"title"`
 	Content       string `json:"content"`
 	ContentDigest string `json:"content_digest"`
-	CountryID     string `json:"country_id,omitempty"`
-	TaskID        string `json:"task_id,omitempty"`
 	LineStart     int    `json:"line_start,omitempty"`
 	LineEnd       int    `json:"line_end,omitempty"`
 }
@@ -82,10 +74,10 @@ const overlapRunes = 128
 
 // Chunks deterministically partitions a sanitized source while preserving exact citation offsets.
 func Chunks(source Source, kind, part, title, content string) ([]Chunk, error) {
-	if source.Validate() != nil || !slices.Contains([]string{"session", "task", "document", "code_reference", "code"}, kind) || !validText(part, 200, true) || !validText(title, 2048, true) || !validText(content, 2*1024*1024, false) {
+	if source.Validate() != nil || !slices.Contains([]string{"session", "code_reference", "code"}, kind) || !validText(part, 200, true) || !validText(title, 2048, true) || !validText(content, 2*1024*1024, false) {
 		return nil, ErrInvalid
 	}
-	if source.Kind == "capture" && (kind != "session" && kind != "code_reference") || source.Kind == "task" && (kind != "task" && kind != "document") || source.Kind == "code" && kind != "code" {
+	if source.Kind == "capture" && (kind != "session" && kind != "code_reference") || source.Kind == "code" && kind != "code" {
 		return nil, ErrInvalid
 	}
 	result := []Chunk{}
@@ -141,8 +133,6 @@ type Query struct {
 	ProjectID    string   `json:"project_id"`
 	RepositoryID string   `json:"repository_id,omitempty"`
 	SessionID    string   `json:"session_id,omitempty"`
-	CountryID    string   `json:"country_id,omitempty"`
-	TaskID       string   `json:"task_id,omitempty"`
 	Text         string   `json:"text,omitempty"`
 	CommitSHA    string   `json:"commit_sha,omitempty"`
 	FilePath     string   `json:"file_path,omitempty"`
@@ -157,7 +147,7 @@ func NormalizeQuery(q Query) (Query, error) {
 	if q.SessionID != "" && (!identifier.Valid(q.SessionID) || q.RepositoryID == "") {
 		return Query{}, ErrInvalid
 	}
-	if !identifier.Valid(q.ProjectID) || q.RepositoryID != "" && !identifier.Valid(q.RepositoryID) || q.CountryID != "" && !identifier.Valid(q.CountryID) || q.TaskID != "" && !identifier.Valid(q.TaskID) || (q.CountryID == "") != (q.TaskID == "") || !validText(q.Text, 512, false) || q.Limit < 0 || q.Limit > 50 || q.CommitSHA != "" && !identifier.ValidCommit(q.CommitSHA) || len(q.Kinds) > 6 {
+	if !identifier.Valid(q.ProjectID) || q.RepositoryID != "" && !identifier.Valid(q.RepositoryID) || !validText(q.Text, 512, false) || q.Limit < 0 || q.Limit > 50 || q.CommitSHA != "" && !identifier.ValidCommit(q.CommitSHA) || len(q.Kinds) > 6 {
 		return Query{}, ErrInvalid
 	}
 	q.Text = strings.TrimSpace(q.Text)
@@ -168,7 +158,7 @@ func NormalizeQuery(q Query) (Query, error) {
 		q.CommitSHA = q.Text
 		q.Text = ""
 	}
-	if q.Text == "" && q.TaskID == "" && q.CommitSHA == "" && q.SessionID == "" {
+	if q.Text == "" && q.CommitSHA == "" && q.SessionID == "" {
 		return Query{}, ErrInvalid
 	}
 	if q.FilePath != "" && (!identifier.ValidGitPath(q.FilePath) || q.RepositoryID == "" || q.CommitSHA == "") {
@@ -178,7 +168,7 @@ func NormalizeQuery(q Query) (Query, error) {
 	slices.Sort(q.Kinds)
 	q.Kinds = slices.Compact(q.Kinds)
 	for _, kind := range q.Kinds {
-		if !slices.Contains([]string{"session", "task", "document", "code_reference", "code"}, kind) {
+		if !slices.Contains([]string{"session", "code_reference", "code"}, kind) {
 			return Query{}, ErrInvalid
 		}
 	}
@@ -186,7 +176,7 @@ func NormalizeQuery(q Query) (Query, error) {
 		q.Limit = 12
 	}
 	q.Terms = Terms(q.Text)
-	if q.Terms == "" && q.TaskID == "" && q.CommitSHA == "" && q.SessionID == "" {
+	if q.Terms == "" && q.CommitSHA == "" && q.SessionID == "" {
 		return Query{}, ErrInvalid
 	}
 	return q, nil

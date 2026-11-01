@@ -69,6 +69,7 @@ export function Workspace({
       if (id && projects.some((p) => p.id === id)) remember(id);
     };
     window.addEventListener("hashchange", read);
+    read();
     return () => window.removeEventListener("hashchange", read);
   }, [projects]);
   async function load(after = "") {
@@ -147,7 +148,6 @@ export function Workspace({
     navigate("repositories", id);
   }
   const navigation = [
-    { view: "work", label: "Работа", icon: "work" },
     { view: "context", label: "Поиск", icon: "context" },
     { view: "repositories", label: "Репозитории", icon: "repositories" },
     { view: "members", label: "Участники", icon: "members" },
@@ -155,7 +155,7 @@ export function Workspace({
     { view: "setup", label: "CLI и MCP", icon: "setup" },
   ] as const;
   return (
-    <div className="workspace grid h-dvh w-full grid-cols-[248px_minmax(0,1fr)] overflow-hidden mobile:block mobile:h-auto mobile:min-h-dvh mobile:overflow-visible">
+    <div className="workspace grid h-dvh w-full grid-cols-[232px_minmax(0,1fr)] overflow-hidden mobile:block mobile:h-auto mobile:min-h-dvh mobile:overflow-visible">
       <a
         className="skip absolute -top-25 left-64 z-50 bg-paper p-3 focus:top-3 mobile:left-4"
         href="#workspace-main"
@@ -163,7 +163,7 @@ export function Workspace({
         {translate("К содержимому")}
       </a>
       <aside className="sidebar flex min-w-0 flex-col border-r border-line bg-paper h-full overflow-y-auto mobile:h-auto mobile:border-r-0 mobile:border-b">
-        <div className="flex items-center justify-between gap-3 px-5 py-5 mobile:py-3">
+        <div className="flex items-center justify-between gap-3 px-4 py-4 mobile:py-3">
           <Brand />
           <button
             className="hidden mobile:inline-flex p-2 min-h-10 bg-canvas"
@@ -175,23 +175,31 @@ export function Workspace({
             ☰
           </button>
         </div>
-        <div className="px-4 pb-5 mobile:pb-3">
-          <label
-            htmlFor="project"
-            className="text-xs text-muted mobile:sr-only"
-          >
-            {translate("Проект")}
-          </label>
+        <div className="px-3 pb-4 mobile:pb-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <label
+              htmlFor="project"
+              className="text-xs text-muted mobile:sr-only"
+            >
+              {translate("Проект")}
+            </label>
+            {canCreate && project && (
+              <button
+                className="min-h-8 min-w-8 rounded-md border-0 bg-transparent p-1 text-lg text-muted hover:bg-canvas hover:text-ink"
+                aria-label={translate("Создать проект")}
+                title={translate("Создать проект")}
+                onClick={() => setCreating(true)}
+              >
+                ＋
+              </button>
+            )}
+          </div>
           <select
             id="project"
             className="w-full text-sm font-medium"
             value={selected}
-            disabled={loading}
+            disabled={loading || !projects.length}
             onChange={(e) => {
-              if (e.target.value === "__new__") {
-                setCreating(true);
-                return;
-              }
               requests.cancel();
               setLoading(false);
               remember(e.target.value);
@@ -206,9 +214,6 @@ export function Workspace({
                 {p.name}
               </option>
             ))}
-            {canCreate && (
-              <option value="__new__">{translate("＋ Создать проект")}</option>
-            )}
           </select>
           {next && (
             <button
@@ -289,12 +294,7 @@ export function Workspace({
         tabIndex={-1}
         className="main min-w-0 h-full overflow-y-auto mobile:h-auto mobile:overflow-visible"
       >
-        <header className="flex min-h-16 items-center justify-between gap-4 border-b border-line bg-paper px-8 mobile:hidden">
-          <span className="truncate text-sm font-medium">
-            {project?.name ?? translate("Добро пожаловать в Gitmora")}
-          </span>
-        </header>
-        <div className="p-8 mobile:p-4">
+        <div className="p-6 mobile:p-4">
           <ErrorNotice>{error}</ErrorNotice>
           {notice && (
             <div>
@@ -329,13 +329,35 @@ export function Workspace({
           ) : loading && !projects.length ? (
             <p role="status">{translate("Загружаем проекты…")}</p>
           ) : !project ? (
-            <section className="mx-auto max-w-160 py-12">
-              <h1>{translate("Создайте первый проект")}</h1>
-              <p className="text-muted">
-                {translate("Подключите репозиторий и пригласите команду.")}
-              </p>
+            <section className="mx-auto grid min-h-[calc(100dvh-3rem)] w-full max-w-5xl grid-cols-2 items-center gap-12 compact:grid-cols-1 compact:content-center compact:gap-6 mobile:min-h-0 mobile:py-6">
+              <div>
+                <h1 className="mb-3 text-3xl mobile:text-2xl">
+                  {translate("Создайте первый проект")}
+                </h1>
+                <p className="text-muted">
+                  {translate(
+                    "Объедините репозитории и команду в одном проекте.",
+                  )}
+                </p>
+                <ol className="mt-7 grid list-none gap-4 p-0 text-sm">
+                  {[
+                    "Создайте проект",
+                    "Подключите GitHub или GitLab",
+                    "Включите запись сессий в CLI",
+                  ].map((step, index) => (
+                    <li className="flex items-center gap-3" key={step}>
+                      <span className="flex size-7 shrink-0 items-center justify-center rounded-full border border-line bg-paper text-xs text-muted">
+                        {index + 1}
+                      </span>
+                      {translate(step)}
+                    </li>
+                  ))}
+                </ol>
+              </div>
               {canCreate && (
-                <CreateProject client={client} onCreated={created} />
+                <div className="rounded-xl border border-line bg-paper p-6 mobile:p-4">
+                  <CreateProject client={client} onCreated={created} />
+                </div>
               )}
             </section>
           ) : (

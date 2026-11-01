@@ -1,45 +1,16 @@
 package domain
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"net"
 	"net/url"
 	"path"
 	"strings"
-
+	"unicode/utf8"
 	"workgraph.local/platform/internal/endpoint"
 	"workgraph.local/platform/internal/identifier"
 	"workgraph.local/platform/internal/redact"
 )
-
-// LinkEvidence preserves the exact capture revision, confirmed SHA and guarded MR observation used for linking.
-type LinkEvidence struct {
-	RepositoryID  string `json:"repository_id"`
-	SessionID     string `json:"session_id"`
-	Revision      int64  `json:"revision"`
-	CaptureDigest string `json:"capture_digest"`
-	CommitSHA     string `json:"commit_sha"`
-	MRObservation string `json:"mr_observation"`
-	MRCodeKey     string `json:"mr_code_key"`
-}
-
-// Validate checks canonical evidence identifiers; provider authority is checked by the store separately.
-func (e LinkEvidence) Validate() error {
-	if !identifier.Valid(e.RepositoryID) || !identifier.Valid(e.SessionID) || e.Revision < 1 || e.Revision > 1_000_000_000 || !identifier.ValidCommit(e.CommitSHA) || !digestPattern.MatchString(e.CaptureDigest) || !digestPattern.MatchString(e.MRObservation) || !digestPattern.MatchString(e.MRCodeKey) {
-		return ErrInvalid
-	}
-	return nil
-}
-
-// Digest identifies one immutable local association observation, independent of outbound idempotency.
-func (e LinkEvidence) Digest() string {
-	raw, _ := json.Marshal(e)
-	sum := sha256.Sum256(raw)
-	return hex.EncodeToString(sum[:])
-}
 
 // MRLink is an immutable outbound operation derived from a scoped provider observation.
 type MRLink struct {
@@ -95,28 +66,14 @@ func (l MRLink) Validate() error {
 	target, err := url.Parse(l.URL)
 	root, _ := url.Parse(canonicalLinkURL(l.BaseURL))
 	canonical, _ := url.Parse(canonicalLinkURL(l.URL))
-	if e != nil || err != nil || !identifier.Valid(l.RepositoryID) || l.ProjectID < 1 || l.IID < 1 || !safeURL(l.BaseURL) || !safeURL(l.URL) || l.Title != fmt.Sprintf("GitLab MR !%d", l.IID) || base.RawQuery != "" || base.Fragment != "" || target.RawQuery != "" || target.Fragment != "" || canonical.Scheme != root.Scheme || canonical.Host != root.Host || strings.Contains(l.URL, "\\") || path.Clean(target.Path) != target.Path || !strings.HasPrefix(target.Path, strings.TrimSuffix(base.Path, "/")+"/") || !strings.HasSuffix(target.Path, fmt.Sprintf("/-/merge_requests/%d", l.IID)) || redact.Text(l.URL) != l.URL {
+	if e != nil || err != nil || !identifier.Valid(l.RepositoryID) || l.ProjectID < 1 || l.IID < 1 || !safeMRURL(l.BaseURL) || !safeMRURL(l.URL) || l.Title != fmt.Sprintf("GitLab MR !%d", l.IID) || base.RawQuery != "" || base.Fragment != "" || target.RawQuery != "" || target.Fragment != "" || canonical.Scheme != root.Scheme || canonical.Host != root.Host || strings.Contains(l.URL, "\\") || path.Clean(target.Path) != target.Path || !strings.HasPrefix(target.Path, strings.TrimSuffix(base.Path, "/")+"/") || !strings.HasSuffix(target.Path, fmt.Sprintf("/-/merge_requests/%d", l.IID)) || redact.Text(l.URL) != l.URL {
 		return ErrInvalid
 	}
 	return nil
 }
 
-// HasLink recognizes an existing remote URL regardless of a human's chosen label.
-func (t Task) HasLink(value string) bool {
-	canonical := canonicalLinkURL(value)
-	if canonical == "" {
-		return false
-	}
-	for _, l := range t.Links {
-		if canonicalLinkURL(l.URL) == canonical {
-			return true
-		}
-	}
-	return false
-}
-
 func canonicalLinkURL(value string) string {
-	if !safeURL(value) {
+	if !safeMRURL(value) {
 		return ""
 	}
 	u, _ := url.Parse(value)
@@ -133,4 +90,9 @@ func canonicalLinkURL(value string) string {
 		u.Host = host
 	}
 	return u.String()
+}
+
+func safeMRURL(s string) bool {
+	u, e := url.Parse(s)
+	return e == nil && len(s) <= 2000 && u.Host != "" && u.User == nil && u.Opaque == "" && (u.Scheme == "https" || u.Scheme == "http") && utf8.ValidString(s) && !strings.ContainsAny(s, "\x00\r\n")
 }

@@ -113,10 +113,10 @@
     scroll-margin-top: 1rem;
   }
   h1 {
-    @apply text-3xl leading-tight tracking-tight font-semibold;
+    @apply text-2xl leading-tight tracking-tight font-semibold;
   }
   h2 {
-    @apply text-xl leading-snug font-semibold mb-4;
+    @apply text-lg leading-snug font-semibold mb-3;
   }
   p {
     @apply mt-0;
@@ -139,7 +139,7 @@
   }
   button,
   .action-link {
-    @apply rounded-md px-5 py-2 min-h-11 border border-transparent font-medium no-underline inline-flex justify-center items-center gap-2;
+    @apply bg-paper text-ink rounded-md px-4 py-2 min-h-11 border border-transparent font-medium no-underline inline-flex justify-center items-center gap-2;
   }
   dd {
     @apply m-0 wrap-anywhere;

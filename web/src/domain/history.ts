@@ -1,12 +1,10 @@
 import { t as translate } from "./locale.js";
 import type { Hit, Source } from "./context.js";
 
-export type WorkKind = "session" | "task" | "merge_request";
+export type SourceKind = "session" | "merge_request";
 export interface Selection {
   project_id: string;
   repository_id?: string;
-  country_id?: string;
-  task_id?: string;
   session_id?: string;
   commit_sha?: string;
   merge_request_iid?: number;
@@ -16,6 +14,7 @@ export interface Selection {
   merge_requests_after?: MRCursor;
 }
 export interface BrowseCursor {
+  observed_at?: string;
   repository_id?: string;
   id?: string;
   iid?: string;
@@ -34,7 +33,7 @@ export interface BrowseEntry {
 }
 export interface BrowsePage {
   schema_version: number;
-  query: { project_id: string; repository_id?: string; kind: WorkKind };
+  query: { project_id: string; repository_id?: string; kind: SourceKind };
   items: BrowseEntry[];
   read_at: string;
   next?: BrowseCursor;
@@ -69,36 +68,6 @@ export interface Excerpt {
   text: string;
   truncated: boolean;
 }
-export interface TaskContext {
-  source: Source;
-  observed_at: string;
-  number: number;
-  title: string;
-  status: string;
-  progress: number;
-  url: string;
-  description: Excerpt;
-  acceptance_criteria: Excerpt;
-  links: { title: string; url: string }[];
-  link_count: number;
-  checklist: { id: string; title: string; done: boolean }[];
-  checklist_count: number;
-  comments: { id: string; body: Excerpt; created_at: string }[];
-  comment_count: number;
-  defects: { id: string; title: string; status: string; details: Excerpt }[];
-  defect_count: number;
-  open_defect_count: number;
-  dependencies: {
-    id: string;
-    taskNumber: number;
-    title: string;
-    status: string;
-  }[];
-  dependency_count: number;
-  documents: { id: string; file_name: string; title: string }[];
-  document_count: number;
-  children_clipped: boolean;
-}
 export interface Pipeline {
   id: number;
   project_id: number;
@@ -119,6 +88,9 @@ export interface Deployment {
   updated_at: string;
 }
 export interface MRContext {
+  source_commits: string[];
+  source_commit_count: number;
+  source_commits_more: boolean;
   association_basis: string;
   repository_id: string;
   iid: number;
@@ -145,8 +117,6 @@ export interface ContextPack {
   schema_version: number;
   query: Selection;
   read_at: string;
-  task?: TaskContext;
-  task_state: string;
   captures: {
     items: CaptureWindow[];
     next?: CaptureCursor;
@@ -239,18 +209,13 @@ function id(value: string | undefined): boolean {
 
 /** Navigation sends exactly one selector and pins the expected MR head across refreshes. */
 export function packQuery(q: Selection): Selection {
-  const selectors = [
-    q.task_id,
-    q.session_id,
-    q.commit_sha,
-    q.merge_request_iid,
-  ].filter((v) => v !== undefined && v !== "" && v !== 0);
+  const selectors = [q.session_id, q.commit_sha, q.merge_request_iid].filter(
+    (v) => v !== undefined && v !== "" && v !== 0,
+  );
   if (
     !id(q.project_id) ||
     (q.repository_id !== undefined && !id(q.repository_id)) ||
     selectors.length !== 1 ||
-    !!q.country_id !== !!q.task_id ||
-    (q.task_id && (!id(q.task_id) || !id(q.country_id))) ||
     (q.session_id && (!id(q.session_id) || !q.repository_id)) ||
     (q.commit_sha && (!sha.test(q.commit_sha) || !q.repository_id)) ||
     (q.merge_request_iid !== undefined &&
@@ -276,15 +241,14 @@ export function packQuery(q: Selection): Selection {
 }
 export function browseQuery(
   project: string,
-  kind: WorkKind,
+  kind: SourceKind,
   repository: string,
   after?: BrowseCursor,
 ) {
   if (
     !id(project) ||
     (repository && !id(repository)) ||
-    (kind === "task" && repository) ||
-    !["task", "session", "merge_request"].includes(kind)
+    !["session", "merge_request"].includes(kind)
   )
     throw new Error("Некорректная область списка источников.");
   return {
@@ -320,8 +284,6 @@ export function sameSelection(a: Selection, b: Selection): boolean {
   return [
     "project_id",
     "repository_id",
-    "country_id",
-    "task_id",
     "session_id",
     "commit_sha",
     "merge_request_iid",

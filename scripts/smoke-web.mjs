@@ -80,7 +80,7 @@ async function search(text) {
 try {
   await page.goto(fixture.url);
   await visible(
-    page.getByRole("heading", { name: "Задачи, код и решения вместе." }),
+    page.getByRole("heading", { name: "История разработки под рукой." }),
   );
   await page.screenshot({
     caret: "initial",
@@ -136,10 +136,6 @@ try {
     await page.evaluate(() => globalThis.untrustedExecuted),
     undefined,
   );
-  assert.match(
-    await page.locator(".source-details").textContent(),
-    new RegExp(fixture.task),
-  );
   await page.screenshot({
     caret: "initial",
     path: output + "/workgraph-evidence.png",
@@ -189,7 +185,7 @@ try {
   });
   if (!mobile) await page.setViewportSize({ width: 1440, height: 1000 });
   await clickUI(page, "Репозитории");
-  await visible(page.getByRole("heading", { name: "Tasktopia", exact: true }));
+  await visible(page.getByRole("heading", { name: "Platform", exact: true }));
   await clickUI(page, "Поиск");
   await page.route(
     "**/v1/context/search",
@@ -230,7 +226,7 @@ try {
   await page.getByRole("button", { name: "Выйти", exact: true }).click();
   await logoutCommitted;
   await visible(
-    page.getByRole("heading", { name: "Задачи, код и решения вместе." }),
+    page.getByRole("heading", { name: "История разработки под рукой." }),
   );
   await page.reload();
   await visible(page.getByRole("link", { name: "Войти", exact: true }));
@@ -310,10 +306,11 @@ try {
     },
     "PUT",
   );
-  await page.getByRole("searchbox").fill("refreshToken changed");
-  await page.getByRole("button", { name: "Найти" }).click();
+  await page.evaluate(() =>
+    document.querySelector(".search-form")?.requestSubmit(),
+  );
   await visible(
-    page.getByRole("heading", { name: "Задачи, код и решения вместе." }),
+    page.getByRole("heading", { name: "История разработки под рукой." }),
   );
   assert.equal(
     await page.locator(".result-row, .source-quote").count(),

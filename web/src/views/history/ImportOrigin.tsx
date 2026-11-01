@@ -1,6 +1,6 @@
 import { t as translate } from "../../domain/locale.js";
 import { useState } from "react";
-import type { ImportOrigin } from "../../domain/work.js";
+import type { ImportOrigin } from "../../domain/history.js";
 import { buttonStyles } from "../ui.js";
 
 /** Displays external source identity and bounded claims without implying verified authorship. */

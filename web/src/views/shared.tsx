@@ -5,7 +5,7 @@ export function Brand() {
   return (
     <div
       translate="no"
-      className="brand flex items-center gap-3 text-2xl font-semibold tracking-[-0.6px]"
+      className="brand flex items-center gap-2 text-xl font-semibold tracking-[-0.6px]"
     >
       <svg
         width="30"
@@ -46,7 +46,7 @@ export function Empty({
 }) {
   const Heading = heading;
   return (
-    <div className="empty px-7 py-10 text-muted [&_h2]:text-ink [&_h2]:text-xl [&_p]:max-w-[58ch] [&_p]:text-sm [&_p]:leading-[1.7]">
+    <div className="empty px-5 py-6 text-muted [&_h2]:text-ink [&_h2]:text-xl [&_p]:max-w-[58ch] [&_p]:text-sm [&_p]:leading-[1.7]">
       <Heading>{title}</Heading>
       <p>{children}</p>
     </div>

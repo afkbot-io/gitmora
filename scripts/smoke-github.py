@@ -299,6 +299,11 @@ def main():
                 and pack["merge_requests"]["items"][0]["url"]
                 == github.REPOSITORY_URL + "/pull/1"
             )
+            resolve_query = dict(project_id=identity["project_id"], url=github.REPOSITORY_URL.upper().replace("HTTPS://", "https://") + "/pull/1?tab=commits#changes")
+            status, resolved = request("/v1/context/resolve", resolve_query)
+            assert status == 200 and resolved["query"]["repository_id"] == repo and resolved["query"]["merge_request_iid"] == 1
+            status, from_url = request("/v1/context/pack", resolved["query"])
+            assert status == 200 and from_url["captures"]["items"] and from_url["merge_requests"]["items"][0]["source_commits"] == [sha]
             meta = {
                 "io.modelcontextprotocol/protocolVersion": "2026-07-28",
                 "io.modelcontextprotocol/clientInfo": {
@@ -374,6 +379,7 @@ def main():
                         raw_blob_hash=True,
                         source_index=True,
                         pull_request_context=True,
+                        mr_url_to_verified_commits_and_sessions=True,
                         http_mcp=True,
                         replay_and_restart=True,
                         unrelated_commit_excluded=True,

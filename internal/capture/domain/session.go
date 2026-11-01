@@ -39,7 +39,7 @@ type Agent struct {
 	Model   string `json:"model"`
 }
 
-// TaskRef uses canonical Tasktopia identifiers, never a country-local task number alone.
+// TaskRef retains the legacy namespace in immutable version-1 captures. It has no remote task operations.
 type TaskRef struct {
 	CountryID string `json:"country_id"`
 	TaskID    string `json:"task_id"`

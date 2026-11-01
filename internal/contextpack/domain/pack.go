@@ -2,17 +2,13 @@
 package domain
 
 import (
-	"cmp"
 	"errors"
-	"slices"
-	"strings"
 	"time"
 	capture "workgraph.local/platform/internal/capture/domain"
 
 	forge "workgraph.local/platform/internal/forge/domain"
 	"workgraph.local/platform/internal/identifier"
 	retrieval "workgraph.local/platform/internal/retrieval/domain"
-	work "workgraph.local/platform/internal/work/domain"
 )
 
 var ErrInvalid = errors.New("invalid context pack query")
@@ -30,28 +26,29 @@ type MRCursor struct {
 	IID          int64  `json:"iid"`
 }
 
-// Query selects a task, exact capture stream, confirmed commit or explicit MR in one local project.
+// Query selects an exact capture stream, confirmed commit or explicit MR in one local project.
 type Query struct {
-	ProjectID    string    `json:"project_id"`
-	RepositoryID string    `json:"repository_id,omitempty"`
-	CountryID    string    `json:"country_id,omitempty"`
-	TaskID       string    `json:"task_id,omitempty"`
-	SessionID    string    `json:"session_id,omitempty"`
-	CommitSHA    string    `json:"commit_sha,omitempty"`
-	MR           int64     `json:"merge_request_iid,omitempty"`
-	ExpectedHead string    `json:"expected_head_sha,omitempty"`
-	Limit        int       `json:"limit,omitempty"`
-	After        *Cursor   `json:"capture_after,omitempty"`
-	MRAfter      *MRCursor `json:"merge_requests_after,omitempty"`
+	MRTargetRepository string    `json:"-"`
+	MRCodeKey          string    `json:"-"`
+	MRSourceProject    int64     `json:"-"`
+	ProjectID          string    `json:"project_id"`
+	RepositoryID       string    `json:"repository_id,omitempty"`
+	SessionID          string    `json:"session_id,omitempty"`
+	CommitSHA          string    `json:"commit_sha,omitempty"`
+	MR                 int64     `json:"merge_request_iid,omitempty"`
+	ExpectedHead       string    `json:"expected_head_sha,omitempty"`
+	Limit              int       `json:"limit,omitempty"`
+	After              *Cursor   `json:"capture_after,omitempty"`
+	MRAfter            *MRCursor `json:"merge_requests_after,omitempty"`
 }
 
 // Normalize owns cursor values and rejects ambiguous selectors before any source query.
 func Normalize(q Query) (Query, error) {
-	if !identifier.Valid(q.ProjectID) || q.RepositoryID != "" && !identifier.Valid(q.RepositoryID) || (q.CountryID == "") != (q.TaskID == "") || q.CountryID != "" && (!identifier.Valid(q.CountryID) || !identifier.Valid(q.TaskID)) || q.SessionID != "" && (!identifier.Valid(q.SessionID) || q.RepositoryID == "") || q.CommitSHA != "" && (!identifier.ValidCommit(q.CommitSHA) || q.RepositoryID == "") || q.MR < 0 || q.MR > 0 && q.RepositoryID == "" || q.ExpectedHead != "" && (!identifier.ValidCommit(q.ExpectedHead) || q.MR == 0) || q.Limit < 0 || q.Limit > 12 {
+	if q.MRTargetRepository != "" || q.MRCodeKey != "" || q.MRSourceProject != 0 || !identifier.Valid(q.ProjectID) || q.RepositoryID != "" && !identifier.Valid(q.RepositoryID) || q.SessionID != "" && (!identifier.Valid(q.SessionID) || q.RepositoryID == "") || q.CommitSHA != "" && (!identifier.ValidCommit(q.CommitSHA) || q.RepositoryID == "") || q.MR < 0 || q.MR > 0 && q.RepositoryID == "" || q.ExpectedHead != "" && (!identifier.ValidCommit(q.ExpectedHead) || q.MR == 0) || q.Limit < 0 || q.Limit > 12 {
 		return Query{}, ErrInvalid
 	}
 	selectors := 0
-	for _, selected := range []bool{q.TaskID != "", q.SessionID != "", q.CommitSHA != "", q.MR > 0} {
+	for _, selected := range []bool{q.SessionID != "", q.CommitSHA != "", q.MR > 0} {
 		if selected {
 			selectors++
 		}
@@ -93,7 +90,7 @@ type Capture struct {
 	Continuation            *capture.Continuation `json:"continuation,omitempty"`
 }
 
-// CapturePage gives explicit navigation when the selected stream/task has more windows.
+// CapturePage gives explicit navigation when the selected stream has more windows.
 type CapturePage struct {
 	Items   []Capture `json:"items"`
 	Next    *Cursor   `json:"next,omitempty"`
@@ -112,90 +109,6 @@ func Clip(s string, n int) Excerpt {
 	return Excerpt{string(r[:min(n, len(r))]), len(r) > n}
 }
 
-// Task holds a bounded current Tasktopia projection; counts expose omitted source children.
-type Task struct {
-	Source             retrieval.Source     `json:"source"`
-	ObservedAt         time.Time            `json:"observed_at"`
-	Number             int64                `json:"number"`
-	Title              string               `json:"title"`
-	Status             string               `json:"status"`
-	Progress           int                  `json:"progress"`
-	URL                string               `json:"url"`
-	Description        Excerpt              `json:"description"`
-	AcceptanceCriteria Excerpt              `json:"acceptance_criteria"`
-	Links              []work.Link          `json:"links"`
-	LinkCount          int                  `json:"link_count"`
-	Checklist          []work.ChecklistItem `json:"checklist"`
-	ChecklistCount     int                  `json:"checklist_count"`
-	Comments           []Comment            `json:"comments"`
-	CommentCount       int                  `json:"comment_count"`
-	Defects            []Defect             `json:"defects"`
-	DefectCount        int                  `json:"defect_count"`
-	OpenDefectCount    int                  `json:"open_defect_count"`
-	Dependencies       []work.Dependency    `json:"dependencies"`
-	DependencyCount    int                  `json:"dependency_count"`
-	Documents          []Document           `json:"documents"`
-	DocumentCount      int                  `json:"document_count"`
-	ChildrenClipped    bool                 `json:"children_clipped"`
-}
-
-// Comment is a source-timed bounded body, without inferred approval or actor attribution.
-type Comment struct {
-	ID        string    `json:"id"`
-	Body      Excerpt   `json:"body"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
-// Defect keeps observed status and compact detail with source identity.
-type Defect struct {
-	ID      string  `json:"id"`
-	Title   string  `json:"title"`
-	Status  string  `json:"status"`
-	Details Excerpt `json:"details"`
-}
-
-// Document is a navigable header; full text remains in exact retrieval/task APIs.
-type Document struct {
-	ID       string `json:"id"`
-	FileName string `json:"file_name"`
-	Title    string `json:"title"`
-}
-
-// CompactTask retains source navigation while preventing full task documents/history from filling a model context.
-func CompactTask(t work.Task, digest, project string, observed time.Time) Task {
-	out := Task{Source: retrieval.Source{Kind: "task", ProjectID: project, CountryID: t.CountryID, TaskID: t.ID, Digest: digest}, ObservedAt: observed, Number: t.Number, Title: t.Title, Status: t.Status, Progress: t.Progress, URL: t.URL, Description: Clip(t.Description, 800), AcceptanceCriteria: Clip(t.AcceptanceCriteria, 1000), Links: []work.Link{}, Checklist: []work.ChecklistItem{}, Comments: []Comment{}, Defects: []Defect{}, Dependencies: []work.Dependency{}, Documents: []Document{}, LinkCount: len(t.Links), ChecklistCount: len(t.Checklist), CommentCount: len(t.Comments), DefectCount: len(t.Defects), DependencyCount: len(t.Dependencies), DocumentCount: len(t.Documents)}
-	out.Links = append(out.Links, t.Links[:min(8, len(t.Links))]...)
-	for _, v := range t.Checklist[:min(12, len(t.Checklist))] {
-		s := Clip(v.Title, 160)
-		out.ChildrenClipped = out.ChildrenClipped || s.Truncated
-		v.Title = s.Text
-		out.Checklist = append(out.Checklist, v)
-	}
-	comments := slices.Clone(t.Comments)
-	slices.SortFunc(comments, func(a, b work.Comment) int {
-		if c := b.CreatedAt.Compare(a.CreatedAt); c != 0 {
-			return c
-		}
-		return cmp.Compare(a.ID, b.ID)
-	})
-	for _, v := range comments[:min(4, len(comments))] {
-		out.Comments = append(out.Comments, Comment{v.ID, Clip(v.Body, 300), v.CreatedAt})
-	}
-	for _, v := range t.Defects[:min(8, len(t.Defects))] {
-		out.Defects = append(out.Defects, Defect{v.ID, v.Title, v.Status, Clip(strings.Join([]string{v.Description, v.ReproductionSteps, v.ActualResult, v.ExpectedResult}, "\n"), 400)})
-	}
-	for _, v := range t.Defects {
-		if v.Status != "FIXED" {
-			out.OpenDefectCount++
-		}
-	}
-	out.Dependencies = append(out.Dependencies, t.Dependencies[:min(8, len(t.Dependencies))]...)
-	for _, v := range t.Documents[:min(8, len(t.Documents))] {
-		out.Documents = append(out.Documents, Document{v.ID, v.FileName, v.Title})
-	}
-	return out
-}
-
 // Pipeline is scoped to an exact provider project and immutable tested SHA.
 type Pipeline struct {
 	forge.Pipeline
@@ -210,6 +123,9 @@ func PipelineView(p forge.Pipeline, m forge.MergeRequest, expected string) Pipel
 
 // MR preserves independent provider observation and code identities; CI is never inherited across heads.
 type MR struct {
+	SourceCommits       []string           `json:"source_commits"`
+	SourceCommitCount   int                `json:"source_commit_count"`
+	SourceCommitsMore   bool               `json:"source_commits_more"`
 	Association         string             `json:"association_basis"`
 	RepositoryID        string             `json:"repository_id"`
 	IID                 int64              `json:"iid"`
@@ -252,8 +168,6 @@ type Pack struct {
 	SchemaVersion  int         `json:"schema_version"`
 	Query          Query       `json:"query"`
 	ReadAt         time.Time   `json:"read_at"`
-	Task           *Task       `json:"task,omitempty"`
-	TaskState      string      `json:"task_state"`
 	Captures       CapturePage `json:"captures"`
 	MergeRequests  MRPage      `json:"merge_requests"`
 	Evidence       []Evidence  `json:"evidence"`

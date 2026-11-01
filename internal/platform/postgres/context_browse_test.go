@@ -12,47 +12,15 @@ import (
 	"workgraph.local/platform/internal/contextpack/domain"
 	forge "workgraph.local/platform/internal/forge/domain"
 	"workgraph.local/platform/internal/platform/postgres"
-	work "workgraph.local/platform/internal/work/domain"
 )
 
 func TestBrowseFiltersUnavailableRowsBeforeLimitAndKeepsLargeCursorExact(t *testing.T) {
-	pool, _, tasks, _ := automationFixture(t)
+	pool := contextFixture(t)
 	ctx := context.Background()
 	seedLinkedMR(t, pool, true, 42)
-	if _, err := tasks.ReconcileOnce(ctx); err != nil {
-		t.Fatal(err)
-	}
 	var raw []byte
-	if err := pool.QueryRow(ctx, "SELECT model FROM work_task_observations WHERE task_id=$1", taskUUID).Scan(&raw); err != nil {
-		t.Fatal(err)
-	}
-	var task work.Task
-	if err := json.Unmarshal(raw, &task); err != nil {
-		t.Fatal(err)
-	}
-	task.ID = "00000000-0000-4000-8000-000000000001"
-	task.Number = 9007199254740993
-	task.Title = "Hidden before visible"
-	raw, _ = json.Marshal(task)
-	if _, err := pool.Exec(ctx, `INSERT INTO work_task_observations(project_id,country_id,task_id,model,digest) VALUES($1,$2,$3,$4,$5)`, project, taskCountry, task.ID, raw, task.Digest()); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := pool.Exec(ctx, `INSERT INTO work_tasks(project_id,country_id,task_id,digest,available,read_started_at) VALUES($1,$2,$3,$4,false,now())`, project, taskCountry, task.ID, task.Digest()); err != nil {
-		t.Fatal(err)
-	}
 	store := postgres.NewContextStore(pool)
 	p := contextPrincipal(access.ReadIntegration)
-	page, err := store.Browse(ctx, p, domain.BrowseQuery{ProjectID: project, Kind: "task", Limit: 1})
-	if err != nil || len(page.Items) != 1 || page.Items[0].Query.TaskID != taskUUID || page.Next != nil {
-		t.Fatal("unavailable task consumed limit", page, err)
-	}
-	if _, err := pool.Exec(ctx, "UPDATE work_tasks SET available=true WHERE task_id=$1", task.ID); err != nil {
-		t.Fatal(err)
-	}
-	page, err = store.Browse(ctx, p, domain.BrowseQuery{ProjectID: project, Kind: "task", Limit: 1})
-	if err != nil || len(page.Items) != 1 || page.Items[0].Number != "9007199254740993" {
-		t.Fatal("task number rounded", page, err)
-	}
 	if err := pool.QueryRow(ctx, "SELECT model FROM forge_mr_observations WHERE iid=7").Scan(&raw); err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +44,7 @@ func TestBrowseFiltersUnavailableRowsBeforeLimitAndKeepsLargeCursorExact(t *test
 		}
 	}
 	q := domain.BrowseQuery{ProjectID: project, Kind: "merge_request", Limit: 1}
-	page, err = store.Browse(ctx, p, q)
+	page, err := store.Browse(ctx, p, q)
 	if err != nil || len(page.Items) != 1 || page.Items[0].Query.MR != 7 || page.Next == nil {
 		t.Fatal("unavailable MR consumed limit", page, err)
 	}
@@ -96,12 +64,9 @@ func TestBrowseFiltersUnavailableRowsBeforeLimitAndKeepsLargeCursorExact(t *test
 }
 
 func TestBrowseScopesBeforePaginationAndHidesRevokedSources(t *testing.T) {
-	pool, _, tasks, _ := automationFixture(t)
+	pool := contextFixture(t)
 	ctx := context.Background()
 	seedLinkedMR(t, pool, true, 42)
-	if _, err := tasks.ReconcileOnce(ctx); err != nil {
-		t.Fatal(err)
-	}
 	snap := snapshot()
 	snap.SessionID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 	if _, err := captureapp.NewService(postgres.NewCaptureStore(pool)).Ingest(ctx, subject, snap); err != nil {
@@ -119,24 +84,21 @@ func TestBrowseScopesBeforePaginationAndHidesRevokedSources(t *testing.T) {
 	if err != nil || len(second.Items) != 1 || second.Next != nil || second.Items[0].Query.SessionID == first.Items[0].Query.SessionID {
 		t.Fatal(second, err)
 	}
-	q = domain.BrowseQuery{ProjectID: project, Kind: "task", Limit: 1}
+	q = domain.BrowseQuery{ProjectID: project, Kind: "merge_request", Limit: 1}
 	if _, err := store.Browse(ctx, p, q); !errors.Is(err, access.ErrDenied) {
-		t.Fatal("capture permission leaked tasks", err)
+		t.Fatal("capture permission leaked provider sources", err)
 	}
 	p = contextPrincipal(access.ReadIntegration)
-	page, err := store.Browse(ctx, p, q)
-	if err != nil || len(page.Items) != 1 || page.Items[0].Query.TaskID != taskUUID {
-		t.Fatal(page, err)
-	}
+	var page domain.BrowsePage
 	q.Kind = "merge_request"
 	page, err = store.Browse(ctx, p, q)
 	if err != nil || len(page.Items) != 1 || page.Items[0].Query.MR != 7 || page.Items[0].Query.ExpectedHead == "" {
 		t.Fatal(page, err)
 	}
-	if _, err := pool.Exec(ctx, "UPDATE forge_connections SET blocked=true; UPDATE work_tasks SET available=false"); err != nil {
+	if _, err := pool.Exec(ctx, "UPDATE forge_connections SET blocked=true"); err != nil {
 		t.Fatal(err)
 	}
-	for _, kind := range []string{"task", "merge_request"} {
+	for _, kind := range []string{"merge_request"} {
 		q.Kind = kind
 		page, err = store.Browse(ctx, p, q)
 		if err != nil || len(page.Items) != 0 || page.Next != nil {
@@ -148,7 +110,7 @@ func TestBrowseScopesBeforePaginationAndHidesRevokedSources(t *testing.T) {
 		t.Fatal("integration permission leaked sessions", err)
 	}
 	q.ProjectID = "99999999-9999-4999-8999-999999999999"
-	q.Kind = "task"
+	q.Kind = "merge_request"
 	if _, err := store.Browse(ctx, p, q); !errors.Is(err, access.ErrDenied) {
 		t.Fatal("foreign project cursor broadened scope", err)
 	}

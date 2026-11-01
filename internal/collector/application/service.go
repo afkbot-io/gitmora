@@ -21,7 +21,6 @@ type RecordingEntry struct {
 type Transaction interface {
 	Config() (domain.Config, error)
 	Binding(string) (*capture.TaskRef, error)
-	Bind(string, *capture.TaskRef) error
 	Find(string) (*domain.Recording, bool, error)
 	NativePin(string) (string, bool, error)
 	PinNative(string, string) error
@@ -97,14 +96,6 @@ type Service struct {
 // NewService constructs a collector; uploader may be nil for capture-only operations.
 func NewService(ledger Ledger, uploader Uploader, now func() time.Time) *Service {
 	return &Service{ledger: ledger, uploader: uploader, now: now}
-}
-
-// Bind selects the Tasktopia scope for new sessions in one worktree. Existing sessions stay immutable.
-func (s *Service) Bind(ctx context.Context, worktree string, task *capture.TaskRef) error {
-	if worktree == "" || (task != nil && (!identifier.Valid(task.CountryID) || !identifier.Valid(task.TaskID))) {
-		return domain.ErrInvalid
-	}
-	return s.ledger.Within(ctx, func(tx Transaction) error { return tx.Bind(worktree, task) })
 }
 
 // Record stores a complete sanitized adapter observation and deduplicates its stable event ID.

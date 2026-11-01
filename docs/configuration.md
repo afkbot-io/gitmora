@@ -41,11 +41,9 @@ The operator CLI automatically uses the application's private `compose.env` on e
 | `WORKGRAPH_GITHUB_ALLOWLIST` | Empty; comma-separated Enterprise HTTPS **web bases** | API/worker. Enterprise API is `<web base>/api/v3`; ports/prefixes are retained. |
 | `WORKGRAPH_GITHUB_PRIVATE` | Empty/`false`; explicit `true` | Direct/native Enterprise private routing only. For Docker use the selected relay's visibility. |
 | `WORKGRAPH_GITHUB_ENTERPRISE_PROXY_URL` | Empty; explicit private CONNECT proxy | API/worker. Independent of GitHub.com proxy. |
-| `WORKGRAPH_TASKTOPIA_ALLOWLIST` | Empty; comma-separated exact HTTPS URLs ending in `/mcp` | API/worker. Empty disables Tasktopia. Optional prefix/port is supported. |
-| `WORKGRAPH_TASKTOPIA_PROXY_URL` | Empty; explicit private CONNECT proxy | API/worker remote Tasktopia route. Requires allowlist and HTTPS; Docker profile supplies `http://tasktopia-egress:8080`. |
 | `SSL_CERT_FILE` | System trust by default; optional readable PEM bundle | Linux process TLS trust. A custom container bundle must retain required system roots and include the corporate CA; never put a private key into it. API/worker need the same trust for their source calls. |
 
-For each sensitive value, select the direct variable **or** its `_FILE` form. Defining both is an error even when the direct value is empty. File paths must be absolute regular nonempty files, at most 64 KiB. Generated secret files are container-readable behind a `0700` host directory; do not change their permissions to a mode that prevents the container UID from reading them. Actual GitHub/GitLab/Tasktopia service tokens are saved through the authenticated connection form/API, encrypted in the database; they are not deployment env variables.
+For each sensitive value, select the direct variable **or** its `_FILE` form. Defining both is an error even when the direct value is empty. File paths must be absolute regular nonempty files, at most 64 KiB. Generated secret files are container-readable behind a `0700` host directory; do not change their permissions to a mode that prevents the container UID from reading them. Actual GitHub/GitLab service tokens are saved through the authenticated connection form/API, encrypted in the database; they are not deployment env variables.
 
 For native API operation the equivalent minimal settings are:
 
@@ -74,12 +72,10 @@ Without an OIDC configuration, capture/API/MCP bearer operations can be used for
 | `GITMORA_PUBLIC_HOST` | `gitmora.example.com`, hostname only. Shared-domain API public origin, issuer and private host mapping derive from it. |
 | `GITMORA_REALM`, `GITMORA_CLIENT_ID` | `gitmora`; match `identity-server init --realm/--client-id` and nginx realm route. |
 | `GITMORA_POSTGRES_IMAGE` | `gitmora-postgres:18.6-security1`; prebuild the pinned image. Identity uses its own default unless explicitly exported during identity operations. |
-| `GITMORA_PRIVATE_SUBNET`, `GITMORA_PRIVATE_GATEWAY` | `172.30.88.0/24`, `172.30.88.1`; choose an unused range before the first start. Used by same-host identity/Tasktopia profiles. |
-| `GITMORA_TASKTOPIA_HOST` | Optional same-host HTTPS hostname; also set matching runtime endpoint allowlist. |
+| `GITMORA_PRIVATE_SUBNET`, `GITMORA_PRIVATE_GATEWAY` | `172.30.88.0/24`, `172.30.88.1`; choose an unused range before the first start. Used by same-host identity profiles. |
 | `GITMORA_GITLAB_URL`, `GITMORA_GITLAB_AUTHORITY`, `GITMORA_GITLAB_VISIBILITY` | Custom GitLab web base, exact `host:port`, and `private`/`public` relay policy. |
 | `GITMORA_GITLAB_CA_BUNDLE` | Absolute public CA bundle for the optional CA overlay. Although named for GitLab, it sets the process-wide `SSL_CERT_FILE` for all provider clients. |
 | `GITMORA_GITHUB_ENTERPRISE_URL`, `GITMORA_GITHUB_ENTERPRISE_AUTHORITY`, `GITMORA_GITHUB_ENTERPRISE_VISIBILITY` | Enterprise web base, exact TLS authority, relay `private`/`public`. |
-| `GITMORA_TASKTOPIA_URL`, `GITMORA_TASKTOPIA_AUTHORITY`, `GITMORA_TASKTOPIA_VISIBILITY` | Remote HTTPS MCP endpoint, exact TLS authority, relay `private`/`public`. |
 | `GITMORA_IDENTITY_STATE`, `GITMORA_IDENTITY_HTTP_PORT`, `GITMORA_IDENTITY_IMAGE`, `GITMORA_IDENTITY_GATEWAY_IMAGE` | Generated from the selected identity profile/directory; ordinary CLI operations supply them. |
 | `GITMORA_IDENTITY_REALM`, `GITMORA_IDENTITY_PUBLIC_URL`, `GITMORA_IDENTITY_PUBLIC_ORIGIN`, `GITMORA_IDENTITY_PREFIX` | Generated provider routing; `/auth` for the recommended same-domain profile. |
 | `GITMORA_IDENTITY_CONFIG`, `GITMORA_IDENTITY_IMPORT` | Generated from bootstrap/active phase. Do not manually remount a retired bootstrap import. |
@@ -88,7 +84,7 @@ Without an OIDC configuration, capture/API/MCP bearer operations can be used for
 
 ## Source-build settings
 
-`make build build-image RELEASE_VERSION=0.4.4 RELEASE_REVISION="$(git rev-parse HEAD)"` stamps host binaries and the application image. Defaults are `development` and an empty revision. These are build inputs, not runtime env values. Tag the resulting local images immutably as described in [deployment](deployment.md); application and identity images are pinned independently.
+`make build build-image RELEASE_VERSION=0.5.0 RELEASE_REVISION="$(git rev-parse HEAD)"` stamps host binaries and the application image. Defaults are `development` and an empty revision. These are build inputs, not runtime env values. Tag the resulting local images immutably as described in [deployment](deployment.md); application and identity images are pinned independently.
 
 ## Developer CLI and agent settings
 
@@ -103,4 +99,4 @@ Without an OIDC configuration, capture/API/MCP bearer operations can be used for
 | `HOME`, `PATH`, `XDG_RUNTIME_DIR`, `DBUS_SESSION_BUS_ADDRESS` | Normal OS/session environment. On Linux, interactive auth requires installed `secret-tool` and an unlocked Secret Service/D-Bus session. |
 | `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_NOSYSTEM`, `GIT_ALLOW_PROTOCOL`, `GIT_TERMINAL_PROMPT`, `GIT_LITERAL_PATHSPECS`, `GIT_NO_LAZY_FETCH`, `GIT_NO_REPLACE_OBJECTS`, `GIT_OPTIONAL_LOCKS` | Existing Git environment; some are deliberately sanitized or fixed by bounded local Git subprocesses. They are not Gitmora server settings. |
 
-Test-only `WORKGRAPH_TEST_*`, `GITMORA_*TEST*`, `TASKTOPIA_SOURCE`, `TASKTOPIA_NODE` and browser verification switches belong to [development](development.md), not production runtime. `HTTP_PROXY`/`HTTPS_PROXY` do not select provider destinations; configure the explicit provider proxy variables. There is no model-provider key, GPU setting or server inference configuration.
+Test-only `WORKGRAPH_TEST_*`, `GITMORA_*TEST*` and browser switches are described in [development](development.md). `HTTP_PROXY`/`HTTPS_PROXY` do not select provider destinations; use the explicit provider proxy settings. There is no model key or GPU requirement.

@@ -115,8 +115,6 @@ def main() -> None:
             git("remote", "add", "origin", str(temp / "remote.git"))
             git("push", "-u", "origin", "main")
             collector("init", "--server", base, "--repository-id", identity["repository_id"])
-            country, task = str(uuid.uuid4()), str(uuid.uuid4())
-            collector("bind", "--country-id", country, "--task-id", task)
             collector("agent", "enable", "opencode", "--config-dir", str(config_dir))
             config = {"autoupdate": False, "share": "disabled", "enabled_providers": ["workgraph-local"], "model": "workgraph-local/fixture", "small_model": "workgraph-local/fixture", "permission": {"*": "deny", "bash": "allow"}, "lsp": False, "formatter": False, "compaction": {"auto": False, "prune": False}, "provider": {"workgraph-local": {"npm": "@ai-sdk/openai-compatible", "name": "Local fixture", "options": {"baseURL": f"http://127.0.0.1:{provider.server_port}/v1", "apiKey": "fixture-local"}, "models": {"fixture": {"name": "Fixture", "tool_call": True, "limit": {"context": 32000, "output": 2048}}}}}}
             (config_dir / "opencode.json").write_text(json.dumps(config))
@@ -135,7 +133,6 @@ def main() -> None:
             snapshot = stored["snapshot"]
             assert set(commits).issubset(snapshot["commits"]), "native intermediate commit was lost"
             assert snapshot["messages"][-1]["text"] == "Native final answer after git push", "final native answer after push was lost"
-            assert snapshot["task"] == {"country_id": country, "task_id": task}, "Tasktopia binding lost"
             assert "native-never-persist" not in json.dumps(stored), "known secret was persisted"
             assert any(message["role"] == "tool" for message in snapshot["messages"]), "native tool evidence missing"
             assert stored["confirmed_commits"] == [], "client push was misreported as provider confirmation"
@@ -157,8 +154,7 @@ def main() -> None:
             manual_snapshot = json.loads(raw)
             assert "manual.go" in manual_snapshot["files"] and manual_commit in manual_snapshot["commits"], "native path observation was lost"
             # Resume the same real native session through its actual summarize API. The new
-            # worktree binding must not retarget the already published original conversation.
-            collector("bind", "--country-id", country, "--task-id", str(uuid.uuid4()))
+            # published conversation preserves its original source scope.
             with socket.socket() as port:
                 port.bind(("127.0.0.1", 0))
                 native_port = port.getsockname()[1]
@@ -197,7 +193,7 @@ def main() -> None:
                 child = child_view["snapshot"]
                 assert child["continuation"]["root_session_id"] == session_id and child["continuation"]["reason"] == "compaction"
                 assert child_view["parent_reference_verified"], "Exact original snapshot was not independently matched"
-                assert child["task"] == snapshot["task"], "Compaction retargeted the original task"
+                assert "task" not in child and "task" not in snapshot, "New recordings acquired a retired task binding"
                 assert any(message.get("kind") == "agent_summary" and message["text"] == "Native compaction summary" for message in child["messages"])
                 assert api.sql(f'SELECT count(*) FROM "{schema}".capture_sessions') == "3", "Private session was published or continuation duplicated"
                 with urllib.request.urlopen(native_origin + f"/session/{native_id}/message?" + query, timeout=5) as response:
@@ -254,7 +250,7 @@ def main() -> None:
             assert api.sql(f'SELECT count(*) FROM "{schema}".capture_sessions') == str(4 + len(windows)), "Another private source inherited long-stream consent"
             collector("agent", "disable", "opencode", "--config-dir", str(config_dir))
             assert (config_dir / "opencode.json").exists(), "provider config removed"
-            print(json.dumps({"result": "passed", "agent": "OpenCode 1.19.5", "model": "deterministic loopback fixture", "verified": ["native plugin loading", "actual Bash tool", "two commits and push in one tool", "real API and PostgreSQL", "late final reply", "task binding", "redaction", "private uncommitted session", "human commits native edits", "actual compaction API", "actual history removal event", "typed continuation and exact parent verification", "summary provenance", "continued original task and consent", "SDK-fixture history over 2 MiB without truncation", "human push seals dirty tail", "safe plugin disable"]}))
+            print(json.dumps({"result": "passed", "agent": "OpenCode 1.19.5", "model": "deterministic loopback fixture", "verified": ["native plugin loading", "actual Bash tool", "two commits and push in one tool", "real API and PostgreSQL", "late final reply", "redaction", "private uncommitted session", "human commits native edits", "actual compaction API", "actual history removal event", "typed continuation and exact parent verification", "summary provenance", "continued original source and consent", "SDK-fixture history over 2 MiB without truncation", "human push seals dirty tail", "safe plugin disable"]}))
     finally:
         provider.shutdown()
         provider.server_close()

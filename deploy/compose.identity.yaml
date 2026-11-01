@@ -1,11 +1,11 @@
 # Selected same-host identity origin: preserve its HTTPS hostname while dialing only the private host gateway.
-# This profile supplies its own private subnet; Tasktopia is optional. It does not enable OIDC or mount a secret in the worker.
+# This profile supplies its own private subnet. It does not enable OIDC or mount a secret in the worker.
 services:
   api:
     extra_hosts:
       - "${GITMORA_PUBLIC_HOST:-gitmora.tasktopia.online}:${GITMORA_PRIVATE_GATEWAY:-172.30.88.1}"
 
-# The identity route works independently of the optional Tasktopia overlay.
+# The identity route works on its own private subnet.
 networks:
   private:
     internal: true

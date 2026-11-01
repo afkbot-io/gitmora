@@ -81,13 +81,3 @@ export interface ForgeStatus {
   blocked: boolean;
   streams: StreamStatus[];
 }
-export interface TasktopiaStatus {
-  project_id: string;
-  endpoint: string;
-  country_id: string;
-  enabled: boolean;
-  generation: number;
-  blocked: boolean;
-  error_code?: string;
-  auto_link_merge_requests: boolean;
-}

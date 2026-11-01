@@ -1,6 +1,6 @@
 import { t as translate } from "../domain/locale.js";
 import { buttonStyles, sharedStyles } from "./ui.js";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type {
   Me,
@@ -19,7 +19,7 @@ import {
   MutationForm,
 } from "./SettingsShared.js";
 import { Empty, ErrorNotice } from "./shared.js";
-import { AgentSetup } from "./AgentSetup.js";
+import { ForgeConnection } from "./connections/ForgeConnection.js";
 
 export function RepositoryCatalog({
   client,
@@ -27,12 +27,14 @@ export function RepositoryCatalog({
   project,
   repositories,
   onSaved,
+  onConnected,
 }: {
   client: ApiClient;
   me: Me;
   project: Project;
   repositories: Repository[];
   onSaved: () => Promise<void>;
+  onConnected: (id: string) => void;
 }) {
   const canConnect =
     capabilities(me, project).catalog && capabilities(me, project).integrations;
@@ -41,16 +43,27 @@ export function RepositoryCatalog({
     <section className="repository-view px-0 pb-8">
       <div className={sharedStyles.heading}>
         <div>
-          <h1>{translate("Репозитории")}</h1>
+          <h1 className="mb-2">
+            {translate(
+              repositories.length
+                ? "Репозитории"
+                : "Подключите первый репозиторий",
+            )}
+          </h1>
+          {!repositories.length && (
+            <p className="mb-0 text-sm text-muted">
+              {translate(
+                "Вставьте ссылку на репозиторий. Адрес сервера и ID определим автоматически.",
+              )}
+            </p>
+          )}
         </div>
-        {canConnect && (
+        {canConnect && repositories.length > 0 && (
           <button
             className={buttonStyles.primary}
             onClick={() => setOpen(!open)}
           >
-            {open
-              ? translate("Скрыть форму")
-              : translate("Добавить репозиторий")}
+            {open ? translate("Отмена") : translate("Добавить репозиторий")}
           </button>
         )}
       </div>
@@ -58,9 +71,11 @@ export function RepositoryCatalog({
         <RepositoryCreate
           client={client}
           project={project}
-          onSaved={async () => {
+          onRegistered={onSaved}
+          onSaved={async (id) => {
             await onSaved();
             setOpen(false);
+            onConnected(id);
           }}
         />
       )}
@@ -88,11 +103,15 @@ function RepositoryCreate({
   client,
   project,
   onSaved,
+  onRegistered,
 }: {
   client: ApiClient;
   project: Project;
-  onSaved: () => Promise<void>;
+  onSaved: (id: string) => Promise<void>;
+  onRegistered: () => Promise<void>;
 }) {
+  const busy = useRef(false);
+  const [saving, setSaving] = useState(false);
   const [host, setHost] = useState<"github" | "gitlab">("github");
   const [url, setURL] = useState("");
   const [token, setToken] = useState("");
@@ -107,6 +126,9 @@ function RepositoryCreate({
   const [error, setError] = useState("");
   async function create(event: FormEvent) {
     event.preventDefault();
+    if (busy.current) return;
+    busy.current = true;
+    setSaving(true);
     setError("");
     const credential = token;
     setToken("");
@@ -152,6 +174,7 @@ function RepositoryCreate({
         );
         if (!saved) return;
         setCreated(true);
+        await onRegistered();
       }
       const saved = await connection.run(
         "PUT",
@@ -163,19 +186,21 @@ function RepositoryCreate({
           webhook_mode: "disabled",
         },
       );
-      if (saved) await onSaved();
+      if (saved) await onSaved(id);
     } catch (e) {
       setError(e instanceof Error ? e.message : translate("Проверьте данные."));
+    } finally {
+      busy.current = false;
+      setSaving(false);
     }
   }
   return (
     <MutationForm
-      pending={action.pending || lookup.pending || connection.pending}
+      pending={saving}
       className={sharedStyles.setup}
       onSubmit={(event) => void create(event)}
     >
-      <h2>{translate("Подключить репозиторий")}</h2>
-      <div className="grid grid-cols-[220px_minmax(0,1fr)] gap-5 mobile:grid-cols-1">
+      <div className="grid grid-cols-[160px_minmax(0,1fr)] gap-4 mobile:grid-cols-1">
         <label>
           {translate("Сервис")}
           <select
@@ -185,7 +210,6 @@ function RepositoryCreate({
             onChange={(e) => {
               setHost(e.target.value as "github" | "gitlab");
               setResolved(null);
-              setURL("");
               setAnonymous(false);
               setToken("");
             }}
@@ -203,8 +227,16 @@ function RepositoryCreate({
             readOnly={created}
             value={url}
             onChange={(e) => {
-              setURL(e.target.value);
+              const value = e.target.value;
+              setURL(value);
               setResolved(null);
+              try {
+                const origin = new URL(value).hostname.toLowerCase();
+                if (origin === "github.com") setHost("github");
+                else if (origin === "gitlab.com") setHost("gitlab");
+              } catch {
+                /* The form validates the final URL. */
+              }
             }}
             placeholder={
               host === "github"
@@ -240,6 +272,18 @@ function RepositoryCreate({
                 "GitLab → Settings → Access tokens. Создайте токен с правом read_api и доступом к этому проекту.",
               )}
         </p>
+        <a
+          className="inline-flex py-2"
+          target="_blank"
+          rel="noopener noreferrer"
+          href={
+            host === "github"
+              ? "https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens"
+              : "https://docs.gitlab.com/user/profile/personal_access_tokens/"
+          }
+        >
+          {translate("Инструкция сервиса")}
+        </a>
       </details>
       {host === "github" && (
         <label className="checkbox">
@@ -283,9 +327,11 @@ function RepositoryCreate({
         </p>
       )}
       <button className={buttonStyles.primary}>
-        {action.pending || lookup.pending || connection.pending
+        {saving
           ? translate("Подключаем…")
-          : translate("Подключить репозиторий")}
+          : created
+            ? translate("Сохранить подключение")
+            : translate("Подключить репозиторий")}
       </button>
     </MutationForm>
   );
@@ -306,7 +352,10 @@ function RepositoryEntry({
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const action = useMutation(client);
+  const rights = capabilities(me, project);
   const path = `/v1/projects/${project.id}/repositories/${repository.id}`;
+  const origin = repositoryURL(repository);
+  const url = safeExternalURL(origin);
   async function remove() {
     if (
       await action.run(
@@ -320,79 +369,82 @@ function RepositoryEntry({
       await onSaved();
     }
   }
-  const origin = repositoryURL(repository);
-  const url = safeExternalURL(origin);
   return (
-    <article
-      className={`
-      settings-resource border-b border-line px-0 py-4 [&_.repository-row]:border-0
-      [&_.repository-row]:px-0 [&_.repository-row]:py-4 [&_.repository-row_>_div:first-child]:[flex:1]
-    `}
-    >
-      <div
-        className={`
-        repository-row px-0 py-6 border-t border-line flex items-center justify-between gap-5
-        flex-wrap [&_h2]:mb-1 [&_p]:m-0 [&_p]:text-sm [&_dt]:text-xs [&_dt]:text-muted [&_dt]:mb-1
-        [&_>_span]:text-xs mobile:gap-3 mobile:[&_>_span]:w-full
-        mobile:[&_a]:wrap-anywhere
-      `}
-      >
-        <div>
-          <h2>{repository.name}</h2>
-          <p>
+    <article className="settings-resource mt-4 overflow-hidden rounded-lg border border-line bg-paper">
+      <div className="repository-row flex flex-wrap items-center justify-between gap-4 p-4">
+        <div className="min-w-0 flex-1">
+          <h2 className="mb-1 text-base">{repository.name}</h2>
+          <p className="m-0 truncate text-xs text-muted">
+            {repository.provider === "github" ? "GitHub" : "GitLab"} ·{" "}
             {url ? (
               <a href={url} target="_blank" rel="noopener noreferrer">
                 {origin}
               </a>
             ) : (
-              translate("Адрес репозитория недоступен")
+              origin
             )}
           </p>
         </div>
-        <span className="text-xs text-muted">
-          {repository.provider === "github" ? "GitHub" : "GitLab"}
-        </span>
-        {capabilities(me, project).catalog && (
-          <div className="actions flex gap-3 flex-wrap items-center">
-            <button
-              className={buttonStyles.secondary}
-              onClick={() => setEditing(!editing)}
-            >
-              {translate("Переименовать")}
-            </button>
-            <button
-              className={sharedStyles.destructiveText}
-              onClick={() => setDeleting(true)}
-            >
-              {translate("Удалить репозиторий")}
-            </button>
-          </div>
-        )}
+        <div className="flex flex-wrap gap-2">
+          <a
+            className={buttonStyles.secondary + " action-link text-sm"}
+            href={`#view=setup&project=${project.id}&repository=${repository.id}`}
+          >
+            {translate("CLI и MCP")}
+          </a>
+          <button
+            className={buttonStyles.secondary + " text-sm"}
+            aria-expanded={editing}
+            onClick={() => setEditing(!editing)}
+          >
+            {translate(editing ? "Свернуть" : "Настроить")}
+          </button>
+        </div>
       </div>
-      {project.role && <AgentSetup repositoryID={repository.id} />}
-      {capabilities(me, project).catalog && editing && (
-        <Rename
-          key={repository.version}
-          client={client}
-          path={path}
-          name={repository.name}
-          version={repository.version}
-          onSaved={onSaved}
-          label={translate("Новое название репозитория")}
-        />
+      {editing && (
+        <div className="border-t border-line p-4">
+          <ForgeConnection
+            client={client}
+            repository={repository}
+            canRead={rights.integrationRead}
+            canManage={rights.integrations}
+          />
+          {rights.catalog && (
+            <details className="mt-5 border-t border-line pt-3 text-sm">
+              <summary className="py-2">
+                {translate("Название и удаление")}
+              </summary>
+              <Rename
+                key={repository.version}
+                client={client}
+                path={path}
+                name={repository.name}
+                version={repository.version}
+                onSaved={onSaved}
+                label={translate("Новое название репозитория")}
+              />
+              <button
+                className={sharedStyles.destructiveText}
+                onClick={() => setDeleting(true)}
+              >
+                {translate("Удалить репозиторий")}
+              </button>
+            </details>
+          )}
+        </div>
       )}
-      {capabilities(me, project).catalog && deleting && (
+      {deleting && (
         <ConfirmAction
           title={translate("Удалить {0}?", repository.name)}
           pending={action.pending}
           error={action.error}
           onClose={() => setDeleting(false)}
           onConfirm={() => void remove()}
-          label={translate("Удалить локальные данные")}
+          label={translate("Удалить репозиторий и его данные")}
         >
           <p>
             {translate(
-              "Будут удалены запись репозитория и связанные локальные сессии, индексы и результаты. Исходный репозиторий останется у вашего провайдера.",
+              "Сессии и история этого репозитория будут удалены из Gitmora.",
             )}
           </p>
         </ConfirmAction>

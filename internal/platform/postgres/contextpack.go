@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -15,7 +14,6 @@ import (
 	"workgraph.local/platform/internal/contextpack/domain"
 	forge "workgraph.local/platform/internal/forge/domain"
 	"workgraph.local/platform/internal/redact"
-	work "workgraph.local/platform/internal/work/domain"
 )
 
 // ContextStore is a read-only cross-context projection adapter. It cannot mutate source aggregates or call providers.
@@ -26,21 +24,13 @@ func NewContextStore(pool *pgxpool.Pool) *ContextStore { return &ContextStore{Ne
 
 // Read applies membership and independent capabilities before loading any source body or association.
 func (s *ContextStore) Read(ctx context.Context, p access.Principal, q domain.Query) (domain.Pack, error) {
-	result := domain.Pack{SchemaVersion: 1, Query: q, TaskState: "not_requested", Captures: domain.CapturePage{Items: []domain.Capture{}, Omitted: !p.Has(access.ReadCapture)}, MergeRequests: domain.MRPage{Items: []domain.MR{}, Omitted: !p.Has(access.ReadIntegration) || (q.MR == 0 && q.CommitSHA == "" && !p.Has(access.ReadCapture))}, Evidence: []domain.Evidence{}}
+	result := domain.Pack{SchemaVersion: 1, Query: q, Captures: domain.CapturePage{Items: []domain.Capture{}, Omitted: !p.Has(access.ReadCapture)}, MergeRequests: domain.MRPage{Items: []domain.MR{}, Omitted: !p.Has(access.ReadIntegration) || (q.MR == 0 && q.CommitSHA == "" && !p.Has(access.ReadCapture))}, Evidence: []domain.Evidence{}}
 	err := s.retrieval.authorized(ctx, p, q.ProjectID, q.RepositoryID, func(tx pgx.Tx) error {
 		if err := tx.QueryRow(ctx, "SELECT transaction_timestamp()").Scan(&result.ReadAt); err != nil {
 			return err
 		}
 		if err := tx.QueryRow(ctx, `SELECT count(*),count(*) FILTER(WHERE j.last_error_code IS NOT NULL) FROM retrieval_jobs j `+sourceJoins+` WHERE `+eligibleSources+` AND j.completed_at IS NULL`, q.ProjectID, p.Has(access.ReadCapture), p.Has(access.ReadIntegration), "", false).Scan(&result.PendingSources, &result.FailedSources); err != nil {
 			return err
-		}
-		if q.TaskID != "" {
-			result.TaskState = "not_permitted"
-			if p.Has(access.ReadIntegration) {
-				if err := readContextTask(ctx, tx, q, &result); err != nil {
-					return err
-				}
-			}
 		}
 		captureQuery := q
 		if q.MR > 0 && p.Has(access.ReadIntegration) {
@@ -53,9 +43,15 @@ func (s *ContextStore) Read(ctx context.Context, p access.Principal, q domain.Qu
 				result.MergeRequests.Items = append(result.MergeRequests.Items, mr)
 				captureQuery.RepositoryID = mr.SourceRepositoryID
 				captureQuery.CommitSHA = mr.Head
+				if mr.CommitsComplete && mr.SourceRepositoryID != "" {
+					captureQuery.CommitSHA = ""
+					captureQuery.MRTargetRepository = q.RepositoryID
+					captureQuery.MRCodeKey = mr.CodeKey
+					captureQuery.MRSourceProject = mr.SourceProjectID
+				}
 			}
 		}
-		if p.Has(access.ReadCapture) && (q.MR == 0 || captureQuery.RepositoryID != "" && captureQuery.CommitSHA != "") {
+		if p.Has(access.ReadCapture) && (q.MR == 0 || captureQuery.RepositoryID != "" && (captureQuery.CommitSHA != "" || captureQuery.MRCodeKey != "")) {
 			if err := readContextCaptures(ctx, tx, captureQuery, &result.Captures); err != nil {
 				return err
 			}
@@ -74,9 +70,6 @@ func (s *ContextStore) Read(ctx context.Context, p access.Principal, q domain.Qu
 				}
 				if found {
 					mr.Association = "captured_stream_commits"
-					if q.TaskID != "" {
-						mr.Association = "capture_task_binding_and_confirmed_commit"
-					}
 					if q.CommitSHA != "" {
 						mr.Association = "confirmed_commit_membership"
 					}
@@ -89,32 +82,6 @@ func (s *ContextStore) Read(ctx context.Context, p access.Principal, q domain.Qu
 	return result, err
 }
 
-func readContextTask(ctx context.Context, tx pgx.Tx, q domain.Query, result *domain.Pack) error {
-	result.TaskState = "unavailable"
-	var raw []byte
-	var digest string
-	var observed time.Time
-	err := tx.QueryRow(ctx, `SELECT o.model,o.digest,t.observed_at FROM work_tasks t JOIN work_task_observations o ON (o.project_id,o.task_id,o.digest)=(t.project_id,t.task_id,t.digest) JOIN work_connections c ON c.project_id=t.project_id AND c.country_id=t.country_id WHERE t.project_id=$1 AND t.country_id::text=$2 AND t.task_id::text=$3 AND t.available AND c.enabled AND NOT c.blocked`, q.ProjectID, q.CountryID, q.TaskID).Scan(&raw, &digest, &observed)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	var task work.Task
-	if json.Unmarshal(raw, &task) != nil {
-		return domain.ErrInvalid
-	}
-	task, err = work.NormalizeTask(task)
-	if err != nil || task.Digest() != digest || task.CountryID != q.CountryID || task.ID != q.TaskID {
-		return domain.ErrInvalid
-	}
-	compact := domain.CompactTask(task, digest, q.ProjectID, observed)
-	result.Task = &compact
-	result.TaskState = "available_cached"
-	return nil
-}
-
 // contextTree proves every traversed edge from an actual root, with exact parent bytes,
 // immutable source scope (including nanoseconds) and originator. Forged declarations never expand a stream.
 const contextTree = `WITH RECURSIVE scoped AS MATERIALIZED (
@@ -124,9 +91,9 @@ const contextTree = `WITH RECURSIVE scoped AS MATERIALIZED (
  LEFT JOIN capture_continuations c ON c.repository_id=s.repository_id AND c.session_id=s.session_id
  WHERE r.project_id=$1 AND ($2::text='' OR s.repository_id::text=$2)
 ), seeds AS MATERIALIZED (
- SELECT s.* FROM scoped s WHERE ($3::text<>'' AND s.country_id::text=$3 AND s.task_id::text=$4)
- OR($5::text<>'' AND s.session_id::text=$5)
- OR($6::text<>'' AND EXISTS(SELECT 1 FROM capture_revision_commits rc JOIN commits c ON c.repository_id=rc.repository_id AND c.sha=rc.sha AND c.confirmed_at IS NOT NULL WHERE rc.repository_id=s.repository_id AND rc.session_id=s.session_id AND rc.sha=$6))
+ SELECT s.* FROM scoped s WHERE ($3::text<>'' AND s.session_id::text=$3)
+ OR($4::text<>'' AND EXISTS(SELECT 1 FROM capture_revision_commits rc JOIN commits c ON c.repository_id=rc.repository_id AND c.sha=rc.sha AND c.confirmed_at IS NOT NULL WHERE rc.repository_id=s.repository_id AND rc.session_id=s.session_id AND rc.sha=$4))
+ OR($7::text<>'' AND EXISTS(SELECT 1 FROM capture_revision_commits rc JOIN commits c ON c.repository_id=rc.repository_id AND c.sha=rc.sha AND c.confirmed_at IS NOT NULL JOIN forge_mr_commits mc ON mc.sha=rc.sha AND mc.repository_id::text=$5 AND mc.iid=$6 AND mc.code_key=$7 AND mc.source_project_id=$8 WHERE rc.repository_id=s.repository_id AND rc.session_id=s.session_id))
 ), tree AS (
  SELECT r.*,1 AS depth FROM scoped r WHERE r.previous_session_id IS NULL AND EXISTS(SELECT 1 FROM seeds s WHERE s.repository_id=r.repository_id AND s.root_id=r.session_id AND s.originator_id=r.originator_id AND s.started_at_text=r.started_at_text AND s.agent_name=r.agent_name AND s.country_id IS NOT DISTINCT FROM r.country_id AND s.task_id IS NOT DISTINCT FROM r.task_id)
  UNION ALL
@@ -138,7 +105,7 @@ const contextTree = `WITH RECURSIVE scoped AS MATERIALIZED (
 ) `
 
 func contextArgs(q domain.Query) []any {
-	return []any{q.ProjectID, q.RepositoryID, q.CountryID, q.TaskID, q.SessionID, q.CommitSHA}
+	return []any{q.ProjectID, q.RepositoryID, q.SessionID, q.CommitSHA, q.MRTargetRepository, q.MR, q.MRCodeKey, q.MRSourceProject}
 }
 func readContextCaptures(ctx context.Context, tx pgx.Tx, q domain.Query, page *domain.CapturePage) error {
 	after := domain.Cursor{}
@@ -153,7 +120,7 @@ func readContextCaptures(ctx context.Context, tx pgx.Tx, q domain.Query, page *d
  ARRAY(SELECT c.sha FROM capture_revision_commits rc JOIN commits c ON c.repository_id=rc.repository_id AND c.sha=rc.sha AND c.confirmed_at IS NOT NULL WHERE rc.repository_id=s.repository_id AND rc.session_id=s.session_id AND rc.revision=s.latest_revision ORDER BY c.sha LIMIT 16),
  (SELECT count(*) FROM capture_revision_commits rc JOIN commits c ON c.repository_id=rc.repository_id AND c.sha=rc.sha AND c.confirmed_at IS NOT NULL WHERE rc.repository_id=s.repository_id AND rc.session_id=s.session_id AND rc.revision=s.latest_revision)
  FROM wanted w JOIN scoped s ON s.repository_id=w.repository_id AND s.session_id=w.session_id JOIN capture_revisions r ON r.repository_id=s.repository_id AND r.session_id=s.session_id AND r.revision=s.latest_revision
- WHERE ($7::text='' OR (s.repository_id::text,s.segment,s.session_id::text)>($7,$8,$9)) ORDER BY s.repository_id::text,s.segment,s.session_id::text LIMIT $10`, args...)
+ WHERE ($9::text='' OR (s.repository_id::text,s.segment,s.session_id::text)>($9,$10,$11)) ORDER BY s.repository_id::text,s.segment,s.session_id::text LIMIT $12`, args...)
 	if err != nil {
 		return err
 	}
@@ -196,54 +163,37 @@ func contextMRRefs(ctx context.Context, tx pgx.Tx, q domain.Query) ([]mrRef, *do
 	if q.MRAfter != nil {
 		after = *q.MRAfter
 	}
-	if q.TaskID != "" {
-		rows, err := tx.Query(ctx, workMRMatches+` AND ($7::text='' OR (m.target_repository_id::text,m.iid)>($7,$8)) AND ($9::text='' OR m.source_repository_id::text=$9)`+strings.Replace(workMRMatchOrder, "LIMIT 100", "LIMIT 5", 1), q.ProjectID, q.CountryID, q.TaskID, "", int64(0), "", after.RepositoryID, after.IID, q.RepositoryID)
-		if err != nil {
-			return nil, nil, err
-		}
-		defer rows.Close()
-		for rows.Next() {
-			m, err := readLinkMatch(rows)
-			if err != nil {
-				return nil, nil, err
-			}
-			refs = append(refs, mrRef{m.Link.RepositoryID, m.Link.IID})
-		}
-		if err := rows.Err(); err != nil {
-			return nil, nil, err
-		}
-	} else {
-		prefix := contextTree + `, bound AS (
+
+	prefix := contextTree + `, bound AS (
  SELECT DISTINCT r.id AS source_repository_id,r.gitlab_url,r.gitlab_project_id,r.provider,rc.sha FROM wanted w JOIN repositories r ON r.id=w.repository_id JOIN capture_revision_commits rc ON rc.repository_id=w.repository_id AND rc.session_id=w.session_id JOIN commits c ON c.repository_id=rc.repository_id AND c.sha=rc.sha AND c.confirmed_at IS NOT NULL
  )`
-		args := contextArgs(q)
-		cursorFilter := ` AND ($7::text='' OR (tr.id::text,o.iid)>($7,$8))`
-		if q.CommitSHA != "" {
-			prefix = `WITH bound AS (SELECT r.id AS source_repository_id,r.gitlab_url,r.gitlab_project_id,r.provider,c.sha FROM repositories r JOIN commits c ON c.repository_id=r.id AND c.confirmed_at IS NOT NULL WHERE r.project_id=$1 AND r.id::text=$2 AND c.sha=$3)`
-			args = []any{q.ProjectID, q.RepositoryID, q.CommitSHA}
-			cursorFilter = ` AND ($4::text='' OR (tr.id::text,o.iid)>($4,$5))`
-		}
-		args = append(args, after.RepositoryID, after.IID)
-		rows, err := tx.Query(ctx, prefix+` SELECT DISTINCT tr.id::text,o.iid FROM bound b JOIN forge_connections sc ON sc.repository_id=b.source_repository_id AND sc.enabled AND NOT sc.blocked AND sc.last_synced_at>now()-interval '10 minutes'
+	args := contextArgs(q)
+	cursorFilter := ` AND ($9::text='' OR (tr.id::text,o.iid)>($9,$10))`
+	if q.CommitSHA != "" {
+		prefix = `WITH bound AS (SELECT r.id AS source_repository_id,r.gitlab_url,r.gitlab_project_id,r.provider,c.sha FROM repositories r JOIN commits c ON c.repository_id=r.id AND c.confirmed_at IS NOT NULL WHERE r.project_id=$1 AND r.id::text=$2 AND c.sha=$3)`
+		args = []any{q.ProjectID, q.RepositoryID, q.CommitSHA}
+		cursorFilter = ` AND ($4::text='' OR (tr.id::text,o.iid)>($4,$5))`
+	}
+	args = append(args, after.RepositoryID, after.IID)
+	rows, err := tx.Query(ctx, prefix+` SELECT DISTINCT tr.id::text,o.iid FROM bound b JOIN forge_connections sc ON sc.repository_id=b.source_repository_id AND sc.enabled AND NOT sc.blocked AND sc.last_synced_at>now()-interval '10 minutes'
  JOIN repositories tr ON tr.project_id=$1 AND tr.provider=b.provider AND ((tr.provider='github' AND regexp_replace(tr.gitlab_url,'/[^/]+/[^/]+$','')=regexp_replace(b.gitlab_url,'/[^/]+/[^/]+$','')) OR(tr.provider='' AND tr.gitlab_url=b.gitlab_url)) JOIN forge_connections tc ON tc.repository_id=tr.id AND tc.enabled AND NOT tc.blocked AND tc.last_synced_at>now()-interval '10 minutes'
  JOIN forge_merge_requests m ON m.repository_id=tr.id AND m.available JOIN forge_mr_observations o ON (o.repository_id,o.iid,o.digest)=(m.repository_id,m.iid,m.digest) AND o.model->>'project_id'=tr.gitlab_project_id::text
  JOIN forge_mr_codes k ON (k.repository_id,k.iid,k.code_key)=(o.repository_id,o.iid,o.code_key) AND k.complete
  WHERE (EXISTS(SELECT 1 FROM forge_mr_commits mc WHERE (mc.repository_id,mc.iid,mc.code_key)=(o.repository_id,o.iid,o.code_key) AND mc.source_project_id=b.gitlab_project_id AND o.model->>'source_project_id'=b.gitlab_project_id::text AND mc.sha=b.sha)
  OR(b.source_repository_id=tr.id AND o.model->>'state'='merged' AND b.sha IN(o.model->>'merge',o.model->>'squash')))`+cursorFilter+` ORDER BY tr.id::text,o.iid LIMIT 5`, args...)
-		if err != nil {
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var r mrRef
+		if err := rows.Scan(&r.repo, &r.iid); err != nil {
 			return nil, nil, err
 		}
-		defer rows.Close()
-		for rows.Next() {
-			var r mrRef
-			if err := rows.Scan(&r.repo, &r.iid); err != nil {
-				return nil, nil, err
-			}
-			refs = append(refs, r)
-		}
-		if err := rows.Err(); err != nil {
-			return nil, nil, err
-		}
+		refs = append(refs, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
 	}
 	var next *domain.MRCursor
 	if len(refs) > 4 {
@@ -255,7 +205,7 @@ func contextMRRefs(ctx context.Context, tx pgx.Tx, q domain.Query) ([]mrRef, *do
 }
 
 func readContextMR(ctx context.Context, tx pgx.Tx, project, repo string, iid int64, expected string) (domain.MR, bool, error) {
-	out := domain.MR{RepositoryID: repo, IID: iid, ResultSHAs: []string{}, Pipelines: []domain.Pipeline{}, Deployments: []forge.Deployment{}}
+	out := domain.MR{SourceCommits: []string{}, RepositoryID: repo, IID: iid, ResultSHAs: []string{}, Pipelines: []domain.Pipeline{}, Deployments: []forge.Deployment{}}
 	var raw []byte
 	var base, provider string
 	err := tx.QueryRow(ctx, `SELECT o.model,o.digest,o.code_key,o.observed_at,k.complete,r.gitlab_url,r.provider FROM repositories r JOIN forge_connections f ON f.repository_id=r.id AND f.enabled AND NOT f.blocked AND f.last_synced_at>now()-interval '10 minutes' JOIN forge_merge_requests m ON m.repository_id=r.id AND m.available JOIN forge_mr_observations o ON (o.repository_id,o.iid,o.digest)=(m.repository_id,m.iid,m.digest) JOIN forge_mr_codes k ON (k.repository_id,k.iid,k.code_key)=(o.repository_id,o.iid,o.code_key) WHERE r.project_id=$1 AND r.id=$2 AND m.iid=$3 AND o.model->>'project_id'=r.gitlab_project_id::text`, project, repo, iid).Scan(&raw, &out.Observation, &out.CodeKey, &out.ObservedAt, &out.CommitsComplete, &base, &provider)
@@ -269,9 +219,30 @@ func readContextMR(ctx context.Context, tx pgx.Tx, project, repo string, iid int
 	if json.Unmarshal(raw, &model) != nil || model.Digest() != out.Observation || model.CodeKey() != out.CodeKey {
 		return out, false, domain.ErrInvalid
 	}
-	if _, e := work.NewProviderMRLink(provider, repo, base, model.ProjectID, iid, model.URL); e != nil {
+	if _, e := forge.NewProviderMRLink(provider, repo, base, model.ProjectID, iid, model.URL); e != nil {
 		return out, false, nil
 	}
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM forge_mr_commits WHERE repository_id=$1 AND iid=$2 AND code_key=$3 AND source_project_id=$4`, repo, iid, out.CodeKey, model.SourceProjectID).Scan(&out.SourceCommitCount); err != nil {
+		return out, false, err
+	}
+	commitRows, err := tx.Query(ctx, `SELECT sha FROM forge_mr_commits WHERE repository_id=$1 AND iid=$2 AND code_key=$3 AND source_project_id=$4 ORDER BY sha LIMIT 50`, repo, iid, out.CodeKey, model.SourceProjectID)
+	if err != nil {
+		return out, false, err
+	}
+	for commitRows.Next() {
+		var sha string
+		if err := commitRows.Scan(&sha); err != nil {
+			commitRows.Close()
+			return out, false, err
+		}
+		out.SourceCommits = append(out.SourceCommits, sha)
+	}
+	err = commitRows.Err()
+	commitRows.Close()
+	if err != nil {
+		return out, false, err
+	}
+	out.SourceCommitsMore = out.SourceCommitCount > len(out.SourceCommits)
 	out.Title = model.Title
 	out.Description = domain.Clip(model.Description, 500)
 	out.URL = model.URL

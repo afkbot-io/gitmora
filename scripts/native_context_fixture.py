@@ -35,7 +35,7 @@ def verify(root, url, token, query, evidence, revoke):
         assert 'result' in initialized
         process.stdin.write(json.dumps(dict(jsonrpc='2.0', method='notifications/initialized')) + '\n'); process.stdin.flush()
         tools = rpc('tools/list', {})
-        assert {tool['name'] for tool in tools['result']['tools']} == {'context.search', 'context.browse', 'context.pack', 'context.expand', 'context.task', 'context.file'}
+        assert {tool['name'] for tool in tools['result']['tools']} == {'context.search', 'context.browse', 'context.pack', 'context.expand', 'context.resolve', 'context.file'}
         assert all(tool['annotations']['readOnlyHint'] for tool in tools['result']['tools'])
         searched = rpc('tools/call', dict(name='context.search', arguments=query))
         assert evidence in {item['id'] for item in searched['result']['structuredContent']['result']['items']}

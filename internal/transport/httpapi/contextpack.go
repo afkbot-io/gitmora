@@ -14,12 +14,42 @@ type ContextPackService interface {
 	Pack(context.Context, access.Principal, domain.Query) (domain.Pack, error)
 }
 
+type ContextResolveService interface {
+	Resolve(context.Context, access.Principal, domain.ResolveQuery) (domain.Resolved, error)
+}
+
 // ContextBrowseService discovers current authorized source headers independently of provider transports.
 type ContextBrowseService interface {
 	Browse(context.Context, access.Principal, domain.BrowseQuery) (domain.BrowsePage, error)
 }
 
 func registerContextPacks(mux *http.ServeMux, c Config) {
+	mux.HandleFunc("POST /v1/context/resolve", contextRead(c, func(w http.ResponseWriter, r *http.Request, p access.Principal) {
+		if c.ContextResolver == nil {
+			writeError(w, 503, "context_unavailable", "Context resolution is not configured")
+			return
+		}
+		raw, ok := forgeBody(w, r, 4096)
+		if !ok {
+			return
+		}
+		var q domain.ResolveQuery
+		if jsonwire.DecodeObject(raw, &q) != nil {
+			writeError(w, 400, "invalid_request", "Invalid MR/PR URL query")
+			return
+		}
+		value, err := c.ContextResolver.Resolve(r.Context(), p, q)
+		if errors.Is(err, domain.ErrInvalid) {
+			writeError(w, 422, "invalid_context_query", "Invalid MR/PR URL")
+			return
+		}
+		if err != nil {
+			retrievalError(w, err)
+			return
+		}
+		writeJSON(w, 200, value)
+	}))
+
 	mux.HandleFunc("POST /v1/context/browse", contextRead(c, func(w http.ResponseWriter, r *http.Request, p access.Principal) {
 		if c.ContextBrowser == nil {
 			writeError(w, 503, "context_unavailable", "Context browsing is not configured")

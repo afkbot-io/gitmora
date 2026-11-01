@@ -309,9 +309,6 @@ func (s *ForgeStore) ApplyMRCommits(ctx context.Context, lease application.Lease
 			if _, err := tx.Exec(ctx, "UPDATE forge_mr_codes SET complete=true WHERE repository_id=$1 AND iid=$2 AND code_key=$3", lease.Repository.ID, model.IID, model.CodeKey()); err != nil {
 				return err
 			}
-			if err := wakeTaskDiscovery(ctx, tx, lease.Repository.ID); err != nil {
-				return err
-			}
 			if model.State == "merged" {
 				for _, result := range []struct{ kind, sha string }{{"merge", model.Merge}, {"squash", model.Squash}} {
 					if result.sha == "" {
