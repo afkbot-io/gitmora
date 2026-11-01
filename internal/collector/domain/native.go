@@ -98,8 +98,7 @@ func ContinueRecording(parent *Recording, rootID, id string, o NormalizedObserva
 		index = p.Snapshot.Continuation.Segment + 1
 	}
 	r.state.Snapshot.Continuation = &capture.Continuation{RootSessionID: rootID, PreviousSessionID: p.Snapshot.SessionID, PreviousRevision: p.LastRevision, PreviousDigest: previous.Digest(), Segment: index, Reason: reason}
-	// These are inherited conversation/commit relations, not new file or authorship assertions.
-	r.state.Snapshot.Commits = slices.Clone(p.Snapshot.Commits)
+	// A new storage window does not inherit earlier commit associations.
 	if _, err = capture.NewSession(r.state.Snapshot); err != nil {
 		return nil, ErrInvalid
 	}

@@ -1,5 +1,15 @@
 # Changes
 
+## 0.6.0
+
+- Scope PR/commit dialogue reads to recorded half-open message intervals. Full-session navigation no longer lists every associated PR; PR dialogue links retain their selected PR and breadcrumb. Technical capture pages are consumed internally.
+- Add bounded `context.pack` transcript pages with exact source revision, original message index, Unicode fragment cursor, MR head and commit-set scope fencing. Missing legacy ranges never fall back to whole-session text.
+- Persist optional commit ranges in immutable capture revisions and schema 26 projections. Native Codex frontiers pin the exact normalized tool endpoint, including multiple commits in one stored window; new windows no longer inherit every prior commit.
+- Add explicit `gitmora recover-ranges --session LAST_RECORDING_UUID` recovery from successful recorded Git commit output and locally resolved objects. Recovered intervals are labelled separately and preserve original revisions.
+- Use one document scroll owner with a sticky project rail; retain append reading position across desktop/mobile.
+
+Upgrade the server first, then CLI 0.6.0. Back up private state and the database before migration 26. Existing records without ranges remain available through explicit full-history navigation; date-only or assistant-text guesses are not used.
+
 ## 0.5.2
 
 - Read agent history as a conversation: safe Markdown, user/agent roles, compact tool groups, supplied command/output details and collapsible long messages. Technical revision/source controls stay under details.

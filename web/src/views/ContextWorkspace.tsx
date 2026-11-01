@@ -34,6 +34,7 @@ function selectionFromHash(project: string): Selection | null {
   if (!session_id && !commit_sha && !mr) return null;
   try {
     return packQuery({
+      ...(p.get("dialogue") ? { dialogue_id: p.get("dialogue")! } : {}),
       project_id: project,
       ...(repository_id ? { repository_id } : {}),
       ...(session_id ? { session_id } : {}),
@@ -74,7 +75,7 @@ export function ContextWorkspace({
     window.addEventListener("hashchange", read);
     return () => window.removeEventListener("hashchange", read);
   }, [project.id]);
-  function open(value: Selection, source?: Hit) {
+  function open(value: Selection, source?: Hit, fromMR?: number) {
     const q = packQuery(value);
     if (q.project_id !== project.id) return;
     const p = new URLSearchParams({ view: "context", project: project.id });
@@ -88,6 +89,8 @@ export function ContextWorkspace({
           p.set("revision", String(source.source.revision));
       }
     }
+    if (q.dialogue_id) p.set("dialogue", q.dialogue_id);
+    if (fromMR) p.set("from_mr", String(fromMR));
     if (q.commit_sha) p.set("commit", q.commit_sha);
     if (q.merge_request_iid) p.set("mr", String(q.merge_request_iid));
     if (q.expected_head_sha) p.set("head", q.expected_head_sha);
@@ -154,7 +157,13 @@ export function ContextWorkspace({
         key={JSON.stringify(selection)}
         client={client}
         selection={selection}
-        onNavigate={open}
+        provider={
+          repositories.find((r) => r.id === selection.repository_id)
+            ?.provider === "github"
+            ? "github"
+            : "gitlab"
+        }
+        onNavigate={(q, fromMR) => open(q, undefined, fromMR)}
         onBack={() => {
           location.hash = new URLSearchParams({
             view: "context",

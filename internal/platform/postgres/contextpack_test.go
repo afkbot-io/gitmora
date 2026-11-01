@@ -99,7 +99,7 @@ func TestContextPackExpandsOnlyFullyVerifiedNativeStreamsAndPaginates(t *testing
 		t.Fatal(err)
 	}
 	store := postgres.NewContextStore(pool)
-	query := pack.Query{ProjectID: project, RepositoryID: repository, CommitSHA: strings.Repeat("a", 40), Limit: 1}
+	query := pack.Query{ProjectID: project, RepositoryID: repository, SessionID: root.SessionID, Limit: 1}
 	first, err := store.Read(ctx, contextPrincipal(access.ReadCapture), query)
 	if err != nil || len(first.Captures.Items) != 1 || first.Captures.Next == nil || !first.Captures.Items[0].ChainVerified {
 		t.Fatalf("%+v %v", first, err)
@@ -225,7 +225,7 @@ func TestContextPackMRDiscoveryHasIndependentAuthorizedPagination(t *testing.T) 
 		}
 	}
 	store := postgres.NewContextStore(pool)
-	q := pack.Query{ProjectID: project, RepositoryID: repository, SessionID: snapshot().SessionID, Limit: 6}
+	q := pack.Query{ProjectID: project, RepositoryID: repository, CommitSHA: strings.Repeat("a", 40), Limit: 6}
 	first, err := store.Read(ctx, contextPrincipal(access.ReadCapture, access.ReadIntegration), q)
 	if err != nil || len(first.MergeRequests.Items) != 4 || first.MergeRequests.Next == nil {
 		t.Fatal(first, err)

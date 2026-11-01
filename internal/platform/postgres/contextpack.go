@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -24,7 +25,13 @@ func NewContextStore(pool *pgxpool.Pool) *ContextStore { return &ContextStore{Ne
 
 // Read applies membership and independent capabilities before loading any source body or association.
 func (s *ContextStore) Read(ctx context.Context, p access.Principal, q domain.Query) (domain.Pack, error) {
-	result := domain.Pack{SchemaVersion: 1, Query: q, Captures: domain.CapturePage{Items: []domain.Capture{}, Omitted: !p.Has(access.ReadCapture)}, MergeRequests: domain.MRPage{Items: []domain.MR{}, Omitted: !p.Has(access.ReadIntegration) || (q.MR == 0 && q.CommitSHA == "" && !p.Has(access.ReadCapture))}, Evidence: []domain.Evidence{}}
+	if q.Limit == 0 {
+		q.Limit = 6
+	}
+	if q.Limit < 1 || q.Limit > 12 {
+		return domain.Pack{}, domain.ErrInvalid
+	}
+	result := domain.Pack{Transcript: domain.MessagePage{Items: []domain.ScopedMessage{}}, Scope: domain.Scope{Kind: "dialogue"}, SchemaVersion: 1, Query: q, Captures: domain.CapturePage{Items: []domain.Capture{}, Omitted: !p.Has(access.ReadCapture)}, MergeRequests: domain.MRPage{Items: []domain.MR{}, Omitted: !p.Has(access.ReadIntegration) || (q.MR == 0 && q.CommitSHA == "" && !p.Has(access.ReadCapture))}, Evidence: []domain.Evidence{}}
 	err := s.retrieval.authorized(ctx, p, q.ProjectID, q.RepositoryID, func(tx pgx.Tx) error {
 		if err := tx.QueryRow(ctx, "SELECT transaction_timestamp()").Scan(&result.ReadAt); err != nil {
 			return err
@@ -33,6 +40,11 @@ func (s *ContextStore) Read(ctx context.Context, p access.Principal, q domain.Qu
 			return err
 		}
 		captureQuery := q
+		if q.MR > 0 {
+			result.Scope.Kind = "merge_request"
+		} else if q.CommitSHA != "" {
+			result.Scope.Kind = "commit"
+		}
 		if q.MR > 0 && p.Has(access.ReadIntegration) {
 			mr, found, err := readContextMR(ctx, tx, q.ProjectID, q.RepositoryID, q.MR, q.ExpectedHead)
 			if err != nil {
@@ -40,6 +52,17 @@ func (s *ContextStore) Read(ctx context.Context, p access.Principal, q domain.Qu
 			}
 			if found {
 				mr.Association = "explicit_provider_mr"
+				if q.DialogueID != "" && q.ExpectedHead != "" && q.ExpectedHead != mr.Head {
+					return domain.ErrInvalid
+				}
+				if q.MessageAfter != nil && q.MessageAfter.Head != "" && q.MessageAfter.Head != mr.Head {
+					return domain.ErrInvalid
+				}
+				captureQuery.ExpectedHead = mr.Head
+				captureQuery.MRReadKey = mr.MessageScopeKey()
+				if q.MessageAfter != nil && q.MessageAfter.ScopeKey != captureQuery.MRReadKey {
+					return domain.ErrInvalid
+				}
 				result.MergeRequests.Items = append(result.MergeRequests.Items, mr)
 				captureQuery.RepositoryID = mr.SourceRepositoryID
 				captureQuery.CommitSHA = mr.Head
@@ -56,7 +79,18 @@ func (s *ContextStore) Read(ctx context.Context, p access.Principal, q domain.Qu
 				return err
 			}
 		}
-		if q.MR == 0 && p.Has(access.ReadIntegration) && (p.Has(access.ReadCapture) || q.CommitSHA != "") {
+		if p.Has(access.ReadCapture) && (q.SessionID != "" || q.DialogueID != "") {
+			if err := readContextMessages(ctx, tx, captureQuery, &result.Transcript, &result.Scope); err != nil {
+				return err
+			}
+		}
+		if p.Has(access.ReadCapture) && q.SessionID == "" && (captureQuery.CommitSHA != "" || captureQuery.MRCodeKey != "") {
+			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM commits c WHERE c.repository_id::text=$2 AND c.confirmed_at IS NOT NULL AND (($4::text<>'' AND c.sha=$4) OR ($7::text<>'' AND EXISTS(SELECT 1 FROM forge_mr_commits mc WHERE mc.sha=c.sha AND mc.repository_id::text=$5 AND mc.iid=$6 AND mc.code_key=$7 AND mc.source_project_id=$8))) AND NOT EXISTS(SELECT 1 FROM capture_commit_ranges z JOIN capture_sessions latest ON latest.repository_id=z.repository_id AND latest.session_id=z.session_id AND latest.latest_revision=z.revision WHERE z.repository_id=c.repository_id AND z.sha=c.sha)) AND $1::text<>'' AND $3::text=''`, contextArgs(captureQuery)...).Scan(&result.Scope.MissingCommitRanges); err != nil {
+				return err
+			}
+		}
+
+		if q.MR == 0 && q.SessionID == "" && p.Has(access.ReadIntegration) && (p.Has(access.ReadCapture) || q.CommitSHA != "") {
 			refs, next, err := contextMRRefs(ctx, tx, q)
 			if err != nil {
 				return err
@@ -112,15 +146,15 @@ func readContextCaptures(ctx context.Context, tx pgx.Tx, q domain.Query, page *d
 	if q.After != nil {
 		after = *q.After
 	}
-	args := append(contextArgs(q), after.RepositoryID, after.Segment, after.SessionID, q.Limit+1)
+	args := append(contextArgs(q), after.RepositoryID, after.Segment, after.SessionID, q.Limit+1, q.DialogueID)
 	rows, err := tx.Query(ctx, contextTree+`
  SELECT s.repository_id::text,s.session_id::text,s.latest_revision,r.digest,s.root_id::text,s.segment,s.agent_name,s.previous_session_id::text,COALESCE(s.previous_revision,0),COALESCE(s.previous_digest,''),COALESCE(s.reason,''),
  EXISTS(SELECT 1 FROM scoped p JOIN capture_revisions pr ON pr.repository_id=p.repository_id AND pr.session_id=p.session_id AND pr.revision=s.previous_revision AND pr.digest=s.previous_digest WHERE p.repository_id=s.repository_id AND p.session_id=s.previous_session_id AND p.root_id=s.root_id AND s.segment=p.segment+1 AND p.originator_id=s.originator_id AND p.started_at_text=s.started_at_text AND p.agent_name=s.agent_name AND p.country_id IS NOT DISTINCT FROM s.country_id AND p.task_id IS NOT DISTINCT FROM s.task_id),
  EXISTS(SELECT 1 FROM tree t WHERE t.repository_id=s.repository_id AND t.session_id=s.session_id),
  ARRAY(SELECT c.sha FROM capture_revision_commits rc JOIN commits c ON c.repository_id=rc.repository_id AND c.sha=rc.sha AND c.confirmed_at IS NOT NULL WHERE rc.repository_id=s.repository_id AND rc.session_id=s.session_id AND rc.revision=s.latest_revision ORDER BY c.sha LIMIT 16),
- (SELECT count(*) FROM capture_revision_commits rc JOIN commits c ON c.repository_id=rc.repository_id AND c.sha=rc.sha AND c.confirmed_at IS NOT NULL WHERE rc.repository_id=s.repository_id AND rc.session_id=s.session_id AND rc.revision=s.latest_revision),s.title,s.started_at_text
+ (SELECT count(*) FROM capture_revision_commits rc JOIN commits c ON c.repository_id=rc.repository_id AND c.sha=rc.sha AND c.confirmed_at IS NOT NULL WHERE rc.repository_id=s.repository_id AND rc.session_id=s.session_id AND rc.revision=s.latest_revision),s.title,s.started_at_text,`+rangeProjection+`
  FROM wanted w JOIN scoped s ON s.repository_id=w.repository_id AND s.session_id=w.session_id JOIN capture_revisions r ON r.repository_id=s.repository_id AND r.session_id=s.session_id AND r.revision=s.latest_revision
- WHERE ($9::text='' OR (s.repository_id::text,s.segment,s.session_id::text)>($9,$10,$11)) ORDER BY s.repository_id::text,s.segment,s.session_id::text LIMIT $12`, args...)
+ WHERE `+scopedWindowFilter+` AND ($13::text='' OR s.session_id::text=$13 OR (s.root_id::text=$13 AND EXISTS(SELECT 1 FROM tree verified WHERE verified.repository_id=s.repository_id AND verified.session_id=s.session_id))) AND ($9::text='' OR (s.repository_id::text,s.segment,s.session_id::text)>($9,$10,$11)) ORDER BY s.repository_id::text,s.segment,s.session_id::text LIMIT $12`, args...)
 	if err != nil {
 		return err
 	}
@@ -130,10 +164,40 @@ func readContextCaptures(ctx context.Context, tx pgx.Tx, q domain.Query, page *d
 		var parent *string
 		var parentRevision int64
 		var parentDigest, reason string
+		var ranges []byte
 		c.Source.Kind = "capture"
 		c.Source.ProjectID = q.ProjectID
-		if err := rows.Scan(&c.Source.RepositoryID, &c.Source.SessionID, &c.Source.Revision, &c.Source.Digest, &c.RootSessionID, &c.Segment, &c.Agent, &parent, &parentRevision, &parentDigest, &reason, &c.ParentReferenceVerified, &c.ChainVerified, &c.ConfirmedCommits, &c.ConfirmedCount, &c.Title, &c.StartedAt); err != nil {
+		if err := rows.Scan(&c.Source.RepositoryID, &c.Source.SessionID, &c.Source.Revision, &c.Source.Digest, &c.RootSessionID, &c.Segment, &c.Agent, &parent, &parentRevision, &parentDigest, &reason, &c.ParentReferenceVerified, &c.ChainVerified, &c.ConfirmedCommits, &c.ConfirmedCount, &c.Title, &c.StartedAt, &ranges); err != nil {
 			return err
+		}
+		if json.Unmarshal(ranges, &c.MessageRanges) != nil {
+			return domain.ErrInvalid
+		}
+		c.RangeStatus = "commit_ranges"
+		if q.SessionID != "" {
+			c.RangeStatus = "full_dialogue"
+		} else if len(c.MessageRanges) == 0 {
+			c.RangeStatus = "unavailable"
+		}
+		if q.SessionID == "" {
+			c.Title = ""
+			c.ConfirmedCommits = []string{}
+			known := map[string]bool{}
+			for _, interval := range c.MessageRanges {
+				known[interval.CommitSHA] = true
+			}
+			for sha := range known {
+				c.ConfirmedCommits = append(c.ConfirmedCommits, sha)
+			}
+			slices.Sort(c.ConfirmedCommits)
+			c.ConfirmedCount = len(c.ConfirmedCommits)
+			if len(c.ConfirmedCommits) > 16 {
+				c.ConfirmedCommits = c.ConfirmedCommits[:16]
+			}
+		}
+		if len(c.MessageRanges) > 64 {
+			c.MessageRanges = c.MessageRanges[:64]
+			c.RangesMore = true
 		}
 		c.VerificationLimited = c.Segment > 256
 		if parent != nil {
@@ -165,7 +229,7 @@ func contextMRRefs(ctx context.Context, tx pgx.Tx, q domain.Query) ([]mrRef, *do
 	}
 
 	prefix := contextTree + `, bound AS (
- SELECT DISTINCT r.id AS source_repository_id,r.gitlab_url,r.gitlab_project_id,r.provider,rc.sha FROM wanted w JOIN repositories r ON r.id=w.repository_id JOIN capture_revision_commits rc ON rc.repository_id=w.repository_id AND rc.session_id=w.session_id JOIN commits c ON c.repository_id=rc.repository_id AND c.sha=rc.sha AND c.confirmed_at IS NOT NULL
+ SELECT DISTINCT r.id AS source_repository_id,r.gitlab_url,r.gitlab_project_id,r.provider,rc.sha FROM wanted w JOIN repositories r ON r.id=w.repository_id JOIN capture_revision_commits rc ON rc.repository_id=w.repository_id AND rc.session_id=w.session_id JOIN commits c ON c.repository_id=rc.repository_id AND c.sha=rc.sha AND c.confirmed_at IS NOT NULL WHERE ($4::text='' OR rc.sha=$4)
  )`
 	args := contextArgs(q)
 	cursorFilter := ` AND ($9::text='' OR (tr.id::text,o.iid)>($9,$10))`

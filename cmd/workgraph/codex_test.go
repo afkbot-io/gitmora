@@ -85,6 +85,9 @@ func TestCodexHooksBindExactObservedCommitAndDeliverAfterLaterHumanHead(t *testi
 		}
 		raw, _ := json.Marshal(snapshot)
 		if strings.Contains(string(raw), "Exact Codex source sentinel") && has(snapshot.Commits, agentSHA) {
+			if len(snapshot.CommitRanges) != 1 || snapshot.CommitRanges[0].CommitSHA != agentSHA || snapshot.CommitRanges[0].Start != 0 || snapshot.CommitRanges[0].End != 3 {
+				t.Fatal("native checkpoint included later messages", snapshot.CommitRanges)
+			}
 			found = true
 		}
 		if has(snapshot.Commits, humanSHA) {

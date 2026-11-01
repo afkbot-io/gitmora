@@ -60,7 +60,7 @@ func TestStreamExcerptsKeepTheirOwnCommitProvenance(t *testing.T) {
 	p := access.Principal{UserID: "33333333-3333-4333-8333-333333333333", Scopes: []access.Permission{access.ReadCapture}}
 	q := domain.Query{ProjectID: "55555555-5555-4555-8555-555555555555", RepositoryID: "11111111-1111-4111-8111-111111111111", CommitSHA: strings.Repeat("b", 40)}
 	got, err := svc.Pack(context.Background(), p, q)
-	if err != nil || len(got.Evidence) != 1 || got.Evidence[0].Selection != "capture_stream" || got.Evidence[0].ConfirmedCount != 0 || len(got.Evidence[0].ConfirmedCommits) != 0 {
+	if err != nil || len(got.Evidence) != 0 {
 		t.Fatal(got, err)
 	}
 	p.Scopes = []access.Permission{access.WriteCapture}

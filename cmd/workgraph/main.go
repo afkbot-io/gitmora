@@ -113,7 +113,7 @@ func interruptionMessage(args []string) string {
 
 func run(parent context.Context, args []string, input io.Reader, output, diagnostic io.Writer) error {
 	if len(args) == 0 || args[0] == "--help" || args[0] == "help" {
-		_, err := fmt.Fprintln(output, "Usage: gitmora init | capture | import | frontier | checkpoint | sync | status | disable | enable | agent | auth | api | mcp | version | self install")
+		_, err := fmt.Fprintln(output, "Usage: gitmora init | capture | recover-ranges | import | frontier | checkpoint | sync | status | disable | enable | agent | auth | api | mcp | version | self install")
 		return err
 	}
 	if args[0] == "version" || args[0] == "--version" {
@@ -139,6 +139,9 @@ func run(parent context.Context, args []string, input io.Reader, output, diagnos
 	}
 	if args[0] == "auth" {
 		return configureAuth(parent, args[1:], output, diagnostic)
+	}
+	if args[0] == "recover-ranges" {
+		return recoverRanges(parent, args[1:], output)
 	}
 	if args[0] == "frontier" {
 		return configureFrontier(parent, args[1:], input, output)
@@ -321,7 +324,7 @@ func run(parent context.Context, args []string, input io.Reader, output, diagnos
 			if err != nil {
 				return err
 			}
-			if err := service.AssociateSession(ctx, repository.WorktreeKey(), sessionID, commits); err != nil {
+			if err := service.AssociateCheckpoint(ctx, repository.WorktreeKey(), sessionID, commits); err != nil {
 				return err
 			}
 		}

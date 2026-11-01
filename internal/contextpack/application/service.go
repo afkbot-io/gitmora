@@ -3,6 +3,8 @@ package application
 
 import (
 	"context"
+	"strconv"
+	"strings"
 	"time"
 	"workgraph.local/platform/internal/access"
 	"workgraph.local/platform/internal/contextpack/domain"
@@ -48,6 +50,9 @@ func (s *Service) Pack(parent context.Context, p access.Principal, q domain.Quer
 	result.Evidence = []domain.Evidence{}
 	seen := map[string]bool{}
 	add := func(h rd.Hit, reason string) {
+		if q.SessionID == "" && h.Source.Kind == "capture" && !scopedCaptureEvidence(h, result.Captures.Items) {
+			return
+		}
 		if seen[h.ID] {
 			return
 		}
@@ -107,4 +112,25 @@ func (s *Service) Pack(parent context.Context, p access.Principal, q domain.Quer
 		return domain.Pack{}, domain.ErrInvalid
 	}
 	return result, nil
+}
+
+func scopedCaptureEvidence(hit rd.Hit, windows []domain.Capture) bool {
+	if !strings.HasPrefix(hit.Part, "messages/") {
+		return false
+	}
+	index, err := strconv.Atoi(strings.TrimPrefix(hit.Part, "messages/"))
+	if err != nil {
+		return false
+	}
+	for _, window := range windows {
+		if window.Source.RepositoryID != hit.Source.RepositoryID || window.Source.SessionID != hit.Source.SessionID || window.Source.Revision != hit.Source.Revision || window.Source.Digest != hit.Source.Digest {
+			continue
+		}
+		for _, interval := range window.MessageRanges {
+			if index >= interval.Start && index < interval.End {
+				return true
+			}
+		}
+	}
+	return false
 }

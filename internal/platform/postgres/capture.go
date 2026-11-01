@@ -102,6 +102,20 @@ func (t *captureTransaction) PutRevision(ctx context.Context, session domain.Ses
 	if err != nil {
 		return false, err
 	}
+	if len(snapshot.CommitRanges) > 0 {
+		shas, bases := []string{}, []string{}
+		starts, ends := []int32{}, []int32{}
+		for _, interval := range snapshot.CommitRanges {
+			shas = append(shas, interval.CommitSHA)
+			bases = append(bases, interval.Basis)
+			starts = append(starts, int32(interval.Start))
+			ends = append(ends, int32(interval.End))
+		}
+		if _, err = t.tx.Exec(ctx, `INSERT INTO capture_commit_ranges(repository_id,session_id,revision,sha,start_message,end_message,basis) SELECT $1,$2,$3,sha,start_message,end_message,basis FROM unnest($4::text[],$5::int[],$6::int[],$7::text[]) AS x(sha,start_message,end_message,basis)`, t.repository, snapshot.SessionID, snapshot.Revision, shas, starts, ends, bases); err != nil {
+			return false, err
+		}
+	}
+
 	// Bulk inserts keep a maximum-size capture independent of network round-trip count.
 	var country, task any
 	if snapshot.Task != nil {

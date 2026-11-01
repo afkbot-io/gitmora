@@ -209,21 +209,25 @@ func (s *Service) ApplyFrontier(ctx context.Context, worktree string, expected d
 		if err := actual.Apply(); err != nil {
 			return err
 		}
-		entry, found, err := tx.FindSession(actual.TargetSessionID)
-		if err != nil {
-			return err
-		}
-		if !found || entry.Recording.State().Worktree != worktree {
-			return domain.ErrConflict
-		}
-		changed, err := entry.Recording.LinkObservedCommits(commits)
-		if err != nil {
-			return err
-		}
-		if changed {
-			if err := seal(tx, entry); err != nil {
-				return err
+		if actual.MessageEnd == nil {
+			entry, found, e := tx.FindSession(actual.TargetSessionID)
+			if e != nil {
+				return e
 			}
+			if !found {
+				return domain.ErrConflict
+			}
+			changed, e := entry.Recording.LinkObservedCommits(commits)
+			if e != nil {
+				return e
+			}
+			if changed {
+				if e := seal(tx, entry); e != nil {
+					return e
+				}
+			}
+		} else if err := associateCheckpoint(tx, worktree, actual.TargetSessionID, commits, actual.MessageEnd); err != nil {
+			return err
 		}
 		if err := tx.SaveFrontier(actual); err != nil {
 			return err
@@ -248,4 +252,32 @@ func loadFrontier(tx Transaction, worktree, id string) (domain.Frontier, error) 
 		return domain.Frontier{}, domain.ErrConflict
 	}
 	return f, nil
+}
+
+// SetFrontierMessageEnd freezes the exact normalized item endpoint before applying a Git transition.
+func (s *Service) SetFrontierMessageEnd(ctx context.Context, worktree, id string, end int) error {
+	return s.ledger.Within(ctx, func(tx Transaction) error {
+		f, err := loadFrontier(tx, worktree, id)
+		if err != nil {
+			return err
+		}
+		e, found, err := tx.FindSession(f.TargetSessionID)
+		if err != nil {
+			return err
+		}
+		if !found || end < 1 || end > len(e.Recording.State().Snapshot.Messages) {
+			return domain.ErrInvalid
+		}
+		if f.MessageEnd != nil {
+			if *f.MessageEnd != end {
+				return domain.ErrConflict
+			}
+			return nil
+		}
+		if f.Applied {
+			return domain.ErrConflict
+		}
+		f.MessageEnd = &end
+		return tx.SaveFrontier(f)
+	})
 }
