@@ -87,7 +87,7 @@ func codexCapture(parent context.Context, args []string, output io.Writer) error
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(parent, 18*time.Second)
+	ctx, cancel := context.WithTimeout(parent, 60*time.Second)
 	defer cancel()
 	result, err := collectCodex(ctx, codexRequest{Event: "Stop", Session: *session, Model: *model, CWD: cwd}, codex.Reader{Executable: selected, Socket: *socket})
 	if err != nil {

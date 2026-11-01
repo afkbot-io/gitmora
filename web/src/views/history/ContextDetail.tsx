@@ -32,6 +32,7 @@ export function ContextDetail({
   useEffect(() => {
     heading.current?.focus();
   }, []);
+  const [continuationsOpen, setContinuationsOpen] = useState(false);
   const [code, setCode] = useState<Hit | null>(null);
   const [pack, setPack] = useState<ContextPack | null>(null);
   const [error, setError] = useState("");
@@ -182,26 +183,43 @@ export function ContextDetail({
               )}
             </section>
           )}
-          {selection.session_id && captures.length > 0 && (
-            <details className="border-t border-line pt-3 text-sm">
-              <summary className="py-2">{t("Продолжение сессии")}</summary>
-              {captures.map((c) => (
-                <button
-                  key={c.source.session_id}
-                  className={buttonStyles.text + " block my-2"}
-                  onClick={() =>
-                    onNavigate({
-                      project_id: selection.project_id,
-                      repository_id: c.source.repository_id!,
-                      session_id: c.source.session_id!,
-                    })
-                  }
-                >
-                  {c.agent} · {t("Сегмент {0}", c.segment)}
-                </button>
-              ))}
-            </details>
-          )}
+          {selection.session_id &&
+            (captures.length > 0 || pack.captures.next) && (
+              <details
+                open={continuationsOpen}
+                onToggle={(event) =>
+                  setContinuationsOpen(event.currentTarget.open)
+                }
+                className="border-t border-line pt-3 text-sm"
+              >
+                <summary className="py-2">{t("Продолжение сессии")}</summary>
+                {captures.map((c) => (
+                  <button
+                    key={c.source.session_id}
+                    className={buttonStyles.text + " block my-2"}
+                    onClick={() =>
+                      onNavigate({
+                        project_id: selection.project_id,
+                        repository_id: c.source.repository_id!,
+                        session_id: c.source.session_id!,
+                      })
+                    }
+                  >
+                    {c.agent} · {t("Сегмент {0}", c.segment)}
+                  </button>
+                ))}
+                {pack.captures.next && (
+                  <button
+                    className={buttonStyles.text + " mt-3"}
+                    onClick={() =>
+                      void load({ capture_after: pack.captures.next! })
+                    }
+                  >
+                    {t("Следующие сессии")}
+                  </button>
+                )}
+              </details>
+            )}
           {!selection.session_id &&
             pack.evidence.some((e) => e.kind === "code") && (
               <section className="overflow-hidden rounded-lg border border-line bg-paper">

@@ -19,6 +19,9 @@ import (
 	"workgraph.local/platform/internal/redact"
 )
 
+// Item count and protocol/text byte budgets independently bound long conversation recovery.
+const maxHistoryItems = 50000
+
 var ErrProtocol = errors.New("Codex history is invalid, unsupported or exceeds the capture bound")
 var ErrUnavailable = errors.New("Codex app-server unavailable; source remains local")
 
@@ -183,7 +186,7 @@ func exposed(i nativeItem) (capture.Message, bool) {
 // Normalize keeps visible text exact (apart from shared credential redaction), preserving order and deterministic windows.
 // Unsupported/media-only item kinds are reported, never represented as invented conversation.
 func Normalize(thread Thread, entries []Entry, model, version, root string) (History, error) {
-	if !locator(thread.ID) || !filepath.IsAbs(root) || !filepath.IsAbs(thread.CWD) || filepath.Clean(root) != filepath.Clean(thread.CWD) || thread.CreatedAt < 1 || len(entries) > 10000 {
+	if !locator(thread.ID) || !filepath.IsAbs(root) || !filepath.IsAbs(thread.CWD) || filepath.Clean(root) != filepath.Clean(thread.CWD) || thread.CreatedAt < 1 || len(entries) > maxHistoryItems {
 		return History{}, ErrProtocol
 	}
 	if model == "" {
@@ -268,7 +271,7 @@ func Normalize(thread Thread, entries []Entry, model, version, root string) (His
 		}
 		part := 0
 		for _, message := range visible {
-			message.Text = redact.Text(message.Text)
+			message.Text = redact.Conversation(message.Text)
 			total += len(message.Text)
 			if total > 64*1024*1024 {
 				return history, ErrProtocol

@@ -28,6 +28,7 @@ func readerFixture(t *testing.T, mode string) (string, string) {
 	modeJSON, _ := json.Marshal(mode)
 	script := `#!` + python + `
 import json, sys
+from pathlib import Path
 root = ` + string(rootJSON) + `
 mode = ` + string(modeJSON) + `
 page = 0
@@ -36,7 +37,14 @@ for line in sys.stdin:
     method = q['method']
     if method == 'initialized': continue
     if method == 'initialize': result = {'userAgent':'fixture-codex/1'}
-    elif method == 'thread/read': result = {'thread':{'id':q['params']['threadId'],'cwd': root if mode != 'wrong-repo' else '/other','createdAt':1793318400,'updatedAt':1793318401}}
+    elif method == 'thread/read':
+        counter=Path(root)/'metadata-read-counter'
+        reads=int(counter.read_text())+1 if counter.exists() else 1
+        counter.write_text(str(reads))
+        result = {'thread':{'id':q['params']['threadId'],'cwd': root if mode != 'wrong-repo' else '/other','createdAt':1793318400,'updatedAt':1793318401}}
+        if mode == 'changes-once': result['thread']['updatedAt'] += int(reads>1)
+        if mode == 'changes-always': result['thread']['updatedAt'] += reads
+
     elif method == 'thread/items/list':
         page += 1
         if mode == 'approval':
@@ -48,7 +56,11 @@ for line in sys.stdin:
         if mode == 'slow':
             import time
             time.sleep(30)
-        result = {'data':[{'turnId':'turn','item':{'id':str(page),'type':'agentMessage','text':'Exact page '+str(page)}}], 'nextCursor':'next' if page == 1 or mode == 'cycle' else None}
+        if mode in ['long','over-limit']:
+            maximum = 501 if mode == 'over-limit' else 180
+            result = {'data':[{'turnId':'turn','item':{'id':str(page)+'-'+str(i),'type':'agentMessage','text':'Visible '+str(page)+' '+str(i)}} for i in range(100)], 'nextCursor':str(page) if page < maximum else None}
+        else:
+            result = {'data':[{'turnId':'turn','item':{'id':str(page),'type':'agentMessage','text':'Exact page '+str(page)}}], 'nextCursor':'next' if page == 1 or mode == 'cycle' else None}
     else: sys.exit(21)
     print(json.dumps({'id':q['id'],'result':result}), flush=True)
 `
@@ -90,5 +102,50 @@ func TestReaderCancellationTerminatesBlockedProxy(t *testing.T) {
 	_, _, err := (codex.Reader{Executable: exe}).Read(ctx, "thread", root)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatal("deadline lost", err)
+	}
+}
+
+func TestReaderPreservesLongHistoryAndStillRejectsItsCountBound(t *testing.T) {
+	for _, mode := range []string{"long", "over-limit"} {
+		t.Run(mode, func(t *testing.T) {
+			exe, root := readerFixture(t, mode)
+			thread, entries, err := (codex.Reader{Executable: exe}).Read(context.Background(), "thread", root)
+			if mode == "over-limit" {
+				if !errors.Is(err, codex.ErrProtocol) {
+					t.Fatal("count bound not enforced", err)
+				}
+				return
+			}
+			if err != nil || len(entries) != 18000 {
+				t.Fatal("long history rejected or shortened", len(entries), err)
+			}
+			history, err := codex.Normalize(thread, entries, "unknown", "fixture", thread.CWD)
+			if err != nil {
+				t.Fatal(err)
+			}
+			count := 0
+			for _, w := range history.Windows {
+				count += len(w.Observation.Messages)
+			}
+			if count != 18000 {
+				t.Fatal("normalizer lost long history", count)
+			}
+		})
+	}
+}
+
+func TestReaderRetriesChangedSnapshotButNeverAcceptsAnUnstableSource(t *testing.T) {
+	for _, mode := range []string{"changes-once", "changes-always"} {
+		t.Run(mode, func(t *testing.T) {
+			exe, root := readerFixture(t, mode)
+			_, entries, err := (codex.Reader{Executable: exe}).Read(context.Background(), "thread", root)
+			if mode == "changes-once" {
+				if err != nil || len(entries) != 2 {
+					t.Fatal("did not recover a stable whole snapshot", len(entries), err)
+				}
+			} else if !errors.Is(err, codex.ErrProtocol) || len(entries) != 0 {
+				t.Fatal("unstable snapshot accepted", len(entries), err)
+			}
+		})
 	}
 }

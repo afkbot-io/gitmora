@@ -1,5 +1,16 @@
 # Changes
 
+## 0.5.1
+
+- Add continuation pagination to session detail and keep the continuation panel open while switching pages.
+
+- Recover long Codex conversations up to 50,000 items while retaining independent 64 MiB protocol/text budgets and per-item limits.
+- Retry a changing metadata snapshot up to three times within the shared read deadline. Manual capture has a 60-second recovery budget; hook execution remains bounded.
+- Mask explicit Russian/English and Markdown password declarations before native message fragmentation. Historical canonical Text/Lines policies and stored digests remain unchanged.
+- Verify long-history completeness, stable snapshot recovery, count limits, secret masking across fragments and projection idempotence.
+
+No schema changes. Upgrade the developer CLI to recover histories that exceeded the earlier 10,000-item bound.
+
 ## 0.5.0
 
 - Remove the task tracker connector, task API/search/MCP tools, task binding command, worker jobs and deployment profiles. Historical capture bytes and old migration checksums remain immutable.

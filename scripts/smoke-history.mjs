@@ -238,6 +238,18 @@ try {
     .click();
   await visible(transcript.getByText("<img src=x", { exact: false }));
   await auditUI(page, "history-session", { enabled: true });
+  const continuation = page.locator(".context-detail details").filter({
+    has: page.locator("summary").filter({ hasText: "Продолжение сессии" }),
+  });
+  await continuation.locator("summary").click();
+  await continuation
+    .getByRole("button", { name: "Следующие сессии", exact: true })
+    .click();
+  await visible(
+    continuation.getByRole("button").filter({ hasText: "Сегмент 7" }),
+  );
+  assert.equal(await continuation.getAttribute("open"), "");
+  await auditUI(page, "history-continuation-page", { enabled: true });
   await exerciseImportedOrigin();
   await click("Назад к поиску");
   await visible(page.getByRole("searchbox"));
@@ -298,6 +310,7 @@ try {
         "recent cursor",
         "session revisions",
         "message pagination",
+        "continuation pagination",
         "XSS plain text",
         "imported provenance",
         "desktop/mobile light/dark accessibility",
