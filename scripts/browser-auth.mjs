@@ -1,6 +1,18 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 
+/** Wait for durable logout before a fixture changes identity or reloads the page. */
+export async function signOutAndWait(page) {
+  const response = page.waitForResponse(
+    (r) =>
+      new URL(r.url()).pathname === "/v1/auth/logout" &&
+      r.request().method() === "POST",
+  );
+  await page.getByRole("button", { name: "Выйти", exact: true }).click();
+  assert.ok((await response).ok(), "Synthetic logout was not acknowledged");
+  await page.getByRole("link", { name: "Войти", exact: true }).waitFor();
+}
+
 /** Real signed local IdP enrollment for owned browser fixtures; never targets production accounts. */
 export async function signInAs(page, fixture, token = fixture.admin) {
   for (const origin of [fixture.url, fixture.issuer])

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { chromium, webkit, firefox, devices } from "playwright";
-import { signInAs, clickUI } from "./browser-auth.mjs";
+import { signInAs, signOutAndWait, clickUI } from "./browser-auth.mjs";
 import { auditUI } from "./audit-ui.mjs";
 import { watchBrowserPolicy } from "./browser-policy.mjs";
 
@@ -68,7 +68,31 @@ try {
     .getByRole("status")
     .filter({ hasText: "Профиль сохранён" })
     .waitFor();
-  await page.getByRole("button", { name: "Выйти", exact: true }).click();
+  // Hold the logout response to exercise a real pending transition rather than
+  // relying on loopback timing before this fixture changes accounts.
+  let releaseLogout;
+  let observeLogout;
+  const logoutGate = new Promise((resolve) => (releaseLogout = resolve));
+  const logoutObserved = new Promise((resolve) => (observeLogout = resolve));
+  const delayedLogout = async (route) => {
+    observeLogout();
+    await logoutGate;
+    await route.continue();
+  };
+  await page.route("**/v1/auth/logout", delayedLogout);
+  const leaving = signOutAndWait(page);
+  await logoutObserved;
+  try {
+    assert.equal(await page.locator(".sidebar").count(), 0);
+    assert.equal(
+      await page.getByRole("link", { name: "Войти", exact: true }).count(),
+      0,
+    );
+  } finally {
+    releaseLogout();
+  }
+  await leaving;
+  await page.unroute("**/v1/auth/logout", delayedLogout);
   await signInAs(page, fixture, fixture.reader_token);
   await page.locator("#project").selectOption(fixture.project);
   await nav("Участники");
@@ -95,7 +119,7 @@ try {
     async () => (await fetch("/v1/admin/users")).status,
   );
   assert.equal(globalStatus, 403);
-  await page.getByRole("button", { name: "Выйти", exact: true }).click();
+  await signOutAndWait(page);
   actorToken = fixture.new_user_token;
   await signInAs(page, fixture, actorToken);
   await page
@@ -355,9 +379,13 @@ try {
     }),
   );
 } catch (error) {
+  const visible = await page
+    .locator("body")
+    .innerText({ timeout: 2000 })
+    .catch(() => "Page body unavailable");
   writeFileSync(
     "build/workspace-browser-failure.txt",
-    await page.locator(".main").innerText(),
+    String(error.stack ?? error) + "\n\n" + page.url() + "\n\n" + visible,
   );
   throw error;
 } finally {

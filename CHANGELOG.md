@@ -1,8 +1,10 @@
 # Changes
 
-## 0.4.2
+## 0.4.3
 
-- Unified source/server and standalone CLI release 0.4.2, with matching checked macOS/Linux downloads and onboarding version.
+- Browser account-switch tests wait for acknowledged logout and cover a deliberately delayed response; failure diagnostics preserve the original error even outside the workspace.
+
+- Unified source/server and standalone CLI release 0.4.3, with matching checked macOS/Linux downloads and onboarding version.
 - Fix GitLab diff/MR/pipeline pagination when the provider expands exact route identities and unchanged defaults into Link parameters; reject altered identities, duplicated keys and unexpected filters.
 - Includes the portable self-hosting and own-domain configuration improvements from 0.4.1.
 
