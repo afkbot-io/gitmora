@@ -43,6 +43,16 @@ func TestCheckpointRecoveryRejectsOutOfOrderApplication(t *testing.T) {
 	o := nativeWindow("both", "a", "first task")
 	o.Messages = append(o.Messages, capture.Message{Role: "assistant", Text: "first result"}, capture.Message{Role: "user", Text: "second task"}, capture.Message{Role: "assistant", Text: "second result"})
 	o.History.MessageIDs = []string{strings.Repeat("a", 64), strings.Repeat("b", 64), strings.Repeat("c", 64), strings.Repeat("d", 64)}
+	if _, err = service.RecordNativeCheckpoints(ctx, "tree", o, []domain.CheckpointBinding{{ID: second.ID, MessageEnd: 4}}); err != nil {
+		t.Fatal(err)
+	}
+	partial, err := service.Frontier(ctx, "tree", second.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = service.ApplyFrontier(ctx, "tree", partial, []string{c}); !errors.Is(err, domain.ErrConflict) {
+		t.Fatal("checkpoint consumed context across an unresolved tool", err)
+	}
 	if _, err = service.RecordNativeCheckpoints(ctx, "tree", o, []domain.CheckpointBinding{{ID: first.ID, MessageEnd: 2}, {ID: second.ID, MessageEnd: 4}}); err != nil {
 		t.Fatal(err)
 	}

@@ -51,6 +51,8 @@ The plugin persists a tool's initial HEAD, pre-existing local commit tips and or
 
 Inspect current-worktree metadata with `gitmora frontier list`, or one exact entry with `gitmora frontier get --id <hash>`. A null `after` means the process never observed the ending boundary. The collector leaves it unresolved; verify the actual Git history and choose an explicit end, or close the intent:
 
+An exact checkpoint also waits while another unfinished tool from the same native source lacks a verified message position. Its order is unknown, so automatically consuming that context would be unsafe. Finish source recovery or explicitly resolve/abandon the pending intent; other native sources remain independent.
+
 ```sh
 gitmora frontier resolve --id <hash> --end <verified-full-SHA> --reason 'Verified actual tool commit'
 gitmora frontier abandon --id <hash> --reason 'Tool did not execute'

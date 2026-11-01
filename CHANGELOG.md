@@ -2,7 +2,7 @@
 
 ## 0.7.0
 
-- Bind normalized tool positions atomically for Codex and OpenCode; recover pending checkpoints in source order and reject out-of-order application. Missing tool results remain unresolved.
+- Bind normalized tool positions atomically for Codex and OpenCode; recover pending checkpoints in source order and reject out-of-order application. Missing tool results remain unresolved and block automatic interval consumption from the same source.
 - Snapshot pre-tool local Git ref tips so checkout of existing history does not become a new checkpoint; retain newly created commits after checkout and history rewrite.
 - Union each pushed ref's own commit interval so one ref cannot exclude another ref's new context. Bound Git stdout and selected push history; disabled agents cannot apply pending checkpoints.
 - Upgrade the private collector ledger to schema 6, deduplicating pre-tool ref snapshots and preventing older clients from applying new checkpoints unsafely. Stop old agents/watch processes and back up the ledger before upgrade; reinstall the OpenCode helper with the new CLI. Server schema remains 26.

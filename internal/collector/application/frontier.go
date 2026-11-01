@@ -288,6 +288,13 @@ func (s *Service) ApplyFrontier(ctx context.Context, worktree string, expected d
 			if err = orderFrontiers(tx, pending); err != nil {
 				return err
 			}
+			// An unresolved tool has no trustworthy source position. It might precede
+			// this endpoint, so do not silently consume its context during recovery.
+			for _, other := range pending {
+				if other.ID != actual.ID && other.NativeKey == actual.NativeKey && (other.TargetSessionID == "" || other.MessageEnd == nil) {
+					return domain.ErrConflict
+				}
+			}
 			for _, prior := range pending {
 				if prior.ID == actual.ID {
 					break
