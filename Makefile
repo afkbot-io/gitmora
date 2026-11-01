@@ -126,10 +126,6 @@ smoke-onboarding: build test-web
 smoke-gitlab-profile:
 	python3 scripts/smoke-gitlab-profile.py
 
-smoke-tasktopia: build
-	docker compose -f compose.test.yaml up -d --wait
-	python3 scripts/smoke-tasktopia.py
-
 smoke-context: build
 	docker compose -f compose.test.yaml up -d --wait
 	python3 scripts/smoke-context.py

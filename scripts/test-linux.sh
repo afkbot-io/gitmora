@@ -21,9 +21,6 @@ CGO_ENABLED=0 GOOS=linux GOARCH="$target_arch" go test -c -o bin/verification/co
 CGO_ENABLED=0 GOOS=linux GOARCH="$target_arch" go test -c -o bin/verification/git-local-policy.test ./internal/gitlocal
 CGO_ENABLED=0 GOOS=linux GOARCH="$target_arch" go test -c -o bin/verification/agent-install.test ./internal/agent/opencode
 CGO_ENABLED=0 GOOS=linux GOARCH="$target_arch" go test -c -o bin/verification/codex-adapter.test ./internal/agent/codex
-CGO_ENABLED=0 GOOS=linux GOARCH="$target_arch" go test -c -o bin/verification/tasktopia-mcp.test ./internal/work/tasktopia
-CGO_ENABLED=0 GOOS=linux GOARCH="$target_arch" go test -c -o bin/verification/task-domain.test ./internal/work/domain
-CGO_ENABLED=0 GOOS=linux GOARCH="$target_arch" go test -c -o bin/verification/task-application.test ./internal/work/application
 CGO_ENABLED=0 GOOS=linux GOARCH="$target_arch" go test -c -o bin/verification/retrieval-domain.test ./internal/retrieval/domain
 CGO_ENABLED=0 GOOS=linux GOARCH="$target_arch" go test -c -o bin/verification/forge-domain.test ./internal/forge/domain
 CGO_ENABLED=0 GOOS=linux GOARCH="$target_arch" go test -c -o bin/verification/gitlab.test ./internal/forge/gitlab
@@ -66,9 +63,6 @@ docker compose -f compose.test.yaml exec -T -u postgres postgres /tmp/workgraph-
 docker compose -f compose.test.yaml exec -T -u postgres postgres /tmp/workgraph-verification/codex-adapter.test -test.v
 docker compose -f compose.test.yaml exec -T -u postgres postgres /tmp/workgraph-verification/workgraphd serve --help
 docker compose -f compose.test.yaml exec -T -u postgres postgres /tmp/workgraph-verification/daemon.test -test.v
-docker compose -f compose.test.yaml exec -T -u postgres postgres /tmp/workgraph-verification/tasktopia-mcp.test -test.v
-docker compose -f compose.test.yaml exec -T -u postgres postgres /tmp/workgraph-verification/task-domain.test -test.v
-docker compose -f compose.test.yaml exec -T -u postgres postgres /tmp/workgraph-verification/task-application.test -test.v
 docker compose -f compose.test.yaml exec -T -u postgres postgres /tmp/workgraph-verification/retrieval-domain.test -test.v
 docker compose -f compose.test.yaml exec -T -u postgres postgres /tmp/workgraph-verification/forge-domain.test -test.v
 docker compose -f compose.test.yaml exec -T -u postgres postgres /tmp/workgraph-verification/gitlab.test -test.v

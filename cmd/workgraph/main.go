@@ -166,6 +166,7 @@ func run(parent context.Context, args []string, input io.Reader, output, diagnos
 	var server, repositoryID, remote, tokenEnv, headFrom string
 	var include, retry, watch, pinSource, captureSync, physical bool
 	var frontiers frontierIDs
+	var checkpoints checkpointBindings
 	if command == "capture" || command == "status" {
 		flags.BoolVar(&physical, "physical-worktree", false, "Isolate native-source queries to the physical current worktree")
 	}
@@ -184,6 +185,7 @@ func run(parent context.Context, args []string, input io.Reader, output, diagnos
 		flags.StringVar(&headFrom, "observe-head-from", "", "Observe commits since a native tool's prior HEAD (or unborn)")
 		flags.BoolVar(&captureSync, "sync", false, "Attempt bounded delivery of already eligible context after durable capture")
 		flags.Var(&frontiers, "frontier", "Bind a completed durable native tool to this exact window; repeat for multiple tools")
+		flags.Var(&checkpoints, "frontier-at", "Atomically bind tool ID:message-end in this normalized window; repeat for multiple tools")
 	case "checkpoint", "status", "disable", "enable":
 	default:
 		return domain.ErrInvalid
@@ -199,6 +201,9 @@ func run(parent context.Context, args []string, input io.Reader, output, diagnos
 		return domain.ErrInvalid
 	}
 	if len(frontiers) > 0 && (!pinSource || headFrom != "") {
+		return domain.ErrInvalid
+	}
+	if len(checkpoints) > 0 && (!pinSource || headFrom != "" || len(frontiers) > 0) {
 		return domain.ErrInvalid
 	}
 	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
@@ -303,7 +308,9 @@ func run(parent context.Context, args []string, input io.Reader, output, diagnos
 			record = service.RecordNative
 		}
 		var sessionID string
-		if len(frontiers) > 0 {
+		if len(checkpoints) > 0 {
+			sessionID, err = service.RecordNativeCheckpoints(ctx, repository.WorktreeKey(), observation, checkpoints)
+		} else if len(frontiers) > 0 {
 			sessionID, err = service.RecordNativeFrontiers(ctx, repository.WorktreeKey(), observation, frontiers)
 		} else {
 			sessionID, err = record(ctx, repository.WorktreeKey(), observation)

@@ -3,13 +3,26 @@ import json
 import selectors
 import sqlite3
 import subprocess
+import urllib.request
+import uuid
 
 
 def exercise(root, environment, repository, command, request, origin, query):
     source = request(origin, "/session?" + query, {"title": "Synthetic crash frontier"})
     session = source["id"]
-    request(origin, f"/session/{session}/message?" + query,
+    initial = request(origin, f"/session/{session}/message?" + query,
             {"noReply": True, "parts": [{"type": "text", "text": "Durable tool boundary source"}]})
+    # Expose labelled synthetic tool records through the real native part API.
+    # A user prompt alone must never stand in for an absent tool endpoint.
+    def expose_tool(call, order):
+        message = initial["info"]["id"]
+        part = "prt_zz" + str(order) + uuid.uuid4().hex
+        body = dict(id=part, sessionID=session, messageID=message, type="tool", callID=call, tool="bash",
+                    state=dict(status="completed", input=dict(command="git commit -m synthetic"), output="Synthetic recorded Git operation", title="Synthetic Git operation", metadata={}, time=dict(start=1,end=2)))
+        req = urllib.request.Request(origin+f"/session/{session}/message/{message}/part/{part}?"+query,
+                                     data=json.dumps(body).encode(),headers={"Content-Type":"application/json"},method="PATCH")
+        with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req,timeout=15) as response:
+            assert response.status==200
     env = dict(environment, FRONTIER_SESSION=session)
     program = """
 import {createOpencodeClient} from '@opencode-ai/sdk';
@@ -56,6 +69,7 @@ throw new Error('Expected suspended durable phase');
     a = commit("tool-first.txt")
     b = commit("tool-second.txt")
     kill_at("end")
+    expose_tool("crash-call", 1)
     human = commit("later-human.txt")
     ended = json.loads(command([cli, "frontier", "end"], input=json.dumps(tool)))
     assert ended["after"] == b, "End retry captured later human HEAD"
@@ -76,6 +90,7 @@ await coordinator.resume();
     second_tool = dict(tool, call_id="bound-call")
     command([cli, "frontier", "begin"], input=json.dumps(second_tool))
     d = commit("tool-bound.txt")
+    expose_tool("bound-call", 2)
     kill_at("bound")
     later = commit("after-bound-human.txt")
     completed = subprocess.run(["node", "--input-type=module", "-e", resume], cwd=root,
@@ -89,5 +104,7 @@ await coordinator.resume();
         private = ledger.execute("SELECT publication_allowed FROM recordings WHERE session_id=?",
                                  (applied["target_session_id"],)).fetchone()[0]
         assert private == 0, "Native crash recovery granted publication"
+        intervals=state["snapshot"]["commit_ranges"]
+        assert {(x["commit_sha"],x["start"],x["end"]) for x in intervals}=={(a,0,2),(b,0,2),(d,2,3)}, "Recovered checkpoints lost their exact tool positions"
     return {"killed_phases": ["started", "ended", "target_bound"], "intermediate_commits": 3,
             "later_human_commits_excluded": 2, "publication": "private"}

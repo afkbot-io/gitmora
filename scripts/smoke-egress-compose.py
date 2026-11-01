@@ -29,7 +29,7 @@ def main():
         with socket.socket() as listener:
             listener.bind(("127.0.0.1", 0))
             port = listener.getsockname()[1]
-        overlays = [ROOT / "deploy/compose.tasktopia.yaml", ROOT / "deploy/compose.gitlab-com.yaml", ROOT / "deploy/compose.identity.yaml"]
+        overlays = [ROOT / "deploy/compose.gitlab-com.yaml", ROOT / "deploy/compose.identity.yaml"]
         args = [str(ROOT / "bin/gitmorad"), "deployment", "init", "--directory", str(state), "--compose", str(ROOT / "compose.yaml"), "--port", str(port), "--image", os.environ.get("GITMORA_DEPLOYMENT_TEST_IMAGE", "gitmora:local")]
         for path in overlays:
             args += ["--overlay", str(path)]

@@ -84,7 +84,7 @@ Without an OIDC configuration, capture/API/MCP bearer operations can be used for
 
 ## Source-build settings
 
-`make build build-image RELEASE_VERSION=0.6.1 RELEASE_REVISION="$(git rev-parse HEAD)"` stamps host binaries and the application image. Defaults are `development` and an empty revision. These are build inputs, not runtime env values. Tag the resulting local images immutably as described in [deployment](deployment.md); application and identity images are pinned independently.
+`make build build-image RELEASE_VERSION=0.7.0 RELEASE_REVISION="$(git rev-parse HEAD)"` stamps host binaries and the application image. Defaults are `development` and an empty revision. These are build inputs, not runtime env values. Tag the resulting local images immutably as described in [deployment](deployment.md); application and identity images are pinned independently.
 
 ## Developer CLI and agent settings
 

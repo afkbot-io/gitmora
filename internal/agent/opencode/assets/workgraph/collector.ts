@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import path from "node:path";
 import { object, type Observation } from "./normalize.js";
@@ -9,11 +10,26 @@ export interface Probe {
 /** Private source locator and immutable Git boundaries returned by the durable local CLI. */
 export interface Frontier {
   readonly id: string;
+  readonly nativeKey: string;
   readonly sourceSessionID: string;
   readonly before: string;
   readonly after: string | null;
   readonly targetSessionID: string;
 }
+export interface CheckpointBinding {
+  readonly id: string;
+  readonly messageEnd: number;
+}
+
+/** Matches Go encoding/json identities, including its HTML/Unicode escaping. */
+export function frontierID(nativeKey: string, callID: string): string {
+  const encoded = JSON.stringify([nativeKey, callID]).replace(
+    /[<>&\u2028\u2029]/gu,
+    (c) => "\\u" + c.charCodeAt(0).toString(16).padStart(4, "0"),
+  );
+  return createHash("sha256").update(encoded).digest("hex");
+}
+
 export interface Collector {
   probe(directory: string): Promise<Probe | undefined>;
   begin(directory: string, sessionID: string, callID: string): Promise<void>;
@@ -23,7 +39,7 @@ export interface Collector {
   record(
     directory: string,
     observation: Observation,
-    frontiers?: readonly string[],
+    frontiers?: readonly CheckpointBinding[],
     deliver?: boolean,
   ): Promise<boolean>;
 }
@@ -37,6 +53,8 @@ function frontier(value: unknown): Frontier {
   const entry = object(value),
     source = object(entry?.source);
   if (
+    typeof entry?.native_key !== "string" ||
+    !/^[0-9a-f]{64}$/u.test(entry.native_key) ||
     typeof entry?.id !== "string" ||
     !/^[0-9a-f]{64}$/u.test(entry.id) ||
     source?.agent !== "opencode" ||
@@ -55,6 +73,7 @@ function frontier(value: unknown): Frontier {
     throw new Error("Invalid local frontier metadata");
   return {
     id: entry.id,
+    nativeKey: entry.native_key,
     sourceSessionID: source.source_session_id.slice(9),
     before: entry.before,
     after: entry.after,
@@ -180,12 +199,13 @@ export class LocalCollector implements Collector {
   async record(
     directory: string,
     observation: Observation,
-    frontiers: readonly string[] = [],
+    frontiers: readonly CheckpointBinding[] = [],
     deliver = true,
   ): Promise<boolean> {
     const args = ["capture", "--pin-source"];
     if (deliver) args.push("--sync");
-    for (const id of frontiers) args.push("--frontier", id);
+    for (const binding of frontiers)
+      args.push("--frontier-at", `${binding.id}:${binding.messageEnd}`);
     return (
       object(await this.execute(directory, args, observation))?.status ===
       "recorded"

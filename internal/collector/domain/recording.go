@@ -20,6 +20,7 @@ var (
 	ErrInvalid = errors.New("invalid collector input")
 	// ErrConflict identifies reused event identity or changed local installation identity.
 	ErrConflict = errors.New("collector identity conflict")
+	// ErrDisabled stops capture, recovery and delivery under current local consent.
 	ErrDisabled = errors.New("local collection is disabled")
 	// ErrNotInitialized means explicit repository setup is required.
 	ErrNotInitialized = errors.New("collector is not initialized")
@@ -487,22 +488,31 @@ func (r *Recording) addCommitRangeAt(candidate *capture.Snapshot, sha, basis str
 	candidate.CommitRanges = append(candidate.CommitRanges, capture.CommitRange{CommitSHA: sha, Start: start, End: end, Basis: basis})
 }
 
-// MergeRecoveredRanges preserves checkpoints while adding explicit recovery from verified Git objects and recorded tool output.
-func (r *Recording) MergeRecoveredRanges(ranges []capture.CommitRange) error {
+// ReplaceRecoveredRanges rebuilds only recovery assertions; observed/carry-forward
+// checkpoints and old immutable revisions retain their original authority.
+func (r *Recording) ReplaceRecoveredRanges(ranges []capture.CommitRange) (bool, int, error) {
 	snapshot := r.State().Snapshot
-	preserveCursor := r.state.CommitBoundary != nil
-	for _, interval := range ranges {
-		exists := false
-		for _, prior := range snapshot.CommitRanges {
-			if prior.CommitSHA == interval.CommitSHA {
-				exists = true
-				break
-			}
-		}
-		if !exists {
-			snapshot.CommitRanges = append(snapshot.CommitRanges, interval)
+	retained := []capture.CommitRange{}
+	priority := map[string]bool{}
+	for _, prior := range snapshot.CommitRanges {
+		if prior.Basis != "recovered_git_output" {
+			retained = append(retained, prior)
+			priority[prior.CommitSHA] = true
 		}
 	}
+	count := 0
+	for _, interval := range ranges {
+		if interval.Basis != "recovered_git_output" {
+			return false, 0, ErrInvalid
+		}
+		if !priority[interval.CommitSHA] {
+			retained = append(retained, interval)
+			count++
+		}
+	}
+	snapshot.CommitRanges = retained
+	preserveCursor := r.state.CommitBoundary != nil
+
 	for _, interval := range ranges {
 		if !slices.Contains(snapshot.Commits, interval.CommitSHA) {
 			snapshot.Commits = append(snapshot.Commits, interval.CommitSHA)
@@ -510,10 +520,11 @@ func (r *Recording) MergeRecoveredRanges(ranges []capture.CommitRange) error {
 	}
 	session, err := capture.NewSession(snapshot)
 	if err != nil {
-		return err
+		return false, 0, err
 	}
 	current, _ := capture.NewSession(r.state.Snapshot)
-	if session.Digest() != current.Digest() {
+	changed := session.Digest() != current.Digest()
+	if changed {
 		r.state.Snapshot = session.Snapshot()
 		r.state.Dirty = true
 	}
@@ -532,5 +543,5 @@ func (r *Recording) MergeRecoveredRanges(ranges []capture.CommitRange) error {
 	if covered == len(snapshot.Messages) {
 		r.state.PendingFiles = []string{}
 	}
-	return nil
+	return changed, count, nil
 }

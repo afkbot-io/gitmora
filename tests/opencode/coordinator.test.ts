@@ -41,7 +41,20 @@ test("awaited tools preserve HEAD window and dispose drains a late final convers
           sdk("ses_1", [
             {
               info: { id: "user", role: "user" },
-              parts: [{ id: "user-text", type: "text", text: "Implement" }],
+              parts: [
+                { id: "user-text", type: "text", text: "Implement" },
+                {
+                  id: "tool",
+                  type: "tool",
+                  callID: "tool_1",
+                  tool: "bash",
+                  state: {
+                    status: "completed",
+                    input: { command: "git commit" },
+                    output: "Synthetic result",
+                  },
+                },
+              ],
             },
             ...(final
               ? [
@@ -128,6 +141,7 @@ test("a tool HEAD window survives an initially empty exposed conversation", asyn
                     parts: [
                       {
                         id: "tool-part",
+                        callID: "call",
                         type: "tool",
                         tool: "bash",
                         state: {
@@ -176,7 +190,20 @@ test("failed after-tool SDK reads retain the HEAD window for a later retry", asy
           return sdk("retry", [
             {
               info: { id: "u", role: "user" },
-              parts: [{ id: "p", type: "text", text: "Implement" }],
+              parts: [
+                { id: "p", type: "text", text: "Implement" },
+                {
+                  id: "tool",
+                  type: "tool",
+                  callID: "call",
+                  tool: "bash",
+                  state: {
+                    status: "completed",
+                    input: { command: "git commit" },
+                    output: "Synthetic result",
+                  },
+                },
+              ],
             },
           ]);
         },

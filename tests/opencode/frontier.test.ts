@@ -18,7 +18,20 @@ function client(messages: () => Promise<unknown>) {
 const rows = [
   {
     info: { id: "m", sessionID: "source", role: "user", time: { created: 1 } },
-    parts: [{ id: "p", type: "text", text: "Exact source" }],
+    parts: [
+      { id: "p", type: "text", text: "Exact source" },
+      {
+        id: "tool",
+        type: "tool",
+        callID: "call",
+        tool: "bash",
+        state: {
+          status: "completed",
+          input: { command: "git commit" },
+          output: "synthetic result",
+        },
+      },
+    ],
   },
 ];
 

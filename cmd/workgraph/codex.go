@@ -156,7 +156,11 @@ func collectCodex(ctx context.Context, request codexRequest, reader codex.Reader
 			return result, e
 		}
 		if request.Event == "PreToolUse" {
-			_, err = service.BeginFrontier(ctx, source, request.Call, head)
+			heads, e := repository.ReferenceHeads(ctx)
+			if e != nil {
+				return result, e
+			}
+			_, err = service.BeginFrontierWithHeads(ctx, source, request.Call, head, heads)
 		} else {
 			var frontier domain.Frontier
 			frontier, err = service.EndFrontier(ctx, source, request.Call, head)
@@ -174,7 +178,16 @@ func collectCodex(ctx context.Context, request codexRequest, reader codex.Reader
 		if frontier.TargetSessionID == "" || frontier.After == nil {
 			return nil
 		}
-		commits, e := repository.HeadWindow(ctx, frontier.Before, *frontier.After)
+		heads, scoped, e := service.FrontierHeads(ctx, worktree, frontier.ID)
+		if e != nil {
+			return e
+		}
+		var commits []string
+		if scoped {
+			commits, e = repository.CheckpointWindow(ctx, frontier.Before, *frontier.After, heads)
+		} else {
+			commits, e = repository.HeadWindow(ctx, frontier.Before, *frontier.After)
+		}
 		if e != nil {
 			return e
 		}
@@ -210,22 +223,19 @@ func collectCodex(ctx context.Context, request codexRequest, reader codex.Reader
 		}
 	}
 	for index, window := range history.Windows {
-		bindings := []string{}
+		bindings := []domain.CheckpointBinding{}
 		for _, frontier := range pending {
 			if position, found := lastWindow[frontier.ID]; found && position == index && frontier.After != nil && frontier.TargetSessionID == "" {
-				bindings = append(bindings, frontier.ID)
+				bindings = append(bindings, domain.CheckpointBinding{ID: frontier.ID, MessageEnd: messageEnd[frontier.ID]})
 			}
 		}
-		sort.Slice(bindings, func(i, j int) bool { return messageEnd[bindings[i]] < messageEnd[bindings[j]] })
-		if _, err = service.RecordNativeFrontiers(ctx, worktree, window.Observation, bindings); err != nil {
+		sort.Slice(bindings, func(i, j int) bool { return bindings[i].MessageEnd < bindings[j].MessageEnd })
+		if _, err = service.RecordNativeCheckpoints(ctx, worktree, window.Observation, bindings); err != nil {
 			return result, err
 		}
 		result.Windows++
-		for _, id := range bindings {
-			if err = service.SetFrontierMessageEnd(ctx, worktree, id, messageEnd[id]); err != nil {
-				return result, err
-			}
-			frontier, e := service.Frontier(ctx, worktree, id)
+		for _, binding := range bindings {
+			frontier, e := service.Frontier(ctx, worktree, binding.ID)
 			if e != nil {
 				return result, e
 			}

@@ -293,6 +293,8 @@ def main():
                     session_id=session,
                 ),
             )
+            assert status==200 and pack["merge_requests"]["items"]==[], "Full history discovered unrelated PR cards"
+            status,pack=request("/v1/context/pack",dict(project_id=identity["project_id"],repository_id=repo,commit_sha=sha))
             assert (
                 status == 200
                 and pack["merge_requests"]["items"]

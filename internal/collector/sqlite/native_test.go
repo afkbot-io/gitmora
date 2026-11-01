@@ -83,7 +83,7 @@ func TestVersionTwoNativePinContinuesWithOriginalTaskAndConsent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := old.Exec(`DROP TABLE native_frontiers; DROP TABLE native_frontier_sources; DROP TABLE native_events; DROP TABLE native_pages; DROP TABLE native_members; DROP TABLE native_streams; PRAGMA user_version=2;`); err != nil {
+	if _, err := old.Exec(`DROP TABLE IF EXISTS git_frontier_scopes; DROP TABLE IF EXISTS git_head_scopes; DROP TABLE native_frontiers; DROP TABLE native_frontier_sources; DROP TABLE native_events; DROP TABLE native_pages; DROP TABLE native_members; DROP TABLE native_streams; PRAGMA user_version=2;`); err != nil {
 		t.Fatal(err)
 	}
 	if err := old.Close(); err != nil {

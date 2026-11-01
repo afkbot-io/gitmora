@@ -14,38 +14,119 @@ import (
 var commitOutput = regexp.MustCompile(`(?m)^\[[^\]\r\n]* ([0-9a-f]{7,64})\](?: |$)`)
 var commitCommand = regexp.MustCompile(`\bgit\b[^\r\n]{0,100}\bcommit\b`)
 
-// RecoverCommitRanges is explicit local recovery. Only supplied Git-resolved
-// object IDs and recorded successful commit output establish endpoints. This
-// remains labelled recovered evidence; dates and assistant prose are ignored.
-func (s *Service) RecoverCommitRanges(ctx context.Context, worktree, last string, known []string) (int, error) {
-	count := 0
+// RecoveryReport separates newly projected intervals from unchanged replay.
+// Previous immutable revisions are retained, including superseded recovery assertions.
+type RecoveryReport struct {
+	Ranges         int
+	UpdatedWindows int
+}
+
+func recoveryChain(tx Transaction, worktree, last string) ([]RecordingEntry, error) {
+	entries := []RecordingEntry{}
+	config, err := tx.Config()
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	id := last
+	for len(entries) < 256 {
+		if seen[id] {
+			return nil, domain.ErrConflict
+		}
+		seen[id] = true
+		e, found, err := tx.FindSession(id)
+		if err != nil {
+			return nil, err
+		}
+		if !found || e.Recording.State().Worktree != worktree {
+			return nil, domain.ErrConflict
+		}
+		if !config.AllowsAgent(e.Recording.State().Snapshot.Agent.Name) {
+			return nil, domain.ErrDisabled
+		}
+		entries = append(entries, e)
+		c := e.Recording.State().Snapshot.Continuation
+		if c == nil {
+			break
+		}
+		id = c.PreviousSessionID
+	}
+	if entries[len(entries)-1].Recording.State().Snapshot.Continuation != nil {
+		return nil, domain.ErrConflict
+	}
+	sort.Slice(entries, func(i, j int) bool { return segment(entries[i]) < segment(entries[j]) })
+	return entries, nil
+}
+
+// recordedCommitOutput recognizes only exposed successful tool records. Even an
+// unresolved or quiet commit is a barrier: recovery must not bridge it into a later commit.
+func recordedCommitOutput(message capture.Message) ([]string, bool) {
+	if message.Role != "tool" {
+		return nil, false
+	}
+	var tool struct {
+		Command string `json:"command"`
+		Cmd     string `json:"cmd"`
+		Output  string `json:"output"`
+		Exit    *int   `json:"exit_code"`
+	}
+	if json.Unmarshal([]byte(message.Text), &tool) != nil || tool.Exit == nil || *tool.Exit != 0 || !commitCommand.MatchString(tool.Command+" "+tool.Cmd) {
+		return nil, false
+	}
+	prefixes := []string{}
+	for _, match := range commitOutput.FindAllStringSubmatch(tool.Output, -1) {
+		prefixes = append(prefixes, match[1])
+	}
+	return prefixes, true
+}
+
+// RecoveryPrefixes returns bounded Git identifiers, never conversation text, for
+// independent local object verification before any recovery state is changed.
+func (s *Service) RecoveryPrefixes(ctx context.Context, worktree, last string) ([]string, error) {
+	prefixes := []string{}
 	err := s.ledger.Within(ctx, func(tx Transaction) error {
-		entries := []RecordingEntry{}
+		entries, err := recoveryChain(tx, worktree, last)
+		if err != nil {
+			return err
+		}
 		seen := map[string]bool{}
-		id := last
-		for len(entries) < 256 {
-			if seen[id] {
-				return domain.ErrConflict
+		for _, e := range entries {
+			for _, m := range e.Recording.State().Snapshot.Messages {
+				found, _ := recordedCommitOutput(m)
+				for _, p := range found {
+					if !seen[p] {
+						seen[p] = true
+						prefixes = append(prefixes, p)
+					}
+					if len(prefixes) > 4096 {
+						return domain.ErrInvalid
+					}
+				}
 			}
-			seen[id] = true
-			e, found, err := tx.FindSession(id)
-			if err != nil {
-				return err
-			}
-			if !found || e.Recording.State().Worktree != worktree {
-				return domain.ErrConflict
-			}
-			entries = append(entries, e)
-			c := e.Recording.State().Snapshot.Continuation
-			if c == nil {
-				break
-			}
-			id = c.PreviousSessionID
 		}
-		if entries[len(entries)-1].Recording.State().Snapshot.Continuation != nil {
-			return domain.ErrConflict
+		return nil
+	})
+	return prefixes, err
+}
+
+// RecoverCommitRanges explicitly rebuilds recovered-only projections from local
+// Git objects and successful recorded tool output. Observed checkpoints take priority;
+// dates, assistant prose, missing objects and redirected output never establish ownership.
+func (s *Service) RecoverCommitRanges(ctx context.Context, worktree, last string, known []string) (RecoveryReport, error) {
+	report := RecoveryReport{}
+	if len(known) > 4096 {
+		return report, domain.ErrInvalid
+	}
+	for _, sha := range known {
+		if !capture.ValidCommit(sha) {
+			return report, domain.ErrInvalid
 		}
-		sort.Slice(entries, func(i, j int) bool { return segment(entries[i]) < segment(entries[j]) })
+	}
+	err := s.ledger.Within(ctx, func(tx Transaction) error {
+		entries, err := recoveryChain(tx, worktree, last)
+		if err != nil {
+			return err
+		}
 		type endpoint struct {
 			part, index int
 			shas        []string
@@ -53,25 +134,16 @@ func (s *Service) RecoverCommitRanges(ctx context.Context, worktree, last string
 		points := []endpoint{}
 		seenSHA := map[string]bool{}
 		for part, e := range entries {
-			for index, message := range e.Recording.State().Snapshot.Messages {
-				if message.Role != "tool" {
-					continue
-				}
-				var tool struct {
-					Command string `json:"command"`
-					Cmd     string `json:"cmd"`
-					Output  string `json:"output"`
-					Exit    *int   `json:"exit_code"`
-					Status  string `json:"status"`
-				}
-				if json.Unmarshal([]byte(message.Text), &tool) != nil || tool.Exit == nil || *tool.Exit != 0 || !commitCommand.MatchString(tool.Command+" "+tool.Cmd) {
+			for index, m := range e.Recording.State().Snapshot.Messages {
+				prefixes, barrier := recordedCommitOutput(m)
+				if !barrier {
 					continue
 				}
 				point := endpoint{part: part, index: index + 1}
-				for _, match := range commitOutput.FindAllStringSubmatch(tool.Output, -1) {
+				for _, prefix := range prefixes {
 					found := ""
 					for _, sha := range known {
-						if strings.HasPrefix(sha, match[1]) {
+						if strings.HasPrefix(sha, prefix) {
 							if found != "" {
 								found = ""
 								break
@@ -84,15 +156,11 @@ func (s *Service) RecoverCommitRanges(ctx context.Context, worktree, last string
 						seenSHA[found] = true
 					}
 				}
-				if len(point.shas) > 0 {
-					points = append(points, point)
-				}
+				points = append(points, point)
 			}
 		}
 		ranges := make([][]capture.CommitRange, len(entries))
 		previousPart, previousIndex := 0, 0
-		// The first recovered endpoint lacks a trustworthy previous checkpoint.
-		// Establish a floor there; do not attach the entire older conversation.
 		for n, point := range points {
 			if n > 0 {
 				for part := previousPart; part <= point.part; part++ {
@@ -108,31 +176,33 @@ func (s *Service) RecoverCommitRanges(ctx context.Context, worktree, last string
 					}
 					for _, sha := range point.shas {
 						ranges[part] = append(ranges[part], capture.CommitRange{CommitSHA: sha, Start: start, End: end, Basis: "recovered_git_output"})
-						count++
 					}
 				}
 			}
 			previousPart, previousIndex = point.part, point.index
 		}
 		for part, e := range entries {
-			if len(ranges[part]) == 0 {
-				continue
-			}
-			if err := e.Recording.MergeRecoveredRanges(ranges[part]); err != nil {
+			changed, count, err := e.Recording.ReplaceRecoveredRanges(ranges[part])
+			if err != nil {
 				return err
 			}
+			if !changed {
+				continue
+			}
+			report.Ranges += count
+			report.UpdatedWindows++
 			if err := seal(tx, e); err != nil {
 				return err
 			}
 		}
 		return flushPublished(tx)
 	})
-	return count, err
+	return report, err
 }
+
 func segment(e RecordingEntry) int64 {
-	c := e.Recording.State().Snapshot.Continuation
-	if c == nil {
-		return 1
+	if c := e.Recording.State().Snapshot.Continuation; c != nil {
+		return c.Segment
 	}
-	return c.Segment
+	return 1
 }

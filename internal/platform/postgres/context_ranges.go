@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	capture "workgraph.local/platform/internal/capture/domain"
@@ -142,7 +143,12 @@ func readContextMessages(ctx context.Context, tx pgx.Tx, q domain.Query, page *d
 func compactToolText(text string) string {
 	var value map[string]any
 	if json.Unmarshal([]byte(text), &value) != nil {
-		return domain.Clip(text, 800).Text
+		input, output, ok := strings.Cut(strings.TrimPrefix(text, "Input:\n"), "\nResult:\n")
+		var decoded map[string]any
+		if !strings.HasPrefix(text, "Input:\n") || !ok || json.Unmarshal([]byte(input), &decoded) != nil || decoded == nil {
+			return domain.Clip(text, 800).Text
+		}
+		value = map[string]any{"input": decoded, "output": output}
 	}
 	input := value
 	for _, key := range []string{"arguments", "input"} {

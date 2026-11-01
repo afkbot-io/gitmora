@@ -12,6 +12,13 @@ import (
 // MaxPendingFrontiers bounds incomplete tool recovery per worktree, including unknown ends.
 const MaxPendingFrontiers = 64
 
+// CheckpointBinding pins a tool to a half-open endpoint in one normalized source window.
+// MessageEnd counts stored messages, not native parts, bytes or user-visible turns.
+type CheckpointBinding struct {
+	ID         string
+	MessageEnd int
+}
+
 var agentLocator = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,119}$`)
 var frontierKey = regexp.MustCompile(`^[0-9a-f]{64}$`)
 

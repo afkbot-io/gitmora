@@ -27,9 +27,19 @@ type MRCursor struct {
 	IID          int64  `json:"iid"`
 }
 
+// MessageView selects full source fragments or explicitly marked display previews.
+type MessageView string
+
+const (
+	// FullMessages retains exact source text, with bounded Unicode pagination.
+	FullMessages MessageView = "full"
+	// CompactMessages shortens long tool outputs while retaining exact expansion cursors.
+	CompactMessages MessageView = "compact"
+)
+
 // Query selects an exact capture stream, confirmed commit or explicit MR in one local project.
 type Query struct {
-	MessageView        string         `json:"message_view,omitempty"`
+	MessageView        MessageView    `json:"message_view,omitempty"`
 	MRReadKey          string         `json:"-"`
 	MRTargetRepository string         `json:"-"`
 	MRCodeKey          string         `json:"-"`

@@ -114,6 +114,22 @@ func TestPrePushSelectionIncludesAllCommitsAndMissingRemoteFallback(t *testing.T
 	}
 }
 
+func TestMultipleRefPushUnionsEachRefWithoutCrossRefExclusion(t *testing.T) {
+	root := fixture(t)
+	base := commit(t, root, "a.go", "base")
+	shared := commit(t, root, "b.go", "shared")
+	tip := commit(t, root, "c.go", "tip")
+	repo, err := gitrepo.Discover(context.Background(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input := "refs/heads/main " + tip + " refs/heads/main " + shared + "\nrefs/heads/review " + shared + " refs/heads/review " + base + "\n"
+	selected, err := repo.Reachable(context.Background(), strings.NewReader(input))
+	if err != nil || !contains(selected, tip) || !contains(selected, shared) || contains(selected, base) {
+		t.Fatal("one ref excluded another ref's selected commit", selected, err)
+	}
+}
+
 func contains(values []string, target string) bool {
 	for _, value := range values {
 		if value == target {

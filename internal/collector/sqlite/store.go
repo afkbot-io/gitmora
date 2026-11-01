@@ -78,10 +78,10 @@ func (s *Store) migrate(ctx context.Context) error {
 	if err := tx.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		return err
 	}
-	if version > 5 {
+	if version > 6 {
 		return errors.New("local ledger schema is newer than this client")
 	}
-	if version == 5 {
+	if version == 6 {
 		return tx.Commit()
 	}
 	if version == 0 {
@@ -137,6 +137,13 @@ func (s *Store) migrate(ctx context.Context) error {
 	}
 	// Origin-bearing recording JSON requires a reader/writer that preserves those immutable fields.
 	if _, err = tx.ExecContext(ctx, "PRAGMA user_version=5"); err != nil {
+		return err
+	}
+	// Version 6 prevents older clients from applying position-bound tools in hash order.
+	// Identical pre-tool ref sets share one value; each frontier retains only its scope key.
+	if _, err = tx.ExecContext(ctx, `CREATE TABLE git_head_scopes(digest TEXT PRIMARY KEY,tips BLOB NOT NULL);
+CREATE TABLE git_frontier_scopes(frontier_id TEXT PRIMARY KEY REFERENCES native_frontiers(id),digest TEXT NOT NULL REFERENCES git_head_scopes(digest));
+PRAGMA user_version=6;`); err != nil {
 		return err
 	}
 	return tx.Commit()

@@ -408,7 +408,7 @@ func TestVersionOneMigrationRetainsDeliveredConsentWithoutPublishingPrivateRecor
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = legacy.Exec(`DROP TABLE native_frontiers; DROP TABLE native_frontier_sources; DROP TABLE native_events; DROP TABLE native_pages; DROP TABLE native_members; DROP TABLE native_streams; DROP TABLE native_pins; DROP TABLE publication_commits; ALTER TABLE recordings DROP COLUMN publication_allowed; PRAGMA user_version=1;`)
+	_, err = legacy.Exec(`DROP TABLE IF EXISTS git_frontier_scopes; DROP TABLE IF EXISTS git_head_scopes; DROP TABLE native_frontiers; DROP TABLE native_frontier_sources; DROP TABLE native_events; DROP TABLE native_pages; DROP TABLE native_members; DROP TABLE native_streams; DROP TABLE native_pins; DROP TABLE publication_commits; ALTER TABLE recordings DROP COLUMN publication_allowed; PRAGMA user_version=1;`)
 	if err != nil {
 		_ = legacy.Close()
 		t.Fatal(err)

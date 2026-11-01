@@ -1,5 +1,14 @@
 # Changes
 
+## 0.7.0
+
+- Bind normalized tool positions atomically for Codex and OpenCode; recover pending checkpoints in source order and reject out-of-order application. Missing tool results remain unresolved.
+- Snapshot pre-tool local Git ref tips so checkout of existing history does not become a new checkpoint; retain newly created commits after checkout and history rewrite.
+- Union each pushed ref's own commit interval so one ref cannot exclude another ref's new context. Bound Git stdout and selected push history; disabled agents cannot apply pending checkpoints.
+- Upgrade the private collector ledger to schema 6, deduplicating pre-tool ref snapshots and preventing older clients from applying new checkpoints unsafely. Stop old agents/watch processes and back up the ledger before upgrade; reinstall the OpenCode helper with the new CLI. Server schema remains 26.
+- Recover recorded Git object IDs in a bounded batch without traversing all repository history. Unknown/quiet commit attempts form conservative barriers; explicit recovery rebuilds only recovered assertions, keeps old immutable revisions and reports unchanged replay accurately.
+- Read legacy OpenCode command/result envelopes in compact and expanded tool views. Remove retired Tasktopia targets from Linux/deployment checks and correct obsolete collector instructions.
+
 ## 0.6.1
 
 - Add compact PR dialogue pages: long hidden tool outputs become explicitly marked previews with exact source cursors. Expanding a tool reads its complete original through the same PR, revision and head checks.

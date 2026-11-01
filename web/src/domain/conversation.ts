@@ -71,7 +71,14 @@ export function toolPresentation(message: Message): {
   output: string;
   failed: boolean;
 } {
-  const value = objectText(message.text);
+  let value = objectText(message.text);
+  if (!value && message.text.startsWith("Input:\n")) {
+    const split = message.text.indexOf("\nResult:\n", 7);
+    if (split >= 0) {
+      const input = objectText(message.text.slice(7, split));
+      if (input) value = { input, output: message.text.slice(split + 9) };
+    }
+  }
   const input =
     objectText(value?.arguments) ?? objectText(value?.input) ?? value;
   const command =

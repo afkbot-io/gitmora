@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,6 +21,22 @@ import (
 )
 
 type frontierIDs []string
+
+type checkpointBindings []domain.CheckpointBinding
+
+func (b *checkpointBindings) String() string { return "checkpoint positions" }
+func (b *checkpointBindings) Set(value string) error {
+	parts := strings.Split(value, ":")
+	if len(parts) != 2 || !domain.ValidFrontierID(parts[0]) || len(*b) >= domain.MaxPendingFrontiers {
+		return domain.ErrInvalid
+	}
+	end, err := strconv.Atoi(parts[1])
+	if err != nil || end < 1 || end > 5000 || strconv.Itoa(end) != parts[1] {
+		return domain.ErrInvalid
+	}
+	*b = append(*b, domain.CheckpointBinding{ID: parts[0], MessageEnd: end})
+	return nil
+}
 
 func (f *frontierIDs) String() string { return strings.Join(*f, ",") }
 func (f *frontierIDs) Set(id string) error {
@@ -119,7 +136,11 @@ func configureFrontier(parent context.Context, args []string, input io.Reader, o
 			return err
 		}
 		if command == "begin" {
-			result, err = service.BeginFrontier(ctx, source, request.Call, head)
+			heads, e := repository.ReferenceHeads(ctx)
+			if e != nil {
+				return e
+			}
+			result, err = service.BeginFrontierWithHeads(ctx, source, request.Call, head, heads)
 		} else {
 			result, err = service.EndFrontier(ctx, source, request.Call, head)
 		}
@@ -145,7 +166,16 @@ func configureFrontier(parent context.Context, args []string, input io.Reader, o
 			return domain.ErrConflict
 		}
 		if !f.Applied {
-			commits, err := repository.HeadWindow(ctx, f.Before, *f.After)
+			heads, scoped, err := service.FrontierHeads(ctx, worktree, f.ID)
+			if err != nil {
+				return err
+			}
+			var commits []string
+			if scoped {
+				commits, err = repository.CheckpointWindow(ctx, f.Before, *f.After, heads)
+			} else {
+				commits, err = repository.HeadWindow(ctx, f.Before, *f.After)
+			}
 			if err != nil {
 				return err
 			}

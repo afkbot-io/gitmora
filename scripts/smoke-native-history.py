@@ -127,7 +127,7 @@ process.stdout.write(JSON.stringify({windows:observations.length,messages:observ
             windows = []
             for identifier in ids:
                 saved = request("http://" + address, f'/v1/repositories/{identity["repository_id"]}/sessions/{identifier}', key=identity["token"])
-                if saved["snapshot"]["messages"] == [{"role": "user", "text": "Durable tool boundary source"}]:
+                if saved["snapshot"]["messages"][0]["text"] == "Durable tool boundary source":
                     continue
                 segment = saved["snapshot"].get("continuation", {}).get("segment", 0)
                 if segment:
