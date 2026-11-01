@@ -118,6 +118,7 @@ func TestPaginationCannotChangeAuthorityPathFiltersOrSkipPages(t *testing.T) {
 	cursor := domain.Cursor{Kind: domain.MergeRequests, Page: 1, After: time.Now().Add(-time.Hour), Before: time.Now()}
 	for _, target := range []string{
 		"https://other.invalid" + path,
+		server.URL + "/repositories/99/pulls?direction=desc&page=2&per_page=50&sort=updated&state=all",
 		server.URL + "/repos/other/project/pulls?direction=desc&page=2&per_page=50&sort=updated&state=all",
 		server.URL + "/repos/example/project/pulls?page=2",
 		server.URL + "/repos/example/project/pulls?direction=desc&page=3&per_page=50&sort=updated&state=all",
@@ -132,5 +133,10 @@ func TestPaginationCannotChangeAuthorityPathFiltersOrSkipPages(t *testing.T) {
 	page, err := client.Changes(context.Background(), repo, "", cursor)
 	if err != nil || page.NextPage != 2 {
 		t.Fatal("valid bounded continuation rejected", page, err)
+	}
+	link = "<" + server.URL + "/repositories/42/pulls?direction=desc&page=2&per_page=50&sort=updated&state=all" + `>; rel="next"`
+	page, err = client.Changes(context.Background(), repo, "", cursor)
+	if err != nil || page.NextPage != 2 {
+		t.Fatal("same immutable repository ID continuation rejected", page, err)
 	}
 }

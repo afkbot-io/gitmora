@@ -40,7 +40,7 @@ func (c *Client) Changes(ctx context.Context, repo domain.Repository, token stri
 	if err != nil {
 		return domain.ChangePage{}, err
 	}
-	next, err := c.nextPage(header, path, cursor.Page)
+	next, err := c.nextPage(header, path, cursor.Page, repo)
 	if err != nil {
 		return domain.ChangePage{}, err
 	}
@@ -221,7 +221,7 @@ func (c *Client) MRCommits(ctx context.Context, repo domain.Repository, token st
 	if jsonwire.DecodeExternalArray(raw, &values) != nil || len(values) > pageSize {
 		return domain.MRCommitPage{}, invalid()
 	}
-	next, err := c.nextPage(header, path, page)
+	next, err := c.nextPage(header, path, page, repo)
 	if err != nil {
 		return domain.MRCommitPage{}, err
 	}

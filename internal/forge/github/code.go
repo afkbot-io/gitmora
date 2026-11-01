@@ -42,7 +42,7 @@ func (c *Client) CodeDiff(ctx context.Context, repo domain.Repository, token, sh
 	if decodeObject(raw, &value) != nil || value.SHA != sha || len(value.Files) > pageSize {
 		return domain.DiffPage{}, invalid()
 	}
-	next, err := c.nextPage(header, path, page)
+	next, err := c.nextPage(header, path, page, repo)
 	if err != nil {
 		return domain.DiffPage{}, err
 	}

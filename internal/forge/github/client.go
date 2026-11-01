@@ -241,7 +241,11 @@ func (c *Client) ConfirmCommit(ctx context.Context, repo domain.Repository, toke
 }
 
 // nextPage never follows provider links; it validates their next ordinal and reconstructs requests locally.
-func (c *Client) nextPage(header http.Header, path string, page int) (int, error) {
+func (c *Client) nextPage(header http.Header, path string, page int, repo domain.Repository) (int, error) {
+	root, err := repoPath(repo)
+	if err != nil {
+		return 0, err
+	}
 	if len(header.Values("Link")) > 1 {
 		return 0, invalid()
 	}
@@ -269,7 +273,10 @@ func (c *Client) nextPage(header http.Header, path string, page int) (int, error
 		}
 		u, err := url.Parse(text[1 : len(text)-1])
 		expected, _ := url.Parse(c.base + path)
-		if err != nil || u.Scheme != expected.Scheme || u.Host != expected.Host || u.Path != expected.Path || u.User != nil || u.Fragment != "" || u.RawPath != "" {
+		// GitHub emits equivalent /repositories/{numeric-id} pagination links for /repos/{owner}/{name}.
+		// Only this catalog's immutable ID is accepted, and the next request is still reconstructed locally.
+		canonicalPath := "/repositories/" + strconv.FormatInt(repo.ProjectID, 10) + strings.TrimPrefix(expected.Path, root)
+		if !strings.HasPrefix(expected.Path, root+"/") || err != nil || u.Scheme != expected.Scheme || u.Host != expected.Host || (u.Path != expected.Path && u.Path != canonicalPath) || u.User != nil || u.Fragment != "" || u.RawPath != "" {
 			return 0, invalid()
 		}
 		q, err := url.ParseQuery(u.RawQuery)
