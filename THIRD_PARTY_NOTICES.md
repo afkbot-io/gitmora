@@ -1,11 +1,14 @@
-# Third-party notices
+# Сторонние компоненты
 
-Gitmora depends on separately licensed components. Their licenses continue to apply; publishing this repository does not replace those terms.
+[MIT](LICENSE) распространяется на собственный код Gitmora. Лицензии сторонних
+компонентов сохраняют силу.
 
-- The hosted account templates under `deploy/identity/themes/gitmora/login/` adapt Keycloak templates. They use Apache License 2.0; the full license is retained at [KEYCLOAK-LICENSE.txt](deploy/identity/themes/KEYCLOAK-LICENSE.txt). Gitmora changes the layout, styling, language/theme loading and explicit ARIA values while preserving native form contracts.
-- IBM Plex Sans/Mono are provided by the pinned `@fontsource` packages under the SIL Open Font License. Build scripts copy their license files alongside generated assets.
-- Tailwind CSS and its build integration use their upstream license. Build scripts include the Tailwind license with generated assets.
-- The conversation reader uses `react-markdown`, `remark-gfm` and their parser dependencies under their respective upstream licenses. Builds include license texts for all shipped npm runtime dependencies in `assets/third-party-licenses.txt`.
-- Go/npm dependencies are identified by `go.mod`, `go.sum`, `package.json` and `package-lock.json`. Inspect their respective upstream licenses when redistributing a build. Container bases, PostgreSQL and Keycloak retain their own distribution terms.
+- Шаблоны входа в `deploy/identity/themes/gitmora/login/` основаны на шаблонах Keycloak под Apache License 2.0. Полный текст сохранён в [KEYCLOAK-LICENSE.txt](deploy/identity/themes/KEYCLOAK-LICENSE.txt). В проекте изменены компоновка, стили, загрузка языка и темы, значения ARIA; контракты исходных форм сохранены.
+- Шрифты IBM Plex Sans и Mono поставляются закреплёнными пакетами `@fontsource` под SIL Open Font License. Сборка копирует лицензии вместе со шрифтами.
+- Tailwind CSS и средства его сборки сохраняют исходные лицензии. Текст лицензии Tailwind включается в собранные ресурсы.
+- Для отображения переписки используются `react-markdown`, `remark-gfm` и их зависимости. Сборка включает лицензии всех поставляемых npm-зависимостей приложения в `assets/third-party-licenses.txt`.
+- Зависимости Go и npm определены файлами `go.mod`, `go.sum`, `package.json` и `package-lock.json`. При распространении сборки сохраняйте их лицензии и авторские уведомления. Базовые образы контейнеров, PostgreSQL и Keycloak имеют собственные условия распространения.
 
-Entire and Git AI are independent projects. The compatibility layer reads the explicitly linked public formats in [compatibility](docs/compatibility.md); Gitmora is not an official version of either project.
+Entire и Git AI — самостоятельные проекты. Поддерживаемые форматы описаны в
+[разделе совместимости](docs/compatibility.md); Gitmora не является официальной
+версией этих продуктов.
