@@ -35,9 +35,11 @@ def main() -> None:
     parser.add_argument("--seconds", type=int, default=20)
     parser.add_argument("--clients", type=int, nargs="+", default=[1, 10, 25, 50])
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--database-pool-max", type=int, default=8)
     args = parser.parse_args()
     assert 50 <= args.sessions <= 5000 and 2 <= args.seconds <= 60
     assert args.clients and all(1 <= n <= 50 for n in args.clients)
+    assert 1 <= args.database_pool_max <= 32
     schema = "load_" + uuid.uuid4().hex
     api.sql(f'CREATE SCHEMA "{schema}"')
     environment = {
@@ -45,7 +47,9 @@ def main() -> None:
         for key, value in os.environ.items()
         if key in {"PATH", "HOME", "TMPDIR", "USER", "LANG", "SHELL"}
     }
-    environment["WORKGRAPH_DATABASE_URL"] = api.BASE_DSN + "&search_path=" + schema
+    # Do not inherit the API host CPU count for a database running in a smaller Docker VM.
+    environment["WORKGRAPH_DATABASE_URL"] = (api.BASE_DSN + "&search_path=" + schema
+                                              + "&pool_max_conns=" + str(args.database_pool_max))
     process = worker = None
     failures: list[str] = []
     try:
@@ -393,6 +397,7 @@ def main() -> None:
             duplicate_replay_safe=True,
             unconfirmed_sha_not_promoted=True,
             production_target=False,
+            database_pool_max=args.database_pool_max,
         )
         if args.output:
             args.output.parent.mkdir(parents=True, exist_ok=True)

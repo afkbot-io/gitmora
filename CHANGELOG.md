@@ -8,6 +8,7 @@
 - Project-scoped upstream identities and provider-instance-scoped commit/PR associations prevent cross-company or cross-server evidence sharing.
 - Checked macOS/Linux installer at `/install.sh`; project-specific CLI and MCP setup.
 - Schema migration 24 adds invitation handles and scopes repository uniqueness to each project.
+- Search ranks narrow authorized candidates and fetches full text only for selected results, avoiding unnecessary temporary-file writes. The load gate records an explicit database pool size.
 
 ## 0.3.0
 

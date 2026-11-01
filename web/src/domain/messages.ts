@@ -50,6 +50,8 @@ export const english: Readonly<Record<string, string>> = {
   "Агент / модель": "Agent / model",
   "Агент в источнике:": "Reported agent:",
   Администратор: "Administrator",
+  "Администратор Gitmora должен разрешить подключение к этому серверу.":
+    "A Gitmora administrator needs to allow connections to this server.",
   "Администратор сервера должен настроить шифрование и разрешённые адреса интеграций.":
     "Ask the server administrator to configure encryption and allowed integration servers.",
   "Адрес вебхука": "Webhook URL",
@@ -147,8 +149,8 @@ export const english: Readonly<Record<string, string>> = {
   "Документ задачи": "Task document",
   "Документы:": "Documents:",
   Дополнительно: "Advanced",
-  "Достигнут лимит GitHub API. Подключите токен чтения или дождитесь следующей попытки.":
-    "GitHub's API limit has been reached. Connect a read token or wait for the next attempt.",
+  "Достигнут лимит API сервиса. Проверьте токен или дождитесь следующей попытки.":
+    "The service API limit was reached. Check the token or wait for the next attempt.",
   "Достигнут общий лимит GitHub. Подключите токен чтения для регулярной синхронизации.":
     "GitHub's shared limit has been reached. Connect a read token for regular synchronization.",
   "Доступ терминала сохранится после выхода из браузера. Отозвать его можно в личных настройках.":
@@ -679,8 +681,6 @@ export const english: Readonly<Record<string, string>> = {
   "Этот ник уже занят. Выберите другой.":
     "This username is taken. Choose another one.",
   "Этот пользователь уже в проекте.": "This user is already a project member.",
-  "Этот сервер ещё не разрешён. Добавьте его адрес в настройки интеграций на сервере Gitmora.":
-    "This server is not allowed yet. Add its address to your Gitmora server's integration configuration.",
   "Явно выбранный MR/PR": "Explicitly selected MR/PR",
   Язык: "Language",
   "Язык интерфейса": "Interface language",

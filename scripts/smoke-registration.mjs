@@ -193,7 +193,7 @@ try {
   await signup.locator("#kc-register-form [type=submit]").click();
   await signup.waitForURL(fixture.url + "/");
   assert.equal(await signup.locator("html").getAttribute("lang"), "en");
-  await signup.getByRole("link", { name: "Settings", exact: true }).waitFor();
+  await signup.locator('.account a[href*="preferences"]').waitFor();
   const created = await me(signup);
   assert.equal(created.status, 200);
   assert.equal(created.body.user.operator, false);

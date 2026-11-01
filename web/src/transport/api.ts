@@ -12,7 +12,7 @@ const messages: Record<number, string> = {
 };
 export const integrationErrors: Record<string, string> = {
   provider_rate_limited:
-    "Достигнут лимит GitHub API. Подключите токен чтения или дождитесь следующей попытки.",
+    "Достигнут лимит API сервиса. Проверьте токен или дождитесь следующей попытки.",
   provider_unauthorized:
     "Токен не принят. Проверьте его срок действия и сохраните новый.",
   provider_forbidden:
@@ -21,7 +21,7 @@ export const integrationErrors: Record<string, string> = {
     "Репозиторий не найден. Проверьте ссылку и доступ токена.",
   provider_private_repository: "Для закрытого репозитория нужен токен чтения.",
   provider_endpoint_not_allowed:
-    "Этот сервер ещё не разрешён. Добавьте его адрес в настройки интеграций на сервере Gitmora.",
+    "Администратор Gitmora должен разрешить подключение к этому серверу.",
   provider_invalid_response:
     "Сервис вернул неподдерживаемый ответ. Проверьте адрес сервера и его версию.",
 };
