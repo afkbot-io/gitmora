@@ -44,6 +44,11 @@ await build({
 const styles = (await readdir(resolve(target, "css"))).filter((name) =>
   /^gitmora-[\w-]+\.css$/.test(name),
 );
+await mkdir(resolve(target, "img"), { recursive: true });
+await copyFile(
+  resolve("web/public/assets/workgraph.svg"),
+  resolve(target, "img/favicon.svg"),
+);
 if (styles.length !== 1)
   throw new Error("Expected exactly one generated identity stylesheet");
 const script = await readFile(resolve("web/public/assets/theme.js"));

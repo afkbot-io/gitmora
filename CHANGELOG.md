@@ -8,6 +8,7 @@
 - Upgrade the private collector ledger to schema 6, deduplicating pre-tool ref snapshots and preventing older clients from applying new checkpoints unsafely. Stop old agents/watch processes and back up the ledger before upgrade; reinstall the OpenCode helper with the new CLI. Server schema remains 26.
 - Recover recorded Git object IDs in a bounded batch without traversing all repository history. Unknown/quiet commit attempts form conservative barriers; explicit recovery rebuilds only recovered assertions, keeps old immutable revisions and reports unchanged replay accurately.
 - Read legacy OpenCode command/result envelopes in compact and expanded tool views. Remove retired Tasktopia targets from Linux/deployment checks and correct obsolete collector instructions.
+- Ship the shared Gitmora favicon with the account theme; verify its actual asset response in registration checks.
 
 ## 0.6.1
 

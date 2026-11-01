@@ -59,6 +59,11 @@ async function checkLocalTheme(page, name) {
   const sheets = await page.evaluate(() =>
     [...document.querySelectorAll("link[rel=stylesheet]")].map((e) => e.href),
   );
+  const icon = await page.locator('link[rel="icon"]').getAttribute("href");
+  assert.ok(icon, "Account page must declare a favicon");
+  const iconResponse = await page.request.get(new URL(icon, page.url()).href);
+  assert.equal(iconResponse.status(), 200, "Account favicon is missing");
+  assert.match(iconResponse.headers()["content-type"], /image\/svg\+xml/);
   const assets = [];
   for (const href of sheets) {
     const r = await page.request.get(href);
