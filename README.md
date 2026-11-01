@@ -57,7 +57,7 @@ make integration
 - [Entire/Git AI import](docs/compatibility.md): explicit versioned formats and preserved provenance, not universal producer compatibility.
 - Phone checks use browser emulation. SMTP recovery, automatic external ACL synchronization, unattended upgrades and a production capacity guarantee are not included.
 
-Server/UI is 0.3.0; the standalone client is 0.3.0 (0.2.0 remains compatible). See [changes](CHANGELOG.md). Legacy `workgraph` executable aliases, `WORKGRAPH_*` variables and protocols remain compatible. Dependency and copied-template terms are listed in [third-party notices](THIRD_PARTY_NOTICES.md).
+Server/UI is 0.4.0; the standalone client is 0.4.0 (0.2.0 remains compatible). See [changes](CHANGELOG.md). Legacy `workgraph` executable aliases, `WORKGRAPH_*` variables and protocols remain compatible. Dependency and copied-template terms are listed in [third-party notices](THIRD_PARTY_NOTICES.md).
 
 ## License
 

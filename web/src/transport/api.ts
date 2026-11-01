@@ -10,7 +10,24 @@ const messages: Record<number, string> = {
   502: "Не удалось проверить доступ к внешнему сервису. Проверьте адрес, ключ и его права.",
   503: "Сервис временно недоступен. Повторите позже.",
 };
+export const integrationErrors: Record<string, string> = {
+  provider_rate_limited:
+    "Достигнут лимит API сервиса. Проверьте токен или дождитесь следующей попытки.",
+  provider_unauthorized:
+    "Токен не принят. Проверьте его срок действия и сохраните новый.",
+  provider_forbidden:
+    "У токена нет доступа. Разрешите чтение репозитория, запросов на слияние и проверок CI.",
+  provider_project_not_found:
+    "Репозиторий не найден. Проверьте ссылку и доступ токена.",
+  provider_private_repository: "Для закрытого репозитория нужен токен чтения.",
+  provider_endpoint_not_allowed:
+    "Администратор Gitmora должен разрешить подключение к этому серверу.",
+  provider_invalid_response:
+    "Сервис вернул неподдерживаемый ответ. Проверьте адрес сервера и его версию.",
+};
 const diagnostics: Record<string, string> = {
+  ...integrationErrors,
+  username_taken: "Этот ник уже занят. Выберите другой.",
   cli_fresh_login_required:
     "Для подтверждения CLI войдите через организацию заново по ссылке из терминала.",
   cli_enrollment_unavailable:

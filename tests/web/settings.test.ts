@@ -1,12 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ApiClient, ApiError } from "../../web/src/transport/api.js";
-import {
-  CommandDraft,
-  capabilities,
-  providerNumber,
-  providerLabel,
-} from "../../web/src/domain/settings.js";
+import { CommandDraft, capabilities } from "../../web/src/domain/settings.js";
 
 test("catalog and connection actions require the real account, scopes and role", () => {
   const operator = {
@@ -32,6 +27,13 @@ test("catalog and connection actions require the real account, scopes and role",
       { ...operator, scopes: ["directory:read", "directory:manage"] },
       { role: "admin" },
     ).catalog,
+    true,
+  );
+  assert.equal(
+    capabilities({
+      user: { operator: false },
+      scopes: ["directory:read", "directory:manage"],
+    }).createProject,
     true,
   );
   assert.equal(
@@ -71,14 +73,6 @@ test("uncertain metadata commands reuse their exact request identity; changed sc
     }).request_id,
     first.request_id,
   );
-});
-
-test("provider project numbers must remain exact safe positive integers", () => {
-  assert.equal(providerNumber("42"), 42);
-  assert.equal(providerLabel(42), "42");
-  assert.match(providerLabel(9007199254740992), /точного/);
-  for (const value of ["0", "-1", "1.5", "1e3", "9007199254740992", "42x", ""])
-    assert.throws(() => providerNumber(value));
 });
 
 test("unsafe empty-body methods still carry CSRF; disconnect accepts an empty 204", async () => {

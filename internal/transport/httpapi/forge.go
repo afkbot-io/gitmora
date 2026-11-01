@@ -156,7 +156,16 @@ func forgeError(w http.ResponseWriter, err error) {
 		if provider.RetryAfter > 0 {
 			w.Header().Set("Retry-After", strconv.Itoa(int(provider.RetryAfter/time.Second)))
 		}
-		writeError(w, 502, "provider_unavailable", "Cannot verify the configured GitLab project")
+		code := "provider_unavailable"
+		switch provider.Code {
+		case "provider_rate_limited", "provider_unauthorized", "provider_forbidden", "provider_project_not_found", "provider_private_repository", "provider_endpoint_not_allowed", "provider_invalid_response":
+			code = provider.Code
+		}
+		status := 502
+		if code == "provider_rate_limited" {
+			status = 429
+		}
+		writeError(w, status, code, "Cannot verify repository access")
 	default:
 		mapError(w, err)
 	}

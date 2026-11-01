@@ -132,8 +132,8 @@ async function exerciseImportedOrigin() {
     },
   };
   assert.equal((await api("/v1/captures", snapshot)).status, 201);
-  await click("Обновить источники");
-  await page.locator(".work-row").filter({ hasText: id }).click();
+  await click("Обновить");
+  await page.locator(`.work-row[data-session-id="${id}"]`).click();
   const origin = page.getByRole("region", { name: "Происхождение импорта" });
   await visible(
     origin.getByRole("heading", { name: "Импорт: Git AI", exact: true }),
@@ -158,7 +158,7 @@ async function exerciseImportedOrigin() {
   );
   await screenshot("gitmora-import-origin-mobile");
   if (!mobile) await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.locator(".work-row").filter({ hasText: fixture.session }).click();
+  await page.locator(`.work-row[data-session-id="${fixture.session}"]`).click();
   await visible(
     page
       .getByRole("region", { name: "Запись сессии" })
@@ -268,7 +268,7 @@ try {
     await visible(page.locator(".mr-context"));
     assert.equal(await page.locator(".head-mismatch").count(), 0);
     await page
-      .getByLabel("Вид источника", { exact: true })
+      .getByLabel("Показать", { exact: true })
       .selectOption("merge_request");
     await page.locator(".work-row").first().click();
     await visible(page.locator(".mr-context"));
@@ -285,9 +285,7 @@ try {
       path: "output/playwright/workgraph-work-mr-detail-mobile.png",
     });
     if (!mobile) await page.setViewportSize({ width: 1440, height: 1000 });
-    await page
-      .getByLabel("Вид источника", { exact: true })
-      .selectOption("task");
+    await page.getByLabel("Показать", { exact: true }).selectOption("task");
     await page
       .locator(".work-row")
       .filter({ hasText: "Read and publish" })
@@ -320,10 +318,8 @@ try {
       page.getByRole("heading", { name: "Задача пока недоступна" }),
     );
     assert.equal(await task.count(), 0);
-    await click("Обновить источники");
-    await visible(
-      page.getByRole("heading", { name: "Сохранённых источников пока нет" }),
-    );
+    await click("Обновить");
+    await visible(page.getByRole("heading", { name: "История пока пуста" }));
   } else {
     await page.goto(fixture.url);
     await page.getByRole("link", { name: "Войти" }).click();
@@ -332,16 +328,14 @@ try {
       .getByLabel("Проект", { exact: true })
       .selectOption(fixture.project);
     await click("Работа");
-    await visible(
-      page.getByRole("heading", { name: "Сохранённых источников пока нет" }),
-    );
-    await page
-      .getByLabel("Вид источника", { exact: true })
-      .selectOption("session");
+    await visible(page.getByRole("heading", { name: "История пока пуста" }));
+    await page.getByLabel("Показать", { exact: true }).selectOption("session");
     await poll(async () => (await page.locator(".work-row").count()) === 20);
     await click("Загрузить ещё источники");
     await poll(async () => (await page.locator(".work-row").count()) === 22);
-    const root = page.locator(".work-row").filter({ hasText: fixture.session });
+    const root = page.locator(
+      `.work-row[data-session-id="${fixture.session}"]`,
+    );
     await root.click();
     const transcript = page.getByRole("region", { name: "Запись сессии" });
     await visible(transcript.locator(".transcript-message").first());
@@ -354,10 +348,10 @@ try {
     await click("Следующие сообщения");
     assert.equal(await transcript.locator(".transcript-message").count(), 6);
     await page.getByLabel("Ревизия сессии", { exact: true }).fill("1");
-    await click("Открыть ревизию");
+    await click("Открыть версию");
     await visible(transcript.getByText(/obsoleteWord/));
     assert.equal(await transcript.locator(".transcript-message").count(), 1);
-    await click("Последняя ревизия");
+    await click("Последняя версия");
     await visible(transcript.getByText(/refreshToken:/).first());
     await screenshot("workgraph-work-session");
     await click("Открыть задачу из привязки агента");
@@ -395,9 +389,7 @@ try {
     await page
       .getByLabel("Проект", { exact: true })
       .selectOption(fixture.other_project);
-    await visible(
-      page.getByRole("heading", { name: "Сохранённых источников пока нет" }),
-    );
+    await visible(page.getByRole("heading", { name: "История пока пуста" }));
     release();
     await page.unroute("**/v1/context/pack");
     assert.equal(await transcript.count(), 0);
@@ -409,12 +401,9 @@ try {
     await page
       .getByLabel("Проект", { exact: true })
       .selectOption(fixture.project);
+    await page.getByLabel("Показать", { exact: true }).selectOption("session");
     await page
-      .getByLabel("Вид источника", { exact: true })
-      .selectOption("session");
-    await page
-      .locator(".work-row")
-      .filter({ hasText: fixture.session })
+      .locator(`.work-row[data-session-id="${fixture.session}"]`)
       .click();
     await visible(transcript.locator(".transcript-message").first());
     const current = await api(`/v1/projects/${fixture.project}/members`);
@@ -429,7 +418,7 @@ try {
       ).status,
       200,
     );
-    await click("Обновить источники");
+    await click("Обновить");
     await visible(page.getByRole("alert"));
     assert.equal(await transcript.count(), 0);
     assert.equal(await page.locator(".work-row").count(), 0);
@@ -450,7 +439,9 @@ try {
   }
   assert.deepEqual(
     await page.evaluate(() => [
-      Object.keys(localStorage),
+      Object.keys(localStorage).filter(
+        (key) => !key.startsWith("gitmora.project."),
+      ),
       Object.keys(sessionStorage),
     ]),
     [[], []],

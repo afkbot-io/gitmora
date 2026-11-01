@@ -17,7 +17,7 @@ import (
 
 // CodeDiff enumerates changed paths; GitHub's own diff cap remains explicit in code status.
 func (c *Client) CodeDiff(ctx context.Context, repo domain.Repository, token, sha string, page int) (domain.DiffPage, error) {
-	root, err := repoPath(repo)
+	root, err := c.repoPath(repo)
 	if err != nil || !identifier.ValidCommit(sha) || page < 1 || page > 1000000 {
 		return domain.DiffPage{}, domain.ErrInvalid
 	}
@@ -77,7 +77,7 @@ type treeEntry struct {
 // CodeFile walks immutable trees, refusing symlinks/submodules before fetching a hash-checked blob.
 // No download_url, mutable branch, archive or external LFS pointer is followed.
 func (c *Client) CodeFile(ctx context.Context, repo domain.Repository, token, sha, filePath string) (domain.FileObservation, error) {
-	root, err := repoPath(repo)
+	root, err := c.repoPath(repo)
 	if err != nil || !identifier.ValidCommit(sha) || !identifier.ValidGitPath(filePath) {
 		return domain.FileObservation{}, domain.ErrInvalid
 	}

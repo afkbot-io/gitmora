@@ -158,7 +158,7 @@ func InteractiveScopes() []access.Permission {
 }
 
 type Flow struct{ StateHash, BrowserHash, Configuration string }
-type Identity struct{ Issuer, Subject, DisplayName string }
+type Identity struct{ Issuer, Subject, DisplayName, Username string }
 
 // Binding is immutable in issuer/subject/user identity. Disabling/re-enabling creates a new version, never a retarget.
 type Binding struct {
@@ -199,6 +199,7 @@ type Session struct {
 	ExpiresAt time.Time
 }
 type SessionSeed struct {
+	Username                                string
 	ID, CookieHash, CSRFHash, Configuration string
 	Binding                                 Binding
 	Credential                              access.CredentialRecord

@@ -94,6 +94,18 @@ func directoryCommandCapability(a directoryActor, c domain.Command) error {
 	if !a.principal.Has(access.ReadDirectory) {
 		return access.ErrDenied
 	}
+	if c.Action == domain.SetUsername {
+		if a.principal.UserID == c.EntityID && a.principal.Has(access.ManageCredentials) {
+			return nil
+		}
+		return access.ErrDenied
+	}
+	if c.Action == domain.CreateProject {
+		if a.principal.Has(access.ManageDirectory) || a.platform() {
+			return nil
+		}
+		return access.ErrDenied
+	}
 	if c.Platform() {
 		if !a.principal.Has(access.ManagePlatform) {
 			return access.ErrDenied

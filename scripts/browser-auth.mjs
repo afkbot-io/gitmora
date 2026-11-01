@@ -44,6 +44,14 @@ export async function signInAs(page, fixture, token = fixture.admin) {
 
 const workspaceSections = new Set([
   "Работа",
+  "Поиск",
+  "Участники",
+  "CLI и MCP",
+  "Личные настройки",
+  "Search",
+  "Members",
+  "CLI and MCP",
+  "Personal settings",
   "Контекст",
   "Репозитории",
   "Настройки проекта",
@@ -65,10 +73,14 @@ const workspaceSections = new Set([
   "Settings",
 ]);
 export async function clickUI(page, name) {
+  if (name === "Личные настройки" || name === "Personal settings") {
+    await page.locator('.account a[href*="preferences"]').click();
+    return;
+  }
   if (workspaceSections.has(name)) {
     await page.locator(".sidebar").waitFor();
     const menu = page.getByRole("button", {
-      name: /^(Разделы|Sections)$/,
+      name: /^(Разделы|Разделы проекта|Sections|Project sections)$/,
       exact: true,
     });
     if (

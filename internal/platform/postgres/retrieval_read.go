@@ -69,6 +69,8 @@ var eligibleSources = `(` + baseSourceAccess + `) AND ($4::text='' OR j.reposito
 // Parameters 1..5 are the shared authorized source scope; matching/ranking use 6..12.
 const sourceIdentityProjection = `j.source_kind,j.project_id,j.repository_id,j.session_id,j.revision,j.country_id::text AS source_country_id,j.task_id::text AS source_task_id,j.source_digest,j.code_sha,j.code_path,j.code_blob_id`
 
+// Keep only identity, authorized source metadata and score in the materialized candidates;
+// fetch wide source text only for the final bounded selection.
 // Identical language alternatives have the same matches and score, but repeat ranking work.
 // Materialize the single query row once, including when PostgreSQL chooses a generic plan.
 var queryPrefix = `WITH forms AS (
@@ -78,10 +80,11 @@ var queryPrefix = `WITH forms AS (
  || CASE WHEN russian_terms=simple_terms OR russian_terms=english_terms THEN ''::tsquery ELSE russian_terms END AS query FROM forms
  ),
  allowed AS MATERIALIZED (
- SELECT d.*,` + sourceIdentityProjection + `,
+ SELECT d.id,` + sourceIdentityProjection + `,
  CASE WHEN j.source_kind='capture' THEN cs.latest_revision=j.revision WHEN j.source_kind='code' THEN true ELSE wt.digest=j.source_digest END AS current,
  CASE WHEN j.source_kind='task' AND wt.digest=j.source_digest THEN wt.observed_at ELSE j.source_observed_at END AS observed_at,
- terms.query
+ CASE WHEN $10::text='' THEN CASE d.kind WHEN 'task' THEN 1.0 WHEN 'document' THEN 0.8 WHEN 'session' THEN 0.4 ELSE 0.2 END
+ ELSE ts_rank_cd(d.lexical,terms.query,32)+(CASE WHEN position(lower($10) IN lower(d.title_terms))>0 THEN 1.0 ELSE 0.0 END) END::double precision AS score
  FROM retrieval_chunks d JOIN retrieval_jobs j ON j.id=d.job_id ` + sourceJoins + ` CROSS JOIN terms
  WHERE ` + eligibleSources + ` AND j.completed_at IS NOT NULL
  AND ($6::text='' OR (d.country_id::text=$6 AND d.task_id::text=$7))
@@ -92,17 +95,13 @@ var queryPrefix = `WITH forms AS (
  AND ($10::text='' OR d.lexical@@terms.query)
  AND ` + confirmedReferenceAccess + `
  AND ($8::text='' OR j.code_sha=$8 OR EXISTS(SELECT 1 FROM capture_revision_commits rc JOIN commits c ON c.repository_id=rc.repository_id AND c.sha=rc.sha WHERE rc.repository_id=j.repository_id AND rc.session_id=j.session_id AND rc.revision=j.revision AND rc.sha=$8 AND c.confirmed_at IS NOT NULL))
- ), ranked AS (
- SELECT *,CASE WHEN $10::text='' THEN CASE kind WHEN 'task' THEN 1.0 WHEN 'document' THEN 0.8 WHEN 'session' THEN 0.4 ELSE 0.2 END
- ELSE ts_rank_cd(lexical,query,32)+(CASE WHEN position(lower($10) IN lower(title_terms))>0 THEN 1.0 ELSE 0.0 END) END::double precision AS score
- FROM allowed
- ), selected AS (SELECT * FROM ranked ORDER BY score DESC,observed_at DESC,id LIMIT $11)
- SELECT s.id,s.kind,s.part,s.start_rune,s.end_rune,s.title,s.content,s.content_digest,COALESCE(s.country_id::text,''),COALESCE(s.task_id::text,''),
- s.source_kind,s.project_id::text,COALESCE(s.repository_id::text,''),COALESCE(s.session_id::text,''),COALESCE(s.revision,0),COALESCE(s.source_country_id,''),COALESCE(s.source_task_id,''),s.source_digest,COALESCE(s.code_sha,''),COALESCE(s.code_path,''),COALESCE(s.code_blob_id,''),s.line_start,s.line_end,
- s.current,s.observed_at,s.indexed_at,s.score,
+ ), selected AS (SELECT * FROM allowed ORDER BY score DESC,observed_at DESC,id LIMIT $11)
+ SELECT s.id,d.kind,d.part,d.start_rune,d.end_rune,d.title,d.content,d.content_digest,COALESCE(d.country_id::text,''),COALESCE(d.task_id::text,''),
+ s.source_kind,s.project_id::text,COALESCE(s.repository_id::text,''),COALESCE(s.session_id::text,''),COALESCE(s.revision,0),COALESCE(s.source_country_id,''),COALESCE(s.source_task_id,''),s.source_digest,COALESCE(s.code_sha,''),COALESCE(s.code_path,''),COALESCE(s.code_blob_id,''),d.line_start,d.line_end,
+ s.current,s.observed_at,d.indexed_at,s.score,
  CASE WHEN s.source_kind='code' THEN ARRAY[s.code_sha] ELSE ARRAY(SELECT c.sha FROM capture_revision_commits rc JOIN commits c ON c.repository_id=rc.repository_id AND c.sha=rc.sha WHERE rc.repository_id=s.repository_id AND rc.session_id=s.session_id AND rc.revision=s.revision AND c.confirmed_at IS NOT NULL ORDER BY c.sha LIMIT 16) END,
  CASE WHEN s.source_kind='code' THEN 1 ELSE (SELECT count(*) FROM capture_revision_commits rc JOIN commits c ON c.repository_id=rc.repository_id AND c.sha=rc.sha WHERE rc.repository_id=s.repository_id AND rc.session_id=s.session_id AND rc.revision=s.revision AND c.confirmed_at IS NOT NULL) END
- FROM selected s ORDER BY s.score DESC,s.observed_at DESC,s.id`
+ FROM selected s JOIN retrieval_chunks d ON d.id=s.id ORDER BY s.score DESC,s.observed_at DESC,s.id`
 
 // readChunks returns only the already-authorized bounded candidate set. Source aliases keep task
 // binding fields distinct from source identity; capture citations never acquire a task's digest.

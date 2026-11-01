@@ -7,8 +7,8 @@ import (
 )
 
 type matchRow struct {
-	base, url string
-	err       error
+	base, url, provider string
+	err                 error
 }
 
 func (r matchRow) Scan(dest ...any) error {
@@ -21,7 +21,7 @@ func (r matchRow) Scan(dest ...any) error {
 		r.base, int64(42), int64(7), r.url,
 		"33333333-3333-4333-8333-333333333333",
 		"44444444-4444-4444-8444-444444444444",
-		int64(1), "capture-digest", "commit-sha", "mr-digest", "code-key",
+		int64(1), "capture-digest", "commit-sha", "mr-digest", "code-key", r.provider,
 	}
 	for i, value := range values {
 		reflect.ValueOf(dest[i]).Elem().Set(reflect.ValueOf(value))
@@ -32,10 +32,12 @@ func (r matchRow) Scan(dest ...any) error {
 func TestReadLinkMatchUsesProviderTitle(t *testing.T) {
 	for _, test := range []struct{ name, base, url, title string }{
 		{"github", "https://github.com/example/project", "https://github.com/example/project/pull/7", "GitHub PR #7"},
+		{"enterprise", "https://github.example.com/code/team/project", "https://github.example.com/code/team/project/pull/7", "GitHub PR #7"},
+		{"gitlab-prefix", "https://gitlab.example.com/code/team", "https://gitlab.example.com/code/team/group/project/-/merge_requests/7", "GitLab MR !7"},
 		{"gitlab", "https://gitlab.example.com", "https://gitlab.example.com/group/project/-/merge_requests/7", "GitLab MR !7"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			match, err := readLinkMatch(matchRow{base: test.base, url: test.url})
+			match, err := readLinkMatch(matchRow{base: test.base, url: test.url, provider: map[string]string{"github": "github", "enterprise": "github"}[test.name]})
 			if err != nil {
 				t.Fatal(err)
 			}

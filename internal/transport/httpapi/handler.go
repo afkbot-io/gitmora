@@ -54,6 +54,7 @@ func NewHandler(config Config) http.Handler {
 	if config.WebUI != nil {
 		mux.Handle("GET /{$}", config.WebUI)
 		mux.Handle("GET /assets/", config.WebUI)
+		mux.Handle("GET /install.sh", config.WebUI)
 	}
 	registerForge(mux, config)
 	registerCode(mux, config)

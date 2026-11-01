@@ -96,5 +96,10 @@ func (s *IdentityStore) provision(ctx context.Context, i domain.Identity, config
 	if _, e = directorySaveReceipt(ctx, tx, r, "", origin, directoryFingerprint([]byte(i.Issuer+"\x00"+i.Subject))); e != nil {
 		return b, e
 	}
+	if username, e := directory.Username(i.Username); e == nil {
+		if _, e = tx.Exec(ctx, `INSERT INTO user_handles(user_id,username)VALUES($1,$2)ON CONFLICT DO NOTHING`, b.UserID, username); e != nil {
+			return b, e
+		}
+	}
 	return b, tx.Commit(ctx)
 }

@@ -2,18 +2,19 @@
 
 The directory API manages users, project/repository metadata, local memberships and API keys. All operations reload the current credential/account state. Projects/repositories keep opaque UUIDs; a repository's Gitmora project, canonical GitLab base and numeric provider project ID cannot be changed through this API. Register a new repository UUID for an intentional new identity. GitLab connections still require separate provider verification and the server allowlist.
 
-The [human workspace](web.md) implements project/repository/account/member administration, immutable OIDC binding controls and personal key issuance/revocation, explicit version-conflict recovery, exact in-memory command retries and destructive confirmation. Installation/operator and actual project roles remain separate. The browser smoke gates cover catalog/provider/binding/credential forms and login recovery against API/PostgreSQL with signed local OIDC and Chromium.
+The [human workspace](web.md) is scoped to the selected project: repositories, participants, work, search and settings. Account preferences and optional automation keys are separate. Global user/binding administration remains an operator API/CLI boundary; it is not a company administration screen.
 
-Hosted password users are created through [registration or the operator CLI](accounts.md). The low-level directory-only create API does not create a password/provider login; the web account page directs operators to the complete hosted workflow.
+Hosted password users are created through [registration or the operator CLI](accounts.md). The low-level directory-only create API does not create a password/provider login; the normal workspace does not expose that low-level operation.
 
 ## Authority
 
 | Operation | Required scope/authority |
 | --- | --- |
 | `GET /v1/me` | Any current enabled Gitmora credential |
+| Create a project, with the creator made administrator atomically | `directory:read,directory:manage`; no installation-operator role required |
 | Discover project/repository/membership metadata | `directory:read` plus current membership; an operator with `platform:manage` can discover global metadata |
 | Rename/delete project; register/rename/delete repository; change memberships | `directory:read,directory:manage` plus project-admin role, or `directory:read,platform:manage` plus installation-operator record |
-| Create projects; manage users/operator grants; read global metadata journal | `directory:read,platform:manage` plus installation-operator record |
+| Manage users/operator grants; read global metadata journal | `directory:read,platform:manage` plus installation-operator record |
 | Owned key metadata/issuance/revocation | `credentials:manage`; issuance is additionally bounded by the current parent's scopes/expiry |
 
 An installation operator receives no automatic code/transcript/search/integration-management authority. Those existing operations still require their own token scopes and real project membership/role. Adding membership is an explicit journalled operation. `me.user.operator` describes the account; the token's actual scopes still limit what it can do. Project admins cannot turn a `platform:manage` string into an installation role.
@@ -84,4 +85,10 @@ The first 201 response contains `created:true`, key metadata and a one-time `sec
 
 `GET /v1/directory/events?project_id=<UUID>&after_sequence=<integer>&limit=30` returns content-free receipts with `origin` api/offline/oidc. Project management authority can inspect its current project journal; operators can inspect all events or filter a deleted project's ID. `next_sequence` continues the ordered journal. Gaps are normal. Operator/user IDs are pseudonymous metadata; this is not a tamper-proof global audit service and does not yet cover every provider/content operation.
 
-`make smoke-directory` uses the built API, real PostgreSQL and only public catalog/account APIs after bootstrap. It verifies restart/replay, role separation, immutable provider identity, token hierarchy, disable/re-enable/delete, local evidence deletion/tombstones and journal. PostgreSQL race tests add concurrent request identity/admin removal/delegation-revocation, ABA protection, rollback on journal failure and stale index-worker fences. The default full and Linux gates include the module; actual Tasktopia compatibility runs separately. The [OIDC/subject/session backend](identity.md) and human login/catalog/account/member/binding/key views are implemented. Native CLI/OS-store login and the selected production installation are implemented; external ACL synchronization and broader audit/retention remain outside the current core scope. See [current acceptance](implementation-status.md).
+`make smoke-directory` uses the built API, real PostgreSQL and only public catalog/account APIs after bootstrap. It verifies restart/replay, role separation, immutable provider identity, token hierarchy, disable/re-enable/delete, local evidence deletion/tombstones and journal. PostgreSQL race tests add concurrent request identity/admin removal/delegation-revocation, ABA protection, rollback on journal failure and stale index-worker fences. The default full and Linux gates include the module; actual Tasktopia compatibility runs separately. The [OIDC/subject/session backend](identity.md) and human login/project/member/profile/connection views are implemented; operator account and identity-binding operations use the API/CLI. Native CLI/OS-store login and the selected production installation are implemented; external ACL synchronization and broader audit/retention remain outside the current core scope. See [current acceptance](implementation-status.md).
+
+## Invitation usernames
+
+`PUT /v1/me/profile` accepts `request_id`, `expected_version` and a `username` for the current account only. Handles are case-insensitive ASCII letters/digits/dots/underscores/hyphens (1–80 characters), globally unique, and independent of authentication subject mappings. A verified provider username seeds an empty handle when available. Choosing/changing a handle never grants membership or matches an existing identity by a name/email claim. UUIDs remain stable when a handle changes.
+
+`POST /v1/projects/{project}/members/resolve` accepts an exact `{ "identifier": "@nickname-or-UUID" }`. Current project management is checked before lookup. It returns only the enabled candidate's `id`, `display_name` and optional `username`; there is no global autocomplete/list. The subsequent versioned membership mutation addresses that exact UUID. A member cannot use this endpoint to discover users, and a project administrator cannot create global operator accounts.

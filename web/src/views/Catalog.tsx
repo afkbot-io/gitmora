@@ -1,6 +1,6 @@
 import { t as translate } from "../domain/locale.js";
 import { buttonStyles, sharedStyles } from "./ui.js";
-import { useId, useState } from "react";
+import { useState } from "react";
 import type { FormEvent } from "react";
 import type {
   Me,
@@ -8,17 +8,8 @@ import type {
   Repository,
   ResolvedRepository,
 } from "../domain/context.js";
-import {
-  safeExternalURL,
-  repositoryURL,
-  repositoryProviderID,
-} from "../domain/context.js";
-import {
-  capabilities,
-  providerLabel,
-  providerNumber,
-} from "../domain/settings.js";
-import type { Receipt } from "../domain/settings.js";
+import { safeExternalURL, repositoryURL } from "../domain/context.js";
+import { capabilities } from "../domain/settings.js";
 import type { ApiClient } from "../transport/api.js";
 import { useMutation } from "../application/useMutation.js";
 import {
@@ -29,124 +20,6 @@ import {
 } from "./SettingsShared.js";
 import { Empty, ErrorNotice } from "./shared.js";
 import { AgentSetup } from "./AgentSetup.js";
-
-export function ProjectCatalog({
-  client,
-  me,
-  projects,
-  onSaved,
-  next,
-  loading,
-  loadMore,
-}: {
-  client: ApiClient;
-  me: Me;
-  projects: Project[];
-  onSaved: (id?: string) => Promise<void>;
-  next: boolean;
-  loading: boolean;
-  loadMore: () => void;
-}) {
-  const [name, setName] = useState("");
-  const [id, setID] = useState(() => crypto.randomUUID());
-  const action = useMutation(client);
-  async function create(event: FormEvent) {
-    event.preventDefault();
-    const saved = await action.run<Receipt>(
-      "POST",
-      "/v1/projects",
-      { name: name.trim(), id },
-      true,
-    );
-    if (saved) {
-      setName("");
-      setID(crypto.randomUUID());
-      action.setMessage("Проект создан.");
-      await onSaved(saved.value.entity_id);
-    }
-  }
-  return (
-    <section className="settings-view px-0 pb-8">
-      <div className={sharedStyles.heading}>
-        <div>
-          <h1>{translate("Каталог проектов")}</h1>
-        </div>
-      </div>
-      {capabilities(me).createProject && (
-        <MutationForm
-          pending={action.pending}
-          className={sharedStyles.setup}
-          onSubmit={(event) => void create(event)}
-        >
-          <h2>{translate("Новый проект")}</h2>
-          <label>
-            {translate("Название проекта")}
-            <input
-              required
-              value={name}
-              maxLength={200}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </label>
-          <button
-            className={buttonStyles.primary}
-            disabled={action.pending || !name.trim()}
-          >
-            {action.pending
-              ? translate("Создаём…")
-              : translate("Создать проект")}
-          </button>
-          <MutationNotice action={action} />
-        </MutationForm>
-      )}
-      {projects.length === 0 && (
-        <Empty title={translate("Нет доступных проектов")}>
-          {translate(
-            "Оператор установки может создать проект и назначить участников.",
-          )}
-        </Empty>
-      )}
-      <div className="settings-list">
-        {projects.map((project) => (
-          <article
-            className={`
-              settings-row flex justify-between items-center gap-5 px-0 py-5 border-b border-line
-              [&_h2]:mb-2 [&_p]:mb-2 [&_>_div]:min-w-0 mobile:flex-wrap
-            `}
-            key={project.id}
-          >
-            <div>
-              <h2>{project.name}</h2>
-              <p className="mono muted text-muted font-mono text-xs wrap-anywhere">
-                {project.id}
-              </p>
-              <span className="small text-sm">
-                {project.role
-                  ? translate("Роль: {0}", project.role)
-                  : translate("Только доступ к каталогу")}
-              </span>
-            </div>
-            <button
-              className={buttonStyles.secondary}
-              onClick={() => void onSaved(project.id)}
-            >
-              {translate("Открыть проект")}
-            </button>
-          </article>
-        ))}
-      </div>
-      {next && (
-        <button
-          className={buttonStyles.secondary}
-          disabled={loading}
-          onClick={loadMore}
-        >
-          {translate("Загрузить ещё проекты")}
-        </button>
-      )}
-    </section>
-  );
-}
 
 export function RepositoryCatalog({
   client,
@@ -161,14 +34,16 @@ export function RepositoryCatalog({
   repositories: Repository[];
   onSaved: () => Promise<void>;
 }) {
-  const [open, setOpen] = useState(false);
+  const canConnect =
+    capabilities(me, project).catalog && capabilities(me, project).integrations;
+  const [open, setOpen] = useState(repositories.length === 0 && canConnect);
   return (
     <section className="repository-view px-0 pb-8">
       <div className={sharedStyles.heading}>
         <div>
           <h1>{translate("Репозитории")}</h1>
         </div>
-        {capabilities(me, project).catalog && (
+        {canConnect && (
           <button
             className={buttonStyles.primary}
             onClick={() => setOpen(!open)}
@@ -179,13 +54,20 @@ export function RepositoryCatalog({
           </button>
         )}
       </div>
-      {capabilities(me, project).catalog && open && (
-        <RepositoryCreate client={client} project={project} onSaved={onSaved} />
+      {canConnect && open && (
+        <RepositoryCreate
+          client={client}
+          project={project}
+          onSaved={async () => {
+            await onSaved();
+            setOpen(false);
+          }}
+        />
       )}
-      {repositories.length === 0 && (
-        <Empty title={translate("Репозитории ещё не зарегистрированы")}>
+      {repositories.length === 0 && !(open && canConnect) && (
+        <Empty title={translate("Подключите первый репозиторий")}>
           {translate(
-            "Зарегистрируйте репозиторий, затем настройте соединение в настройках проекта.",
+            "Добавьте GitHub или GitLab, чтобы сохранять историю разработки.",
           )}
         </Empty>
       )}
@@ -211,157 +93,199 @@ function RepositoryCreate({
   project: Project;
   onSaved: () => Promise<void>;
 }) {
-  const hostID = useId();
-  const [name, setName] = useState("");
+  const [host, setHost] = useState<"github" | "gitlab">("github");
   const [url, setURL] = useState("");
-  const [provider, setProvider] = useState("");
-  const [host, setHost] = useState<"gitlab" | "github">("gitlab");
+  const [token, setToken] = useState("");
+  const [name, setName] = useState("");
+  const [anonymous, setAnonymous] = useState(false);
+  const [id] = useState(() => crypto.randomUUID());
+  const [created, setCreated] = useState(false);
   const [resolved, setResolved] = useState<ResolvedRepository | null>(null);
-  const lookup = useMutation(client);
-  const [id, setID] = useState(() => crypto.randomUUID());
-  const [error, setError] = useState("");
   const action = useMutation(client);
+  const lookup = useMutation(client);
+  const connection = useMutation(client);
+  const [error, setError] = useState("");
   async function create(event: FormEvent) {
     event.preventDefault();
     setError("");
+    const credential = token;
+    setToken("");
+    let identity = resolved;
     try {
-      let identity: Record<string, unknown>;
-      let repositoryName = name.trim();
-      if (host === "github") {
-        let value = resolved;
-        if (!value) {
-          const result = await lookup.run<ResolvedRepository>(
-            "POST",
-            `/v1/projects/${project.id}/repositories/lookup`,
-            { url: url.trim() },
-          );
-          if (!result) return;
-          value = result.value;
-          if (
-            value.provider !== "github" ||
-            !Number.isSafeInteger(value.provider_repository_id) ||
-            value.provider_repository_id < 1
-          )
-            throw new Error("ID вне точного диапазона браузера");
-          setResolved(value);
-        }
-        identity = {
-          provider: "github",
-          provider_url: value.provider_url,
-          provider_repository_id: value.provider_repository_id,
-        };
-        if (!repositoryName) repositoryName = value.name;
-      } else {
-        const number = providerNumber(provider);
-        if (!safeExternalURL(url))
-          throw new Error(
-            "Введите полный HTTP(S)-адрес GitLab без учётных данных.",
-          );
-        identity = { gitlab_url: url.trim(), gitlab_project_id: number };
-      }
-      const saved = await action.run(
-        "POST",
-        `/v1/projects/${project.id}/repositories`,
-        {
-          id,
-          name: repositoryName,
-          ...identity,
-        },
-        true,
-      );
-      if (saved) {
-        setID(crypto.randomUUID());
-        setName("");
-        setProvider("");
-        setResolved(null);
-        action.setMessage(
-          "Репозиторий зарегистрирован. Настройте соединение в настройках проекта.",
+      if (!created) {
+        const found = await lookup.run<ResolvedRepository>(
+          "POST",
+          `/v1/projects/${project.id}/repositories/lookup`,
+          {
+            url: url.trim(),
+            provider: host,
+            ...(!anonymous || host !== "github"
+              ? { api_token: credential }
+              : {}),
+          },
         );
-        await onSaved();
+        if (!found) return;
+        identity = found.value;
+        if (
+          identity.provider !== (host === "github" ? "github" : "") ||
+          !Number.isSafeInteger(identity.provider_repository_id) ||
+          identity.provider_repository_id < 1
+        )
+          throw new Error(translate("Проверьте данные репозитория."));
+        setResolved(identity);
+        const fields =
+          host === "github"
+            ? {
+                provider: "github",
+                provider_url: identity.provider_url,
+                provider_repository_id: identity.provider_repository_id,
+              }
+            : {
+                gitlab_url: identity.provider_url,
+                gitlab_project_id: identity.provider_repository_id,
+              };
+        const saved = await action.run(
+          "POST",
+          `/v1/projects/${project.id}/repositories`,
+          { id, name: name.trim() || identity.name, ...fields },
+          true,
+        );
+        if (!saved) return;
+        setCreated(true);
       }
+      const saved = await connection.run(
+        "PUT",
+        `/v1/repositories/${id}/forge`,
+        {
+          ...(host === "github" && anonymous
+            ? { anonymous: true }
+            : { api_token: credential }),
+          webhook_mode: "disabled",
+        },
+      );
+      if (saved) await onSaved();
     } catch (e) {
       setError(e instanceof Error ? e.message : translate("Проверьте данные."));
     }
   }
   return (
     <MutationForm
-      pending={action.pending || lookup.pending}
+      pending={action.pending || lookup.pending || connection.pending}
       className={sharedStyles.setup}
       onSubmit={(event) => void create(event)}
     >
-      <h2>{translate("Новый репозиторий")}</h2>
-      <div className="mb-4">
-        <label htmlFor={hostID}>{translate("Хостинг репозитория")}</label>
-        <select
-          id={hostID}
-          value={host}
-          onChange={(event) => {
-            setHost(event.target.value as "gitlab" | "github");
-            setURL("");
-            setProvider("");
-            setResolved(null);
-          }}
-        >
-          <option value="gitlab">GitLab</option>
-          <option value="github">GitHub</option>
-        </select>
-      </div>
-      <div className={sharedStyles.formGrid}>
+      <h2>{translate("Подключить репозиторий")}</h2>
+      <div className="grid grid-cols-[220px_minmax(0,1fr)] gap-5 mobile:grid-cols-1">
         <label>
-          {translate("Название репозитория")}
-          <input
-            required={host === "gitlab"}
-            maxLength={200}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
+          {translate("Сервис")}
+          <select
+            aria-label={translate("Сервис")}
+            value={host}
+            disabled={created}
+            onChange={(e) => {
+              setHost(e.target.value as "github" | "gitlab");
+              setResolved(null);
+              setURL("");
+              setAnonymous(false);
+              setToken("");
+            }}
+          >
+            <option value="github">GitHub</option>
+            <option value="gitlab">GitLab</option>
+          </select>
         </label>
         <label>
-          {host === "github"
-            ? translate("Ссылка на репозиторий GitHub")
-            : translate("Адрес сервера GitLab")}
+          {translate("Ссылка на репозиторий")}
           <input
             type="url"
+            name="repository_url"
             required
-            maxLength={2000}
-            placeholder={
-              host === "github"
-                ? "https://github.com/owner/repository"
-                : "https://gitlab.internal"
-            }
+            readOnly={created}
             value={url}
             onChange={(e) => {
               setURL(e.target.value);
               setResolved(null);
             }}
+            placeholder={
+              host === "github"
+                ? "https://github.com/team/project"
+                : "https://gitlab.company.ru/team/project"
+            }
           />
         </label>
-        {host === "gitlab" && (
-          <label>
-            {translate("Числовой ID проекта GitLab")}
-            <input
-              inputMode="numeric"
-              required
-              value={provider}
-              onChange={(e) => setProvider(e.target.value)}
-            />
-          </label>
-        )}
       </div>
-      <p className="field-help text-sm text-muted mx-0 mt-2 mb-5 leading-[1.5]">
-        {host === "github"
-          ? translate(
-              "Укажите ссылку на публичный репозиторий. Gitmora проверит его и определит ID автоматически.",
-            )
-          : translate(
-              "ID указан в настройках проекта GitLab. Используйте адрес сервера без имени проекта. После создания изменить привязку нельзя.",
-            )}
-      </p>
+      {!(host === "github" && anonymous) && (
+        <label>
+          {translate("Токен чтения")}
+          <input
+            type="password"
+            name="repository_token"
+            required
+            autoComplete="off"
+            minLength={8}
+            maxLength={4096}
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+          />
+        </label>
+      )}
+      <details className="mb-4 text-sm text-muted">
+        <summary>{translate("Как получить токен")}</summary>
+        <p className="mt-3">
+          {host === "github"
+            ? translate(
+                "GitHub → Settings → Developer settings → Fine-grained tokens. Выберите репозиторий и разрешите Contents, Pull requests и Actions: Read-only.",
+              )
+            : translate(
+                "GitLab → Settings → Access tokens. Создайте токен с правом read_api и доступом к этому проекту.",
+              )}
+        </p>
+      </details>
+      {host === "github" && (
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={anonymous}
+            onChange={(e) => {
+              setAnonymous(e.target.checked);
+              setToken("");
+            }}
+          />
+          {translate("Публичный репозиторий без токена")}
+        </label>
+      )}
+      {host === "github" && anonymous && (
+        <p className="text-sm text-muted">
+          {translate("Без токена доступен небольшой общий лимит GitHub API.")}
+        </p>
+      )}
+      <details className="mb-5 text-sm">
+        <summary>{translate("Дополнительно")}</summary>
+        <label className="mt-4">
+          {translate("Название в Gitmora")}
+          <input
+            value={name}
+            maxLength={200}
+            readOnly={created}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </label>
+      </details>
       <ErrorNotice>{error}</ErrorNotice>
       <MutationNotice action={lookup} />
       <MutationNotice action={action} />
-      <button className={buttonStyles.primary} disabled={action.pending}>
-        {translate("Зарегистрировать репозиторий")}
+      <MutationNotice action={connection} />
+      {created && connection.error && (
+        <p className="text-sm text-muted">
+          {translate(
+            "Репозиторий добавлен. Введите действующий токен, чтобы завершить подключение.",
+          )}
+        </p>
+      )}
+      <button className={buttonStyles.primary}>
+        {action.pending || lookup.pending || connection.pending
+          ? translate("Подключаем…")
+          : translate("Подключить репозиторий")}
       </button>
     </MutationForm>
   );
@@ -424,20 +348,10 @@ function RepositoryEntry({
               translate("Адрес репозитория недоступен")
             )}
           </p>
-          <p className="mono muted text-muted font-mono text-xs wrap-anywhere">
-            {repository.id}
-          </p>
         </div>
-        <dl>
-          <dt>
-            {repository.provider === "github"
-              ? translate("Репозиторий GitHub")
-              : translate("Проект GitLab")}
-          </dt>
-          <dd className="mono font-mono text-xs wrap-anywhere">
-            {providerLabel(repositoryProviderID(repository))}
-          </dd>
-        </dl>
+        <span className="text-xs text-muted">
+          {repository.provider === "github" ? "GitHub" : "GitLab"}
+        </span>
         {capabilities(me, project).catalog && (
           <div className="actions flex gap-3 flex-wrap items-center">
             <button

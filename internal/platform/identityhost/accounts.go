@@ -161,5 +161,5 @@ func (a *localAdministrator) CreateUser(ctx context.Context, i Installation, inp
 	if e != nil || status != 200 || user.ID != subject || user.Username != input.Username || !user.Enabled {
 		return identity.Identity{}, ErrConflict
 	}
-	return identity.Identity{Issuer: i.Profile.Issuer(), Subject: user.ID, DisplayName: input.DisplayName}, nil
+	return identity.Identity{Issuer: i.Profile.Issuer(), Subject: user.ID, DisplayName: input.DisplayName, Username: input.Username}, nil
 }

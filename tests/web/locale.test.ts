@@ -75,7 +75,7 @@ test("authored messages localize and interpolate without interpreting values as 
       configurable: true,
       value: { documentElement: { lang: "en" } },
     });
-    assert.equal(t("Настройки"), "Settings");
+    assert.equal(t("Личные настройки"), "Personal settings");
     assert.equal(t("Удалить {0}?", "Настройки"), "Delete Настройки?");
     assert.equal(t("Unlisted source text"), "Unlisted source text");
   } finally {

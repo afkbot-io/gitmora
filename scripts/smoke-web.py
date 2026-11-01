@@ -67,6 +67,7 @@ def main():
         assert status == 201
         other = uid()
         assert call("/v1/projects", dict(request_id=uid(), id=other, name="Закрытая лаборатория"))[0] == 201
+        assert call(f"/v1/projects/{other}/repositories",dict(request_id=uid(),id=uid(),provider="",gitlab_url="https://gitlab.internal",gitlab_project_id=43,name="Empty repository"))[0]==201
         if args.work:
             assert call(f'/v1/projects/{other}/members/{user}', dict(request_id=uid(), expected_version=0, role="reader"), "PUT")[0] == 200
         # Put non-member metadata first to make default-selection coverage deterministic.

@@ -163,14 +163,13 @@ export function WorkDetail({
       <ErrorNotice>{error}</ErrorNotice>
       {loading && (
         <p className="notice px-4 py-4 mx-0 my-3 text-muted" role="status">
-          {translate("Собираем доступные наблюдения…")}
+          {translate("Загрузка…")}
         </p>
       )}
       {pack && (
         <>
           <p className="small muted text-muted text-sm">
             {translate("Прочитано")} {date(pack.read_at)}
-            {translate(". Показаны последние доступные наблюдения источников.")}
           </p>
           {(pack.pending_sources_in_project > 0 ||
             pack.failed_sources_in_project > 0) && (

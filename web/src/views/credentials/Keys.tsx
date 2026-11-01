@@ -64,7 +64,7 @@ export function Keys({ client, me }: { client: ApiClient; me: Me }) {
     <section className="settings-view px-0 pb-8">
       <div className={sharedStyles.heading}>
         <div>
-          <h1>{translate("Личные ключи")}</h1>
+          <h2>{translate("Личные ключи")}</h2>
           <p className="muted text-muted">
             {translate(
               "Ключи и браузерные сессии вашей учётной записи. Доступ к проектам проверяется отдельно.",
@@ -269,28 +269,30 @@ function KeyIssue({
         `}
         >
           <legend>{translate("Разрешения нового ключа")}</legend>
-          {permissions.map((item) => (
-            <label
-              className="checkbox [&_input]:[accent-color:var(--color-accent)] [&_input]:w-4 [&_input]:min-h-4 [&_input]:m-0"
-              key={item.id}
-            >
-              <input
-                type="checkbox"
-                checked={selected.includes(item.id)}
-                disabled={!me.scopes.includes(item.id)}
-                onChange={(e) => choose(item.id, e.target.checked)}
-              />
-              <span>
-                {translate(item.label)}
-                <small className="mono font-mono text-xs wrap-anywhere">
-                  {item.id}
-                  {!me.scopes.includes(item.id)
-                    ? translate(" — недоступно родителю")
-                    : ""}
-                </small>
-              </span>
-            </label>
-          ))}
+          {permissions
+            .filter((item) => item.id !== "platform:manage" || me.user.operator)
+            .map((item) => (
+              <label
+                className="checkbox [&_input]:[accent-color:var(--color-accent)] [&_input]:w-4 [&_input]:min-h-4 [&_input]:m-0"
+                key={item.id}
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.includes(item.id)}
+                  disabled={!me.scopes.includes(item.id)}
+                  onChange={(e) => choose(item.id, e.target.checked)}
+                />
+                <span>
+                  {translate(item.label)}
+                  <small className="mono font-mono text-xs wrap-anywhere">
+                    {item.id}
+                    {!me.scopes.includes(item.id)
+                      ? translate(" — недоступно родителю")
+                      : ""}
+                  </small>
+                </span>
+              </label>
+            ))}
         </fieldset>
         <ErrorNotice>{error}</ErrorNotice>
         <MutationNotice action={action} />

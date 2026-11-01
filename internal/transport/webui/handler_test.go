@@ -10,13 +10,14 @@ import (
 )
 
 func TestLocalAssetsAndStrictMissingPaths(t *testing.T) {
-	h := webui.New(fstest.MapFS{"index.html": {Data: []byte("<html>local app</html>")}, "assets/app-12345678.js": {Data: []byte("export {}")}})
+	h := webui.New(fstest.MapFS{"index.html": {Data: []byte("<html>local app</html>")}, "assets/app-12345678.js": {Data: []byte("export {}")}, "install.sh": {Data: []byte("#!/bin/sh\nexit 0\n")}})
 	for _, tc := range []struct {
 		path        string
 		status      int
 		cache, kind string
 	}{
 		{"/", 200, "no-store", "text/html"},
+		{"/install.sh", 200, "no-store", "text/plain"},
 		{"/assets/app-12345678.js", 200, "public, max-age=31536000, immutable", "javascript"},
 		{"/v1/missing", 404, "no-store", ""},
 		{"/assets/missing.js", 404, "no-store", ""},

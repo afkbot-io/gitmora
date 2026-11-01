@@ -276,9 +276,14 @@ func run(ctx context.Context, args []string, output io.Writer) error {
 			return err
 		}
 		directoryService := directoryapp.NewService(postgres.NewDirectoryStore(pool), time.Now)
-		if githubClient != nil {
-			directoryService.WithRepositoryResolver(githubClient)
+		resolver := repositoryResolver{github: githubClient}
+		if raw := os.Getenv("WORKGRAPH_GITLAB_ALLOWLIST"); raw != "" {
+			resolver.gitlab, err = gitlab.NewWithProxy(strings.Split(raw, ","), os.Getenv("WORKGRAPH_GITLAB_PROXY_URL"))
+			if err != nil {
+				return err
+			}
 		}
+		directoryService.WithRepositoryResolver(resolver)
 		retrievalService := retrievalapp.NewService(postgres.NewRetrievalStore(pool))
 		handler := httpapi.NewHandler(httpapi.Config{Captures: application.NewService(postgres.NewCaptureStore(pool)), Authenticator: postgres.NewCredentialStore(pool), Ready: func(ctx context.Context) error { return postgres.VerifySchema(ctx, pool) }, Forge: forgePort, Code: codePort, Work: workPort, Retrieval: retrievalService, ContextPacks: contextapp.NewService(postgres.NewContextStore(pool), retrievalService), ContextBrowser: contextapp.NewBrowser(postgres.NewContextStore(pool)), Directory: directoryService, Identity: identityPort, CLIEnrollment: cliEnrollment, MCPAllowedOrigins: origins, WebUI: webui.Embedded()})
 		return serve(ctx, listen, handler)
@@ -335,12 +340,12 @@ func identityService(ctx context.Context, pool *pgxpool.Pool) (*identityapp.Serv
 }
 
 // configuredGitHub activates one fixed read-only API route; development overrides are loopback-only.
-func configuredGitHub() (*github.Client, error) {
+func configuredGitHub() (*github.Router, error) {
 	enabled := os.Getenv("WORKGRAPH_GITHUB_ENABLED")
 	base := os.Getenv("WORKGRAPH_GITHUB_API_URL")
 	proxy := os.Getenv("WORKGRAPH_GITHUB_PROXY_URL")
 	if enabled != "true" {
-		if (enabled != "" && enabled != "false") || base != "" || proxy != "" {
+		if (enabled != "" && enabled != "false") || base != "" || proxy != "" || os.Getenv("WORKGRAPH_GITHUB_ALLOWLIST") != "" || os.Getenv("WORKGRAPH_GITHUB_PRIVATE") != "" || os.Getenv("WORKGRAPH_GITHUB_ENTERPRISE_PROXY_URL") != "" {
 			return nil, errors.New("invalid GitHub configuration")
 		}
 		return nil, nil
@@ -348,7 +353,15 @@ func configuredGitHub() (*github.Client, error) {
 	if base == "" {
 		base = "https://api.github.com"
 	}
-	client, err := github.New(base, proxy)
+	var custom []string
+	if raw := os.Getenv("WORKGRAPH_GITHUB_ALLOWLIST"); raw != "" {
+		custom = strings.Split(raw, ",")
+	}
+	private := os.Getenv("WORKGRAPH_GITHUB_PRIVATE")
+	if private != "" && private != "true" && private != "false" {
+		return nil, errors.New("invalid GitHub private routing configuration")
+	}
+	client, err := github.NewRouterWithEnterpriseProxy(base, proxy, os.Getenv("WORKGRAPH_GITHUB_ENTERPRISE_PROXY_URL"), custom, private == "true")
 	if err != nil {
 		return nil, errors.New("invalid GitHub API or private proxy configuration")
 	}

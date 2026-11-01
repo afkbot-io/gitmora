@@ -63,7 +63,7 @@ def main():
             cases = ("corrupt-binary", "corrupt-manifest", "missing-checksum", "duplicate-checksum", "duplicate-binary-only", "valid")
             for case in cases:
                 bodies.clear()
-                bodies.update({prefix + filename: raw, prefix + "release.json": manifest, prefix + "SHA256SUMS": sums})
+                bodies.update({"/install.sh": (ROOT / "web/public/install.sh").read_bytes(), prefix + filename: raw, prefix + "release.json": manifest, prefix + "SHA256SUMS": sums})
                 if case == "corrupt-binary": bodies[prefix + filename] = b"not executable downloaded bytes"
                 if case == "corrupt-manifest": bodies[prefix + "release.json"] = b'{"corrupt":true}'
                 if case == "missing-checksum": bodies[prefix + "SHA256SUMS"] = sums.splitlines(keepends=True)[0]
@@ -78,7 +78,9 @@ def main():
                 result = subprocess.run(["/bin/sh", "-c", generated["command"]], env=environment, capture_output=True, text=True, timeout=90)
                 installed = home / ".local/bin/gitmora"
                 if case == "valid":
-                    assert result.returncode == 0 and installed.is_file(), "Verified copied installer failed"
+                    if result.returncode != 0 or not installed.is_file():
+                        (ROOT / "build/onboarding-failure.log").write_text(result.stdout+"\n"+result.stderr)
+                    assert result.returncode == 0 and installed.is_file(), "Verified copied installer failed; see build/onboarding-failure.log"
                     assert hashlib.sha256(installed.read_bytes()).digest() == hashlib.sha256(raw).digest()
                     observed = json.loads(subprocess.check_output([str(installed), "version"], env=environment, text=True))
                     assert observed == version

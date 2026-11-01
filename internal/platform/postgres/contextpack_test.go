@@ -19,6 +19,52 @@ func contextPrincipal(scopes ...access.Permission) access.Principal {
 	return access.Principal{UserID: reader, Scopes: scopes}
 }
 
+func TestGitHubInstancesDoNotAssociateEqualIDsAndCommits(t *testing.T) {
+	pool, _, _, _ := automationFixture(t)
+	ctx := context.Background()
+	// GitHub.com source and Enterprise target deliberately reuse the same numeric ID/SHA.
+	if _, err := pool.Exec(ctx, `UPDATE repositories SET provider='github',gitlab_url='https://github.com/team/source' WHERE id=$1`, repository); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO repositories(id,project_id,provider,gitlab_url,gitlab_project_id,name) VALUES($1,$2,'github','https://code.example.com/enterprise/team/source',42,'Enterprise')`, otherRepository, project); err != nil {
+		t.Fatal(err)
+	}
+	// The same identity remains unique within a single project and provider instance.
+	if _, err := pool.Exec(ctx, `UPDATE repositories SET gitlab_url='https://code.example.com/enterprise/team/source' WHERE id=$1`, repository); err == nil {
+		t.Fatal("same-instance duplicate numeric ID accepted")
+	}
+	if _, err := pool.Exec(ctx, `UPDATE repositories SET gitlab_project_id=99 WHERE id=$1`, otherRepository); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE repositories SET gitlab_url='https://code.example.com/enterprise/team/target' WHERE id=$1`, repository); err != nil {
+		t.Fatal(err)
+	}
+	seedLinkedMR(t, pool, true, 99, "https://code.example.com/enterprise/team/target/pull/7")
+	if _, err := pool.Exec(ctx, `UPDATE repositories SET gitlab_url='https://github.com/team/source' WHERE id=$1`, otherRepository); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO forge_connections(repository_id,webhook_mode,secret_envelope,updated_by,last_synced_at) VALUES($1,'signature',$2,$3,now())`, otherRepository, make([]byte, 32), subject); err != nil {
+		t.Fatal(err)
+	}
+	snap := snapshot()
+	snap.RepositoryID = otherRepository
+	if _, err := captures.NewService(postgres.NewCaptureStore(pool)).Ingest(ctx, subject, snap); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE commits SET confirmed_at=now()`); err != nil {
+		t.Fatal(err)
+	}
+	store := postgres.NewContextStore(pool)
+	result, err := store.Read(ctx, contextPrincipal(access.ReadCapture, access.ReadIntegration), pack.Query{ProjectID: project, RepositoryID: repository, MR: 7, Limit: 6})
+	if err != nil || len(result.MergeRequests.Items) != 1 || result.MergeRequests.Items[0].SourceRepositoryID != "" || len(result.Captures.Items) != 0 {
+		t.Fatal("Enterprise PR used GitHub.com source", result, err)
+	}
+	result, err = store.Read(ctx, contextPrincipal(access.ReadCapture, access.ReadIntegration), pack.Query{ProjectID: project, RepositoryID: otherRepository, CommitSHA: strings.Repeat("a", 40), Limit: 6})
+	if err != nil || len(result.MergeRequests.Items) != 0 {
+		t.Fatal("GitHub.com SHA discovered Enterprise PR", result, err)
+	}
+}
+
 func TestContextPackExpandsOnlyFullyVerifiedNativeStreamsAndPaginates(t *testing.T) {
 	pool := database(t)
 	seed(t, pool)

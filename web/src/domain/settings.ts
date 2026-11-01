@@ -1,4 +1,3 @@
-import { t as translate } from "./locale.js";
 /** Settings policy only shapes controls; every server operation rechecks current authority. */
 export interface Actor {
   scopes: readonly string[];
@@ -9,7 +8,8 @@ export function capabilities(actor: Actor, project?: { role?: string }) {
   const operator =
     actor.user.operator && has("platform:manage") && has("directory:read");
   return {
-    createProject: operator,
+    createProject:
+      has("directory:read") && (has("directory:manage") || operator),
     accounts: operator,
     catalog:
       has("directory:read") &&
@@ -43,21 +43,6 @@ export class CommandDraft {
   }
 }
 
-export function providerNumber(value: string): number {
-  if (!/^[1-9][0-9]*$/.test(value) || !Number.isSafeInteger(Number(value)))
-    throw new Error(
-      "ID проекта GitLab должен быть точным положительным целым числом.",
-    );
-  return Number(value);
-}
-
-/** Legacy int64 catalog IDs can exceed JSON's exact number range; never display a rounded ID. */
-export function providerLabel(value: number): string {
-  return Number.isSafeInteger(value) && value > 0
-    ? String(value)
-    : translate("ID вне точного диапазона браузера");
-}
-
 export interface Receipt {
   action: string;
   entity_id: string;
@@ -66,6 +51,7 @@ export interface Receipt {
   sequence?: number;
 }
 export interface Member {
+  username?: string;
   user_id: string;
   display_name: string;
   enabled: boolean;
@@ -104,12 +90,4 @@ export interface TasktopiaStatus {
   blocked: boolean;
   error_code?: string;
   auto_link_merge_requests: boolean;
-}
-
-/** Provider diagnostics are small protocol codes; never render arbitrary provider messages. */
-export function diagnostic(value?: string): string {
-  if (!value) return translate("Нет зарегистрированной ошибки");
-  return /^[a-z0-9_]{1,80}$/.test(value)
-    ? value
-    : translate("Ошибка интеграции");
 }

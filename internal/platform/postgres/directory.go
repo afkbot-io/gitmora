@@ -51,7 +51,7 @@ func directoryNoRows(e error) error {
 	return e
 }
 
-const directoryUserColumns = `u.id::text,u.display_name,u.enabled,EXISTS(SELECT 1 FROM directory_operators o WHERE o.user_id=u.id),u.version,u.created_at,u.deleted_at`
+const directoryUserColumns = `u.id::text,u.display_name,COALESCE((SELECT username FROM user_handles h WHERE h.user_id=u.id),''),u.enabled,EXISTS(SELECT 1 FROM directory_operators o WHERE o.user_id=u.id),u.version,u.created_at,u.deleted_at`
 
 func directoryUser(ctx context.Context, tx pgx.Tx, id string, lock bool) (domain.User, error) {
 	var u domain.User
@@ -59,7 +59,7 @@ func directoryUser(ctx context.Context, tx pgx.Tx, id string, lock bool) (domain
 	if lock {
 		suffix = " FOR UPDATE OF u"
 	}
-	e := tx.QueryRow(ctx, `SELECT `+directoryUserColumns+` FROM users u WHERE u.id=$1`+suffix, id).Scan(&u.ID, &u.DisplayName, &u.Enabled, &u.Operator, &u.Version, &u.CreatedAt, &u.DeletedAt)
+	e := tx.QueryRow(ctx, `SELECT `+directoryUserColumns+` FROM users u WHERE u.id=$1`+suffix, id).Scan(&u.ID, &u.DisplayName, &u.Username, &u.Enabled, &u.Operator, &u.Version, &u.CreatedAt, &u.DeletedAt)
 	return u, directoryNoRows(e)
 }
 
@@ -173,7 +173,7 @@ func (s *DirectoryStore) Members(ctx context.Context, p access.Principal, projec
 		if e := directoryProjectAuthority(ctx, tx, a, project, false); e != nil {
 			return domain.Page[domain.Member]{}, e
 		}
-		rows, e := tx.Query(ctx, `SELECT m.user_id::text,u.display_name,u.enabled,m.role,m.version FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.project_id=$1 AND($2='' OR m.user_id>NULLIF($2,'')::uuid)ORDER BY m.user_id LIMIT $3`, project, c.AfterID, c.Limit+1)
+		rows, e := tx.Query(ctx, `SELECT m.user_id::text,u.display_name,COALESCE((SELECT username FROM user_handles h WHERE h.user_id=u.id),''),u.enabled,m.role,m.version FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.project_id=$1 AND($2='' OR m.user_id>NULLIF($2,'')::uuid)ORDER BY m.user_id LIMIT $3`, project, c.AfterID, c.Limit+1)
 		if e != nil {
 			return domain.Page[domain.Member]{}, e
 		}
@@ -181,7 +181,7 @@ func (s *DirectoryStore) Members(ctx context.Context, p access.Principal, projec
 		items := []domain.Member{}
 		for rows.Next() {
 			var v domain.Member
-			if e = rows.Scan(&v.UserID, &v.DisplayName, &v.Enabled, &v.Role, &v.Version); e != nil {
+			if e = rows.Scan(&v.UserID, &v.DisplayName, &v.Username, &v.Enabled, &v.Role, &v.Version); e != nil {
 				return domain.Page[domain.Member]{}, e
 			}
 			items = append(items, v)
@@ -206,7 +206,7 @@ func (s *DirectoryStore) Users(ctx context.Context, p access.Principal, c domain
 		items := []domain.User{}
 		for rows.Next() {
 			var v domain.User
-			if e = rows.Scan(&v.ID, &v.DisplayName, &v.Enabled, &v.Operator, &v.Version, &v.CreatedAt, &v.DeletedAt); e != nil {
+			if e = rows.Scan(&v.ID, &v.DisplayName, &v.Username, &v.Enabled, &v.Operator, &v.Version, &v.CreatedAt, &v.DeletedAt); e != nil {
 				return domain.Page[domain.User]{}, e
 			}
 			items = append(items, v)

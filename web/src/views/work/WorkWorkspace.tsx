@@ -131,14 +131,14 @@ export function WorkWorkspace({
     <section className="work-view">
       <div className="section-heading flex justify-between items-start gap-4 flex-wrap [&_h1]:mb-2 [&_h2]:mb-2 [&_>_div]:min-w-0 [&_>_div]:max-w-full">
         <div>
-          <h1>{translate("Задачи и история работы")}</h1>
+          <h1>{translate("Работа")}</h1>
         </div>
         <button
           className={buttonStyles.secondary}
           disabled={loading}
           onClick={() => void load()}
         >
-          {translate("Обновить источники")}
+          {translate("Обновить")}
         </button>
       </div>
       <div
@@ -155,9 +155,9 @@ export function WorkWorkspace({
       `}
       >
         <label>
-          {translate("Вид источника")}
+          {translate("Показать")}
           <select
-            aria-label={translate("Вид источника")}
+            aria-label={translate("Показать")}
             value={kind}
             onChange={(e) => {
               clear();
@@ -174,9 +174,9 @@ export function WorkWorkspace({
         </label>
         {kind !== "task" && (
           <label>
-            {translate("Репозиторий источника")}
+            {translate("Репозиторий")}
             <select
-              aria-label={translate("Репозиторий источника")}
+              aria-label={translate("Репозиторий")}
               value={repository}
               onChange={(e) => {
                 clear();
@@ -193,25 +193,6 @@ export function WorkWorkspace({
           </label>
         )}
       </div>
-      <p className="small muted text-muted text-sm">
-        {translate(
-          "Показаны принятые локальные записи в порядке идентификаторов.",
-        )}{" "}
-        {kind === "session"
-          ? translate(
-              "Каждая строка — сохранённое окно сессии; проверенная цепочка открывается в деталях.",
-            )
-          : kind === "task"
-            ? translate(
-                "Задачи обнаруживаются по привязкам или явной синхронизации проекта.",
-              )
-            : translate(
-                "Доступность MR/PR зависит от сверки репозитория.",
-              )}{" "}
-        {translate(
-          "Пустой список не означает отсутствие работы во внешнем сервисе.",
-        )}
-      </p>
       <ErrorNotice>{error}</ErrorNotice>
       {error && (
         <button className={buttonStyles.secondary} onClick={() => void load()}>
@@ -225,8 +206,7 @@ export function WorkWorkspace({
       )}
       {readAt && (
         <p className="small muted text-muted text-sm">
-          {translate("Список прочитан")} {date(readAt)}
-          {translate(". Изменения источников появятся при обновлении.")}
+          {translate("Обновлено")} {date(readAt)}
         </p>
       )}
       <div
@@ -245,6 +225,7 @@ export function WorkWorkspace({
             <button
               className={`work-row flex flex-col items-stretch gap-1 w-full text-left rounded-none border-b border-line px-3 py-4 bg-transparent text-ink font-normal wrap-anywhere [&.selected]:bg-accent-soft [&.selected]:[box-shadow:inset_3px_0_var(--color-accent)] [&:hover:not(.selected)]:bg-canvas ${selection && sameSelection(selection, item.query) ? "selected" : ""}`}
               key={JSON.stringify(item.cursor)}
+              data-session-id={item.query.session_id}
               aria-pressed={!!selection && sameSelection(selection, item.query)}
               onClick={() => {
                 try {
@@ -263,25 +244,15 @@ export function WorkWorkspace({
                 {item.title}
               </strong>
               {item.state && <span>{item.state}</span>}
-              {item.revision && (
-                <span>
-                  {translate("Окно")} {item.segment}
-                  {translate(", ревизия")} {item.revision}
-                </span>
-              )}
+
               <span className="small text-sm">
-                {translate("Наблюдение:")} {date(item.observed_at)}
-              </span>
-              <span className="mono small font-mono text-xs wrap-anywhere">
-                {item.cursor.id ?? item.cursor.repository_id}
+                {translate("Обновлено")} {date(item.observed_at)}
               </span>
             </button>
           ))}
           {!items.length && !loading && !error && (
-            <Empty title={translate("Сохранённых источников пока нет")}>
-              {translate(
-                "Проверьте выбранный вид, фильтр и состояние интеграций.",
-              )}
+            <Empty title={translate("История пока пуста")}>
+              {translate("Подключите CLI и выполните первый commit и push.")}
             </Empty>
           )}
           {next && (
@@ -318,9 +289,9 @@ export function WorkWorkspace({
               onNavigate={navigate}
             />
           ) : (
-            <Empty title={translate("Откройте источник")}>
+            <Empty title={translate("Выберите запись")}>
               {translate(
-                "Здесь появятся задача, окна сессии, подтверждённые изменения и точные цитаты.",
+                "Откройте сессию, задачу или запрос на слияние из списка.",
               )}
             </Empty>
           )}
