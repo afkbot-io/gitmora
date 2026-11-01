@@ -1,5 +1,11 @@
 # Changes
 
+## 0.4.4
+
+- Stabilize secret masking for quoted assignments followed by punctuation or adjacent assignments. Sanitized code now passes retention validation without blocking later files in the repository queue; existing stable projections keep their digests.
+- Add property fuzzing and a PostgreSQL ingestion/restart/search regression for the affected code shape.
+- Publish matching server and standalone CLI 0.4.4 builds.
+
 ## 0.4.3
 
 - Browser account-switch tests wait for acknowledged logout and cover a deliberately delayed response; failure diagnostics preserve the original error even outside the workspace.

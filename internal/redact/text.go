@@ -19,7 +19,7 @@ func Text(input string) string {
 	input = privateKey.ReplaceAllString(input, "[REDACTED]")
 	input = bearer.ReplaceAllString(input, "${1}[REDACTED]")
 	input = providerToken.ReplaceAllString(input, "[REDACTED]")
-	return assignment.ReplaceAllString(input, "${1}[REDACTED]")
+	return assignments(input)
 }
 
 // Lines removes known secrets while preserving newline counts for code citations.
@@ -28,5 +28,14 @@ func Lines(input string) string {
 	input = privateKey.ReplaceAllStringFunc(input, func(match string) string { return "[REDACTED]" + strings.Repeat("\n", strings.Count(match, "\n")) })
 	input = bearer.ReplaceAllString(input, "${1}[REDACTED]")
 	input = providerToken.ReplaceAllString(input, "[REDACTED]")
+	return assignments(input)
+}
+
+// Removing a quoted value can join its placeholder to suffix punctuation or
+// another assignment. Canonicalize that span before returning a retained value.
+// The second pass leaves each placeholder followed by a value delimiter, so
+// validating an already sanitized projection does not change it again.
+func assignments(input string) string {
+	input = assignment.ReplaceAllString(input, "${1}[REDACTED]")
 	return assignment.ReplaceAllString(input, "${1}[REDACTED]")
 }

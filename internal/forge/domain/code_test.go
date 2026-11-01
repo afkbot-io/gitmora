@@ -61,6 +61,20 @@ func TestCodeUnsupportedFilesAreExplicitWithoutPretendingTheyAreText(t *testing.
 	}
 }
 
+func TestQuotedSecretInCallProducesValidRetainedCode(t *testing.T) {
+	raw := []byte("connect(password=\"must-never-persist\").call()\nnext()\n")
+	observed, err := domain.ObserveFile(codeIdentity(raw), raw)
+	if err != nil || observed.File == nil {
+		t.Fatal("valid Git blob was rejected", err)
+	}
+	if err := observed.File.ValidateRetained(); err != nil {
+		t.Fatal("observed code cannot cross the persistence boundary", err)
+	}
+	if strings.Contains(observed.File.Content, "must-never-persist") || strings.Count(observed.File.Content, "\n") != 2 {
+		t.Fatal("secret removal or original citation lines were lost")
+	}
+}
+
 func TestCodeSHA256AndRuneQuotesKeepOriginalLineNumbers(t *testing.T) {
 	raw := []byte("// Авторизация🧪\nfunc Refresh(){}\n")
 	id := codeIdentity(raw)

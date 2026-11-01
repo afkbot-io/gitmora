@@ -30,6 +30,45 @@ func TestOrdinaryEvidencePreserved(t *testing.T) {
 	}
 }
 
+func TestQuotedAssignmentSuffixesRemainStable(t *testing.T) {
+	for _, input := range []string{
+		`connect(password="synthetic-value")`,
+		`connect(token="synthetic-value").call()`,
+		`token="synthetic-value"secret="another synthetic value"`,
+		"connect(password='synthetic-value')\nnext()",
+	} {
+		for _, project := range []func(string) string{redact.Text, redact.Lines} {
+			got := project(input)
+			if strings.Contains(got, "synthetic") || project(got) != got {
+				t.Fatalf("quoted assignment was not stably redacted: %q", got)
+			}
+		}
+		if strings.Count(redact.Lines(input), "\n") != strings.Count(input, "\n") {
+			t.Fatal("code citation line numbers changed")
+		}
+	}
+}
+
+func FuzzSecretProjectionIdempotence(f *testing.F) {
+	for _, seed := range []string{
+		`connect(password="synthetic-value")`,
+		`token="one"secret="two words"`,
+		`{"api_key":"synthetic-value"}`,
+		"Authorization: Bearer synthetic-value\nnext()",
+		"-----BEGIN PRIVATE KEY-----\nsynthetic\n-----END PRIVATE KEY-----",
+	} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, input string) {
+		for _, project := range []func(string) string{redact.Text, redact.Lines} {
+			got := project(input)
+			if project(got) != got {
+				t.Fatal("sanitized projection changed on validation")
+			}
+		}
+	})
+}
+
 func TestProviderTokenSuffixesAreCompletelyRemoved(t *testing.T) {
 	for _, token := range []string{
 		"wg_" + strings.Repeat("A", 42) + "-",

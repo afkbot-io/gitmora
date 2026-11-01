@@ -48,7 +48,7 @@ func TestCodeIngestionSurvivesRestartAndBecomesAuthorizedSearchableEvidence(t *t
 	if err != nil || !found || fileWork.Path != "src/auth.go" {
 		t.Fatal(fileWork, found, err)
 	}
-	text := []byte("package auth\nvar token=\"must-never-persist\"\nfunc VerifiedRefreshToken() {}\n")
+	text := []byte("package auth\nvar example = `connect(token=\"must-never-persist\").call()`\nfunc VerifiedRefreshToken() {}\n")
 	blob := sha1.Sum(append([]byte(fmt.Sprintf("blob %d\x00", len(text))), text...))
 	observation, err := domain.ObserveFile(domain.FileIdentity{RepositoryID: repository, BaseURL: fileWork.Repository.BaseURL, ProjectID: 42, CommitSHA: strings.Repeat("a", 40), Path: "src/auth.go", BlobID: fmt.Sprintf("%x", blob), Size: int64(len(text))}, text)
 	if err != nil {
