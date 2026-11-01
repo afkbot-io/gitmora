@@ -1,3 +1,9 @@
+# Optional source-build stamps; runtime configuration remains in the private installation.
+RELEASE_VERSION ?= development
+RELEASE_REVISION ?=
+BUILD_INFO = workgraph.local/platform/internal/distribution/buildinfo
+GO_RELEASE_FLAGS = -X $(BUILD_INFO).version=$(RELEASE_VERSION) -X $(BUILD_INFO).revision=$(RELEASE_REVISION)
+
 .PHONY: build build-web test-web smoke-web smoke-work smoke-work-tasktopia smoke-settings smoke-settings-tasktopia smoke-credentials test vet integration smoke smoke-context smoke-agent-context smoke-directory smoke-identity smoke-forge smoke-tasktopia smoke-opencode test-agents verify verify-linux clean
 .PHONY: smoke-cli-consent smoke-cli-auth test-native-secret-store-linux
 .PHONY: build-image smoke-deployment smoke-recovery
@@ -17,8 +23,8 @@ test-web:
 	npm run test:web
 
 build: build-web
-	go build -trimpath -o bin/workgraphd ./cmd/workgraphd
-	go build -trimpath -o bin/workgraph ./cmd/workgraph
+	go build -trimpath -ldflags "$(GO_RELEASE_FLAGS)" -o bin/workgraphd ./cmd/workgraphd
+	go build -trimpath -ldflags "$(GO_RELEASE_FLAGS)" -o bin/workgraph ./cmd/workgraph
 	ln -sf workgraphd bin/gitmorad
 	ln -sf workgraph bin/gitmora
 
@@ -32,7 +38,7 @@ smoke-web smoke-settings smoke-settings-tasktopia smoke-credentials smoke-cli-co
 smoke-cli-auth smoke-work smoke-work-tasktopia smoke-cli-release: build-postgres-image
 
 build-image: build-postgres-image
-	docker build --file deploy/Dockerfile --tag gitmora:local .
+	docker build --file deploy/Dockerfile --tag gitmora:local --build-arg RELEASE_VERSION=$(RELEASE_VERSION) --build-arg RELEASE_REVISION=$(RELEASE_REVISION) .
 
 build-identity-image: build-identity-theme build-postgres-image
 	docker build --file deploy/identity/Dockerfile --tag gitmora-identity:26.8.1-auth .
@@ -189,7 +195,7 @@ smoke-work-tasktopia: build
 	docker compose -f compose.test.yaml up -d --wait
 	WORKGRAPH_WORK_BROWSER=1 python3 scripts/smoke-tasktopia.py
 
-verify: vet integration smoke smoke-opencode smoke-codex smoke-native-history smoke-compatibility smoke-forge smoke-context smoke-agent-context smoke-directory smoke-identity smoke-web smoke-settings smoke-credentials smoke-cli-consent smoke-work smoke-deployment smoke-recovery smoke-egress smoke-keycloak smoke-registration smoke-identity-proxy smoke-cli-downloads smoke-cli-release
+verify: check-config vet integration smoke smoke-opencode smoke-codex smoke-native-history smoke-compatibility smoke-forge smoke-context smoke-agent-context smoke-directory smoke-identity smoke-web smoke-settings smoke-credentials smoke-cli-consent smoke-work smoke-deployment smoke-recovery smoke-egress smoke-keycloak smoke-registration smoke-identity-proxy smoke-cli-downloads smoke-cli-release
 
 verify-linux: build-web build-postgres-image
 	bash scripts/test-linux.sh
@@ -218,7 +224,7 @@ verify-ui:
 	GITMORA_UI_AUDIT=1 $(MAKE) smoke-design smoke-web smoke-work smoke-settings smoke-credentials smoke-cli-consent smoke-registration
 
 # Source-backed Tasktopia gates additionally require TASKTOPIA_SOURCE and Node 24+; see development.md.
-verify-release: smoke-github-profile smoke-github smoke-github-ui verify verify-linux smoke-cli-auth test-native-secret-store-linux smoke-forge-subpath smoke-gitlab-profile smoke-onboarding smoke-design smoke-browser-compat
+verify-release: smoke-self-host-config smoke-custom-server smoke-github-profile smoke-github smoke-github-ui verify verify-linux smoke-cli-auth test-native-secret-store-linux smoke-forge-subpath smoke-gitlab-profile smoke-onboarding smoke-design smoke-browser-compat
 
 smoke-browser-compat: build test-web build-postgres-image
 	mkdir -p bin/verification
@@ -253,3 +259,15 @@ smoke-load: build build-postgres-image
 .PHONY: smoke-github-profile
 smoke-github-profile:
 	python3 scripts/smoke-github-profile.py
+
+.PHONY: check-config smoke-self-host-config smoke-custom-server
+check-config:
+	python3 scripts/check-configuration.py
+	python3 -m unittest discover -s scripts/tests -p test_self_host_configuration.py
+
+smoke-self-host-config: build check-config
+	python3 scripts/smoke-self-host-config.py
+
+smoke-custom-server: build build-postgres-image
+	docker compose -f compose.test.yaml up -d --wait
+	python3 scripts/smoke-custom-server.py

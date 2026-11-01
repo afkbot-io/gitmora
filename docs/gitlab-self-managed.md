@@ -6,12 +6,12 @@
 
 Секреты остаются в API/worker на внутренней Docker-сети. Для одного своего экземпляра предусмотрен [отдельный overlay](../deploy/compose.gitlab-custom.yaml): credential-free CONNECT relay имеет единственную выбранную цель, проверяет все ответы DNS и передаёт зашифрованный TLS. Клиент проверяет имя GitLab и его сертификат. Входящие URL/вебхуки не могут перенастроить цель.
 
-В shell оператора задайте **несекретную сетевую политику**. Эти значения нужны для каждой операции `deployment`, которая читает Compose; `runtime.env` не подставляет переменные в сам Compose:
+В приватном `compose.env` установки задайте **несекретную сетевую политику**. Новый операторский CLI автоматически выбирает этот файл на каждом `deployment` вызове; настройки приложения находятся отдельно в `runtime.env`:
 
-```sh
-export GITMORA_GITLAB_URL=https://code.company.ru:8443/gitlab
-export GITMORA_GITLAB_AUTHORITY=code.company.ru:8443
-export GITMORA_GITLAB_VISIBILITY=private
+```dotenv
+GITMORA_GITLAB_URL=https://code.company.ru:8443/gitlab
+GITMORA_GITLAB_AUTHORITY=code.company.ru:8443
+GITMORA_GITLAB_VISIBILITY=private
 ```
 
 `private` разрешает private/loopback IP и отвергает public/mixed DNS. Для GitLab с публичным IPv4 выберите `public`; он отвергает private/loopback/link-local/reserved DNS. Нельзя использовать `any`, wildcard или URL проекта. DNS должен разрешаться с relay, а целевой адрес — быть доступным с его сети. VPN/private DNS/маршрут до корпоративной сети предоставляет оператор; overlay их не создаёт. Для VPN с отдельным Docker attachment адаптируйте только relay, оставив API/worker внутренними. Не устанавливайте глобальный HTTP-прокси.
@@ -34,7 +34,7 @@ gitmorad deployment up --directory /absolute/private/gitmora-state
 Если GitLab использует корпоративный CA, подготовьте PEM bundle с системными roots и корпоративным CA, **без приватного ключа**, и добавьте [CA overlay](../deploy/compose.gitlab-ca.yaml) после custom overlay:
 
 ```sh
-export GITMORA_GITLAB_CA_BUNDLE=/absolute/operator/trusted-ca.pem
+GITMORA_GITLAB_CA_BUNDLE=/absolute/operator/trusted-ca.pem
 # В новой установке добавьте второй --overlay .../deploy/compose.gitlab-ca.yaml.
 ```
 
@@ -43,8 +43,8 @@ export GITMORA_GITLAB_CA_BUNDLE=/absolute/operator/trusted-ca.pem
 ## Администратор проекта: токен и репозиторий
 
 1. Создайте ограниченный по сроку Project Access Token в GitLab → проект → Settings → Access Tokens, роль **Reporter**, scopes **read_api** и **read_repository**. Если этот тип недоступен, используйте Personal Access Token участника с чтением нужного проекта. Для создания project token нужны Maintainer/Owner; на GitLab.com доступность зависит от тарифа, на Self-Managed он доступен с любой лицензией. [Документация GitLab](https://docs.gitlab.com/user/project/settings/project_access_tokens/), [значение scopes](https://docs.gitlab.com/security/tokens/access_token_scopes/).
-2. В Gitmora → «Репозитории» введите тот же **базовый URL** и числовой **Project ID**. Namespace и название проекта не включайте в базовый URL. Привязка неизменяема.
-3. В «Настройках проекта» → GitLab введите API-токен и выберите «Только API, без вебхуков». Gitmora проверит доступ и точный числовой ID перед сохранением зашифрованного секрета. Не отправляйте токен в чат или URL.
+2. В Gitmora → «Репозитории» выберите GitLab, введите **полную ссылку на репозиторий** (с namespace) и токен чтения. Сервер определит Project ID автоматически. В операторском allowlist при этом остаётся базовый URL установки, без namespace репозитория.
+3. Кнопка «Подключить репозиторий» проверит и сохранит API-подключение. Для смены ключа откройте «Настройки проекта → Интеграции → Изменить доступ». Gitmora проверит доступ и точный числовой ID перед сохранением зашифрованного секрета. Не отправляйте токен в чат или URL.
 4. Запросите сверку и убедитесь, что завершились MR, pipelines, child pipelines и deployments. Отсутствие CI/deployments может быть ограничением прав/версии/содержимого проекта — это отражается отдельно.
 5. Webhook необязателен. Для старых GitLab можно выбрать «Секретный заголовок GitLab», для поддерживающих Standard Webhooks — HMAC. Используйте показанный путь и соответствующий одинаковый секрет; подпись не заменяется legacy fallback. [Подробный протокол](gitlab.md).
 

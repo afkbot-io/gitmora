@@ -19,7 +19,7 @@ Gitmora хранит разрешённые сессии ваших локаль
 В приложении откройте **CLI и MCP**. Установщик сам определит macOS/Linux и архитектуру, проверит контрольные суммы и установит CLI в `$HOME/.local/bin`:
 
 ```sh
-curl -fsS --proto '=https' --tlsv1.2 https://gitmora.tasktopia.online/install.sh | sh
+curl -fsS --proto '=https' --tlsv1.2 https://gitmora.tasktopia.online/install.sh | sh -s -- --server https://gitmora.tasktopia.online
 export PATH="$HOME/.local/bin:$PATH"
 ```
 

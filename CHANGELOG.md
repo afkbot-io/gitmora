@@ -1,5 +1,16 @@
 # Changes
 
+## 0.4.1
+
+- Complete self-hosting guide, visible Compose/runtime env examples and a checked configuration reference.
+- Persist private Compose interpolation settings beside the selected installation; custom-domain identity routing works without enabling Tasktopia.
+- Generate single-domain nginx/ACME/renewal files for custom hosts and loopback ports; no dependency on Certbot nginx helper files.
+- Explicit private CONNECT routing for remote Tasktopia MCP, with normal TLS and exact endpoint authorization.
+- Custom-server CLI/MCP instructions, atomic checked CLI-file publication and live TLS/installation configuration checks. The installer requires explicit `--server`, without a hidden public-instance fallback. Published standalone CLI 0.4.0 remains compatible.
+- MCP behind a native loopback reverse proxy accepts only a validated configured public authority (plus normal loopback access), retaining Origin/auth checks.
+- A prepared encryption keyring no longer forces enabling a forge; unconnected installations start while malformed supplied keys are rejected.
+- Restarting the identity provider without a registration env override preserves the existing durable signup policy.
+
 ## 0.4.0
 
 - Full-width project workspace, simpler connections, consistent light/dark themes and Russian/English interface copy.

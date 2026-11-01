@@ -1,6 +1,6 @@
 # Supported core scope
 
-The current product is development context, described by [requirements C01–C18](requirements.md) and the [architecture](system-analysis.md). Server/UI version is 0.4.0; the standalone client is 0.4.0 (0.2.0 remains compatible).
+The current product is development context, described by [requirements C01–C18](requirements.md) and the [architecture](system-analysis.md). Source/server version is 0.4.1; the standalone client is 0.4.0 (0.2.0 remains compatible).
 
 | Area | Delivered behavior |
 | --- | --- |
@@ -12,7 +12,7 @@ The current product is development context, described by [requirements C01–C18
 | Accounts | Shared web/CLI account, cookie/CSRF browser sessions, native OS-store CLI roots and bounded revocable credentials. |
 | Registration | Env-controlled signup and hidden-password operator creation; no implicit project/operator authority. |
 | Workspace | React/TypeScript/Tailwind, RU/EN, personal appearance settings, full-width project workspace, self-service projects, nickname/UUID membership, simplified connections and one-command CLI installation. |
-| Operations | Separate API/worker/gateway and identity/database profiles, private file secrets, pinned builds and checksum-checked migrations. |
+| Operations | Separate API/worker/gateway and identity/database profiles, private file secrets, pinned builds and checksum-checked migrations; persistent per-installation Compose settings, generated own-domain nginx and explicit custom-provider relays. |
 
 [Development](development.md) lists reproducible unit, integration, browser, native, provider, deployment and restore gates. Test fixtures and actual upstream-service checks are different forms of evidence; a green fixture does not certify every provider version or deployment.
 

@@ -94,6 +94,17 @@ def main():
                 data=urllib.parse.urlencode(dict(grant_type="password", client_id="admin-cli", username="gitmora.operator", password=material["master_password"])).encode())
             with opener.open(token_request, timeout=15) as response:
                 management_token = json.load(response)["access_token"]
+            # Ordinary restart must not silently reset durable registration policy.
+            environment["WORKGRAPH_REGISTRATION_ENABLED"] = "true"
+            cli(["configure", "--directory", str(root)])
+            environment.pop("WORKGRAPH_REGISTRATION_ENABLED")
+            cli(["up", "--directory", str(root)])
+            realm_request = urllib.request.Request("http://127.0.0.1:" + str(identity_port) + prefix + "/admin/realms/gitmora", headers={"Authorization": "Bearer " + management_token})
+            with opener.open(realm_request, timeout=15) as response:
+                assert json.load(response)["registrationAllowed"] is True, "Restart closed existing signup policy"
+            environment["WORKGRAPH_REGISTRATION_ENABLED"] = "false"
+            cli(["configure", "--directory", str(root)])
+            environment.pop("WORKGRAPH_REGISTRATION_ENABLED")
             user_request = urllib.request.Request("http://127.0.0.1:" + str(identity_port) + prefix + "/admin/realms/gitmora/users/" + profile["user_id"], headers={"Authorization": "Bearer " + management_token})
             with opener.open(user_request, timeout=15) as response:
                 user = json.load(response)

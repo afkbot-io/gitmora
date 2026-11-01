@@ -9,6 +9,7 @@ import (
 	captures "workgraph.local/platform/internal/capture/application"
 	pack "workgraph.local/platform/internal/contextpack/domain"
 	"workgraph.local/platform/internal/directory/domain"
+	identity "workgraph.local/platform/internal/identity/domain"
 	"workgraph.local/platform/internal/platform/postgres"
 )
 
@@ -126,5 +127,36 @@ func TestProjectMemberExactHandleLookupRequiresCurrentAdministration(t *testing.
 	}
 	if _, e = s.ResolveMember(ctx, owner, project, "guest.1"); !errors.Is(e, domain.ErrNotFound) {
 		t.Fatal("disabled account resolved", e)
+	}
+}
+
+// The self-hosting guide creates a bound human account before granting installation
+// authority; no bootstrap bearer, placeholder project or orphan local owner is needed.
+func TestFirstOperatorCanBeCreatedFromAnOfflineBoundAccount(t *testing.T) {
+	pool := database(t)
+	ctx := context.Background()
+	binding, err := postgres.NewIdentityStore(pool).CreateAccountOffline(ctx, identity.Identity{Issuer: "https://gitmora.example.test/auth/realms/gitmora", Subject: "first-exact-provider-subject", DisplayName: "Own administrator"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory := postgres.NewDirectoryStore(pool)
+	if err = directory.GrantOperatorOffline(ctx, binding.UserID); err != nil {
+		t.Fatal(err)
+	}
+	principal := directoryPrincipal(t, pool, binding.UserID, access.ReadDirectory, access.ManageDirectory, access.ManagePlatform, access.ManageCredentials)
+	me, err := directory.Me(ctx, principal)
+	if err != nil || !me.User.Operator || !me.User.Enabled {
+		t.Fatal(me, err)
+	}
+	if count(t, pool, "users") != 1 || count(t, pool, "memberships") != 0 {
+		t.Fatal("unexpected bootstrap accounts or project authority")
+	}
+	id := "77777777-7777-4777-8777-777777777777"
+	if _, _, err = directory.Apply(ctx, principal, domain.Command{Action: domain.CreateProject, RequestID: requestID(t), EntityID: id, Name: display("First project")}); err != nil {
+		t.Fatal(err)
+	}
+	value, err := directory.Project(ctx, principal, id)
+	if err != nil || value.Role != "admin" {
+		t.Fatal(value, err)
 	}
 }

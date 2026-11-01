@@ -2,10 +2,10 @@
 services:
   api:
     extra_hosts:
-      tasktopia.online: "${GITMORA_PRIVATE_GATEWAY:-172.30.88.1}"
+      - "${GITMORA_TASKTOPIA_HOST:-tasktopia.online}:${GITMORA_PRIVATE_GATEWAY:-172.30.88.1}"
   worker:
     extra_hosts:
-      tasktopia.online: "${GITMORA_PRIVATE_GATEWAY:-172.30.88.1}"
+      - "${GITMORA_TASKTOPIA_HOST:-tasktopia.online}:${GITMORA_PRIVATE_GATEWAY:-172.30.88.1}"
 
 networks:
   private:

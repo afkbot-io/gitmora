@@ -1,10 +1,10 @@
 # Gitmora accounts
 
-The web application, hosted password forms under `/auth/`, and CLI consent use one account. Project access remains local to Gitmora. A new account has no project membership or operator role; an installation operator assigns membership separately.
+The web application, hosted password forms under `/auth/`, and CLI consent use one account. Project access remains local to Gitmora. A new account has no project membership or operator role; a user can explicitly create a project or be added to an existing one.
 
 ## Registration policy
 
-Public registration is enabled on the selected `gitmora.tasktopia.online` installation at the user's request. Use “Создать аккаунт” on the public page. This creates an ordinary account; project membership is assigned separately. New installations still default to closed registration.
+Public registration is enabled on the selected `gitmora.tasktopia.online` installation at the user's request. Use “Создать аккаунт” on the public page. This creates an ordinary account; a user can create their own project or receive an invitation to an existing one. New installations still default to closed registration.
 
 Set `WORKGRAPH_REGISTRATION_ENABLED=false` in the private application `runtime.env` to close registration. The default is `false`; only literal `true` opens it. Invalid values stop startup. Restart the selected API so it applies the policy, then apply the same value to the hosted provider:
 
@@ -12,7 +12,7 @@ Set `WORKGRAPH_REGISTRATION_ENABLED=false` in the private application `runtime.e
 WORKGRAPH_REGISTRATION_ENABLED=false gitmorad identity-server configure --directory /srv/gitmora/identity
 ```
 
-`identity-server up` also applies the env policy after an active provider starts. Keep the API and provider values consistent. With signup closed, `/v1/auth/register` denies requests, stale API instances cannot provision accounts against the durable disabled policy, and the provider rejects previously opened registration forms after its policy is applied. Existing login/browser/CLI authority is preserved; authentication stays mandatory.
+`identity-server up` applies an explicitly supplied env policy after an active provider starts. With the variable unset, a normal restart preserves the provider's durable policy rather than silently closing signup. Keep the API and provider values consistent. With signup closed, `/v1/auth/register` denies requests, stale API instances cannot provision accounts against the durable disabled policy, and the provider rejects previously opened registration forms after its policy is applied. Existing login/browser/CLI authority is preserved; authentication stays mandatory.
 
 Changing the provider issuer/client/session security policy remains a separate operation that deliberately revokes incompatible grants. Disabling registration is not such an operation.
 

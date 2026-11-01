@@ -5,12 +5,12 @@ The current native client includes Codex/OpenCode adapters, native CLI API/MCP a
 ## One-command installation
 
 ```sh
-curl -fsS --proto '=https' --tlsv1.2 https://gitmora.tasktopia.online/install.sh | sh
+curl -fsS --proto '=https' --tlsv1.2 https://gitmora.tasktopia.online/install.sh | sh -s -- --server https://gitmora.tasktopia.online
 export PATH="$HOME/.local/bin:$PATH"
 gitmora auth login --server https://gitmora.tasktopia.online
 ```
 
-The script detects macOS/Linux and arm64/amd64, downloads the pinned version plus both manifests, and verifies the exact binary and metadata checksums before execution. It installs only into your user-owned stable directory and does not edit shell profiles or agent configuration. A different existing binary requires the explicit update procedure below. For a custom Gitmora URL pass it to the script with `sh -s -- --server https://gitmora.example.com`.
+The explicit `--server` is required: the installer has no fallback to another Gitmora instance. The script detects macOS/Linux and arm64/amd64, downloads the pinned version plus both manifests, and verifies the exact binary and metadata checksums before execution. It installs only into your user-owned stable directory and does not edit shell profiles or agent configuration. A different existing binary requires the explicit update procedure below. For a custom Gitmora URL pass it to the script with `sh -s -- --server https://gitmora.example.com`.
 
 ## Select and verify a release
 
@@ -92,6 +92,8 @@ From clean committed source with the pinned Go toolchain and existing output par
 ```sh
 python3 scripts/release-cli.py --version <numeric-release-version> --output /absolute/new-release-directory
 ```
+
+For a fresh server 0.4.1, the [deployment guide](deployment.md#7-раздать-cli-и-подключить-агенты-к-своему-адресу) deliberately publishes the compatible official client 0.4.0. If distributing a different client version, align `publicClientVersion` in `web/src/domain/onboarding.ts` and `gitmora_version` in `web/public/install.sh`, rebuild the web/server image, then publish the matching six files using `scripts/publish-cli.py`. Runtime env does not change the pinned download version.
 
 The script refuses dirty source/existing output and exports only the selected committed revision into a new owned build tree; ignored compiler/embed inputs never enter it. It verifies module checksums, builds CGO-disabled baseline-CPU targets, checks embedded module/platform/toolchain settings and emits complete public manifests. Native-host execution also checks the exact version/revision stamp. Go deliberately omits linker flags from build info under `-trimpath`; other-platform runtime stamps need actual execution, not an assumption that these flags are inspectable. No timestamp/host path is included in release metadata. It does not publish or install. `--target linux/amd64` can prepare a deliberate subset; normal distribution uses all four.
 

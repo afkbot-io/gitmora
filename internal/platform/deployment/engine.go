@@ -62,6 +62,17 @@ func (s *Service) compose(ctx context.Context, root string, input io.Reader, out
 		defer lease.Unlock()
 	}
 	command, env := composeArgs(i, args...)
+	// Keep operator interpolation policy beside this installation, independent of
+	// the checkout's .env and the shell used for a later restart.
+	policy := filepath.Join(root, "compose.env")
+	if info, err := os.Lstat(policy); err == nil {
+		if !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 || info.Size() > 65536 {
+			return ErrFilesystem
+		}
+		command = append([]string{"compose", "--env-file", policy}, command[1:]...)
+	} else if !os.IsNotExist(err) {
+		return ErrFilesystem
+	}
 	return s.engine.Run(ctx, command, env, input, output)
 }
 

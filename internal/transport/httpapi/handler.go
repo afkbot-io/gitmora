@@ -42,6 +42,7 @@ type Config struct {
 	CLIEnrollment     CLIEnrollmentService
 	WebUI             http.Handler
 	MCPAllowedOrigins []string
+	MCPPublicOrigin   string
 }
 
 // NewHandler constructs a strict JSON API. Unknown fields, duplicate keys, excessive depth,

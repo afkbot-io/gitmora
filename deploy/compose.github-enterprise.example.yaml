@@ -1,23 +1,23 @@
-# Copy outside the release directory, replace the three example addresses, then append
-# to the selected installation's overlays. Keep compose.github-com.yaml for GitHub.com.
+# Fill GITMORA_GITHUB_ENTERPRISE_* in the installation compose.env and select this overlay.
+# Keep compose.github-com.yaml for independent GitHub.com access.
 services:
   api:
     environment:
       WORKGRAPH_GITHUB_ENABLED: "true"
-      WORKGRAPH_GITHUB_ALLOWLIST: https://github.example.com
+      WORKGRAPH_GITHUB_ALLOWLIST: ${GITMORA_GITHUB_ENTERPRISE_URL:?Set the exact Enterprise HTTPS web base}
       WORKGRAPH_GITHUB_ENTERPRISE_PROXY_URL: http://github-enterprise-egress:8080
     depends_on:
       github-enterprise-egress: {condition: service_healthy}
   worker:
     environment:
       WORKGRAPH_GITHUB_ENABLED: "true"
-      WORKGRAPH_GITHUB_ALLOWLIST: https://github.example.com
+      WORKGRAPH_GITHUB_ALLOWLIST: ${GITMORA_GITHUB_ENTERPRISE_URL:?Set the exact Enterprise HTTPS web base}
       WORKGRAPH_GITHUB_ENTERPRISE_PROXY_URL: http://github-enterprise-egress:8080
     depends_on:
       github-enterprise-egress: {condition: service_healthy}
   github-enterprise-egress:
     image: ${WORKGRAPH_IMAGE:-gitmora:local}
-    command: [egress, --listen, "0.0.0.0:8080", --target, "github.example.com:443", --visibility, public]
+    command: [egress, --listen, "0.0.0.0:8080", --target, "${GITMORA_GITHUB_ENTERPRISE_AUTHORITY:?Set the Enterprise host:port}", --visibility, "${GITMORA_GITHUB_ENTERPRISE_VISIBILITY:-public}"]
     user: "65532:65532"
     read_only: true
     cap_drop: [ALL]

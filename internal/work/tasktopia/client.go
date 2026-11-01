@@ -19,6 +19,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"workgraph.local/platform/internal/identifier"
 	"workgraph.local/platform/internal/jsonwire"
+	"workgraph.local/platform/internal/platform/netroute"
 	"workgraph.local/platform/internal/work/application"
 	"workgraph.local/platform/internal/work/domain"
 )
@@ -33,9 +34,18 @@ type Client struct {
 
 // New permits HTTPS endpoints and loopback-only HTTP for isolated local tests.
 func New(endpoints []string) (*Client, error) {
+	return NewWithProxy(endpoints, "")
+}
+
+// NewWithProxy confines optional external routing to an explicit private CONNECT proxy.
+// TLS and the exact endpoint check remain end-to-end; ambient proxy settings are ignored.
+func NewWithProxy(endpoints []string, proxy string) (*Client, error) {
 	c := &Client{allowed: map[string]bool{}}
 	for _, e := range endpoints {
 		if !validEndpoint(e) {
+			return nil, domain.ErrInvalid
+		}
+		if proxy != "" && !strings.HasPrefix(e, "https://") {
 			return nil, domain.ErrInvalid
 		}
 		c.allowed[e] = true
@@ -43,6 +53,22 @@ func New(endpoints []string) (*Client, error) {
 	c.transport = http.DefaultTransport.(*http.Transport).Clone()
 	c.transport.Proxy = nil
 	c.transport.MaxResponseHeaderBytes = 64 * 1024
+	if proxy != "" {
+		u, err := url.Parse(proxy)
+		if err != nil || len(proxy) > 256 || u.Scheme != "http" || u.Host == "" || u.User != nil || u.Path != "" || u.RawPath != "" || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || u.Opaque != "" {
+			return nil, domain.ErrInvalid
+		}
+		dial, err := netroute.NewBoundDialer(u.Host, netroute.Private, nil, nil)
+		if err != nil {
+			return nil, domain.ErrInvalid
+		}
+		c.transport.Proxy = http.ProxyURL(u)
+		c.transport.DialContext = dial.DialContext
+		c.transport.DialTLS = nil
+		c.transport.DialTLSContext = nil
+		c.transport.ProxyConnectHeader = nil
+		c.transport.GetProxyConnectHeader = nil
+	}
 	return c, nil
 }
 func validEndpoint(e string) bool {
