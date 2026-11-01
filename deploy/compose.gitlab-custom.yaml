@@ -1,4 +1,4 @@
-# One explicit self-managed provider. Export these non-secret policy values for every deployment command.
+# One explicit self-managed provider. Store these non-secret policy values in the installation compose.env.
 # See docs/gitlab-self-managed.md; API/worker retain their internal-only network and end-to-end TLS.
 services:
   api:

@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
 	"time"
 
 	"workgraph.local/platform/internal/platform/deployment"
@@ -93,7 +94,10 @@ func identityServerCommand(parent context.Context, args []string, out io.Writer)
 			if e != nil {
 				return e
 			}
-			if i.Phase == "active" {
+			// A normal restart preserves the durable realm policy. Apply an
+			// explicit env override, rather than silently closing signup when
+			// the operator opens another shell without that variable.
+			if _, explicit := os.LookupEnv("WORKGRAPH_REGISTRATION_ENABLED"); i.Phase == "active" && explicit {
 				enabled, e := runtimeconfig.RegistrationEnabled()
 				if e != nil {
 					return e

@@ -19,11 +19,25 @@ Capture is opt-in per repository/agent. A transcript does not establish line-lev
 - **[User guide, in Russian](docs/getting-started.md)** — account, CLI, agent, push, search and MCP.
 - **[Self-hosting](docs/deployment.md)** and [account provider](docs/identity-hosting.md).
 - **[Self-Managed GitLab](docs/gitlab-self-managed.md)** — custom HTTPS host, port, installation prefix and corporate CA.
-- **[GitHub.com](docs/github.md)** — URL lookup, public access or a dedicated read token, PRs and Actions.
+- **[GitHub.com / Enterprise](docs/github.md)** — URL lookup, public access or a dedicated read token, PRs and Actions.
 - [Tasktopia](docs/tasktopia.md), [CLI account](docs/cli-auth.md), [standalone installation](docs/native-installation.md).
 - [Architecture](docs/system-analysis.md), [API](docs/api.md), [development and tests](docs/development.md).
 
 The UI uses React, TypeScript and Tailwind CSS with light/dark themes and Russian/English. Appearance is selected in personal settings. Web and CLI use one account; public registration is configurable and new users receive no automatic project access. See [account administration](docs/accounts.md).
+
+## Deploy on your own server and domain
+
+Use the **[complete self-hosting guide](docs/deployment.md)** for a new Linux server. It covers one-domain app/login, DNS, ACME/HTTPS renewal, private networks, first administrator, registration policy, source connections and publishing the client downloads. `/install.sh` installs the **developer CLI**, not the platform.
+
+1. Point your domain's DNS at the server and prepare Docker Compose, nginx/Certbot and the source-build toolchains.
+2. Check out `v0.4.1` and build the app, operator CLI, PostgreSQL and hosted-account images.
+3. Run `gitmorad deployment init` once with the selected overlays; copy [`.env.example`](.env.example) to the private installation's `compose.env` and the [runtime example](deploy/gitmora.runtime.env.example) to its `runtime.env`.
+4. Set `GITMORA_PUBLIC_HOST` to your domain, select an unused private subnet, and run `scripts/render-nginx.py` for that hostname. Obtain the certificate with the HTTP bootstrap config, then activate the HTTPS config.
+5. Initialize/finalize the same-domain account provider, copy its dedicated OIDC client-secret file into the app slot, and start the app.
+6. Create your own user through hidden-password `gitmorad users create`, grant operator authority explicitly, then sign in and create your project.
+7. Publish the six checked CLI files on your domain, connect your repositories and configure agents with your own `--server` address.
+
+The private `compose.env` is selected automatically on later deployment operations. It controls Compose interpolation; `runtime.env` controls API/worker runtime. Actual secrets are generated into private file slots. **[Every supported env and setting](docs/configuration.md)** is documented with role, default, format and precedence. [Custom-server CLI/MCP](docs/custom-server.md) includes Codex/OpenCode examples, multiple server accounts and diagnostics. [Relocation](docs/relocation.md) distinguishes a fresh installation, moving existing data and changing an existing OIDC domain.
 
 ## Build from source
 
@@ -57,7 +71,7 @@ make integration
 - [Entire/Git AI import](docs/compatibility.md): explicit versioned formats and preserved provenance, not universal producer compatibility.
 - Phone checks use browser emulation. SMTP recovery, automatic external ACL synchronization, unattended upgrades and a production capacity guarantee are not included.
 
-Server/UI is 0.4.0; the standalone client is 0.4.0 (0.2.0 remains compatible). See [changes](CHANGELOG.md). Legacy `workgraph` executable aliases, `WORKGRAPH_*` variables and protocols remain compatible. Dependency and copied-template terms are listed in [third-party notices](THIRD_PARTY_NOTICES.md).
+Source/server release is 0.4.1; the published standalone client is 0.4.0 (0.2.0 remains compatible). See [changes](CHANGELOG.md). Legacy `workgraph` executable aliases, `WORKGRAPH_*` variables and protocols remain compatible. Dependency and copied-template terms are listed in [third-party notices](THIRD_PARTY_NOTICES.md).
 
 ## License
 

@@ -126,3 +126,47 @@ func TestExplicitReviewedOverlayStaysPinnedInTheInstallationCommand(t *testing.T
 		t.Fatal("reviewed connectivity overlay was silently discarded")
 	}
 }
+
+func TestPrivateComposeEnvironmentIsSelectedOnEveryOperation(t *testing.T) {
+	root, compose := fixture(t)
+	if _, err := deployment.Create(context.Background(), root, compose, 8080, "gitmora:local"); err != nil {
+		t.Fatal(err)
+	}
+	policy := filepath.Join(root, "compose.env")
+	if err := os.WriteFile(policy, []byte("GITMORA_PUBLIC_HOST=gitmora.example.test\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	port := &engine{}
+	s := deployment.NewService(port)
+	for _, operation := range []func() error{
+		func() error { return s.Up(context.Background(), root) },
+		func() error { return s.Status(context.Background(), root, io.Discard) },
+		func() error {
+			return s.Admin(context.Background(), root, []string{"grant-operator", "--user-id", "11111111-1111-4111-8111-111111111111"}, io.Discard)
+		},
+		func() error { return s.Down(context.Background(), root) },
+	} {
+		if err := operation(); err != nil {
+			t.Fatal(err)
+		}
+		if len(port.args) < 3 || port.args[0] != "compose" || port.args[1] != "--env-file" || port.args[2] != policy {
+			t.Fatal("installation policy was lost", port.args)
+		}
+	}
+	before := port.calls
+	if err := os.Chmod(policy, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Up(context.Background(), root); !errors.Is(err, deployment.ErrFilesystem) || port.calls != before {
+		t.Fatal("unsafe policy reached Docker", err)
+	}
+	if err := os.Remove(policy); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(compose, policy); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Up(context.Background(), root); !errors.Is(err, deployment.ErrFilesystem) || port.calls != before {
+		t.Fatal("symlink policy reached Docker", err)
+	}
+}

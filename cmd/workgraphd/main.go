@@ -261,6 +261,10 @@ func run(ctx context.Context, args []string, output io.Writer) error {
 		if err != nil {
 			return err
 		}
+		publicOrigin, err := mcpPublicOrigin()
+		if err != nil {
+			return err
+		}
 		identities, err := identityService(startup, pool)
 		if err != nil {
 			return err
@@ -285,7 +289,7 @@ func run(ctx context.Context, args []string, output io.Writer) error {
 		}
 		directoryService.WithRepositoryResolver(resolver)
 		retrievalService := retrievalapp.NewService(postgres.NewRetrievalStore(pool))
-		handler := httpapi.NewHandler(httpapi.Config{Captures: application.NewService(postgres.NewCaptureStore(pool)), Authenticator: postgres.NewCredentialStore(pool), Ready: func(ctx context.Context) error { return postgres.VerifySchema(ctx, pool) }, Forge: forgePort, Code: codePort, Work: workPort, Retrieval: retrievalService, ContextPacks: contextapp.NewService(postgres.NewContextStore(pool), retrievalService), ContextBrowser: contextapp.NewBrowser(postgres.NewContextStore(pool)), Directory: directoryService, Identity: identityPort, CLIEnrollment: cliEnrollment, MCPAllowedOrigins: origins, WebUI: webui.Embedded()})
+		handler := httpapi.NewHandler(httpapi.Config{Captures: application.NewService(postgres.NewCaptureStore(pool)), Authenticator: postgres.NewCredentialStore(pool), Ready: func(ctx context.Context) error { return postgres.VerifySchema(ctx, pool) }, Forge: forgePort, Code: codePort, Work: workPort, Retrieval: retrievalService, ContextPacks: contextapp.NewService(postgres.NewContextStore(pool), retrievalService), ContextBrowser: contextapp.NewBrowser(postgres.NewContextStore(pool)), Directory: directoryService, Identity: identityPort, CLIEnrollment: cliEnrollment, MCPAllowedOrigins: origins, MCPPublicOrigin: publicOrigin, WebUI: webui.Embedded()})
 		return serve(ctx, listen, handler)
 	default:
 		return errors.New("unsupported command")
@@ -384,14 +388,15 @@ func forgeServices(pool *pgxpool.Pool) (*forgeapp.Service, *forgeapp.CodeService
 		return nil, nil, errors.New("allowed GitLab endpoints are required for the explicit proxy")
 	}
 	active := os.Getenv("WORKGRAPH_ENCRYPTION_ACTIVE_KEY")
-	if allowed == "" && githubClient == nil && os.Getenv("WORKGRAPH_TASKTOPIA_ALLOWLIST") != "" {
-		return nil, nil, nil
-	}
-	if keyring == "" && allowed == "" && active == "" && githubClient == nil {
-		return nil, nil, nil
-	}
 	if allowed == "" && githubClient == nil {
-		return nil, nil, errors.New("allowed forge endpoints are required")
+		// A generated keyring does not enable a source. Fresh installations
+		// may start without a forge, but malformed supplied keys still fail.
+		if keyring != "" || active != "" {
+			if _, err := configuredVault(); err != nil {
+				return nil, nil, err
+			}
+		}
+		return nil, nil, nil
 	}
 	box, err := configuredVault()
 	if err != nil {
@@ -456,7 +461,11 @@ func runWorker(ctx context.Context, once bool, output io.Writer, services ...rec
 
 func workService(pool *pgxpool.Pool) (*workapp.Service, error) {
 	allowed := os.Getenv("WORKGRAPH_TASKTOPIA_ALLOWLIST")
+	proxy := os.Getenv("WORKGRAPH_TASKTOPIA_PROXY_URL")
 	if allowed == "" {
+		if proxy != "" {
+			return nil, errors.New("Tasktopia allowlist is required with an explicit proxy")
+		}
 		return nil, nil
 	}
 	box, err := configuredVault()
@@ -467,7 +476,7 @@ func workService(pool *pgxpool.Pool) (*workapp.Service, error) {
 	for i := range endpoints {
 		endpoints[i] = strings.TrimSpace(endpoints[i])
 	}
-	provider, err := tasktopia.New(endpoints)
+	provider, err := tasktopia.NewWithProxy(endpoints, proxy)
 	if err != nil {
 		return nil, errors.New("invalid allowed Tasktopia endpoint")
 	}
@@ -541,4 +550,16 @@ func mcpAllowedOrigins() ([]string, error) {
 		result = append(result, value)
 	}
 	return result, nil
+}
+
+func mcpPublicOrigin() (string, error) {
+	raw := strings.TrimSuffix(os.Getenv("WORKGRAPH_PUBLIC_URL"), "/")
+	if raw == "" {
+		return "", nil
+	}
+	u, err := identitydomain.URL(raw)
+	if err != nil || u.Path != "" || identitydomain.Origin(u) != raw {
+		return "", errors.New("invalid public Gitmora origin")
+	}
+	return raw, nil
 }

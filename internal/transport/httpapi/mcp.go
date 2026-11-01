@@ -7,7 +7,9 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -21,6 +23,7 @@ import (
 type principalContextKey struct{}
 
 func registerContextMCP(mux *http.ServeMux, config Config) {
+	publicHost, publicValid := mcpPublicHost(config.MCPPublicOrigin)
 	allowed := map[string]bool{}
 	for _, origin := range config.MCPAllowedOrigins {
 		allowed[origin] = true
@@ -28,7 +31,10 @@ func registerContextMCP(mux *http.ServeMux, config Config) {
 	transport := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
 		principal, _ := r.Context().Value(principalContextKey{}).(access.Principal)
 		return contextMCPServer(config.Retrieval, config.Code, config.ContextPacks, config.ContextBrowser, principal)
-	}, &mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true, MaxRequestBodyBytes: 65536, PropagateRequestCancellation: true})
+	}, &mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true, MaxRequestBodyBytes: 65536, PropagateRequestCancellation: true,
+		// Replace the SDK's loopback-only Host check only with an explicit,
+		// validated public authority check for reverse-proxy deployments.
+		DisableLocalhostProtection: publicValid && publicHost != ""})
 	handler := contextRead(config, func(w http.ResponseWriter, r *http.Request, p access.Principal) {
 		if r.Method == http.MethodPost {
 			raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 65536))
@@ -46,6 +52,10 @@ func registerContextMCP(mux *http.ServeMux, config Config) {
 		transport.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), principalContextKey{}, p)))
 	})
 	mux.HandleFunc("/mcp", func(w http.ResponseWriter, r *http.Request) {
+		if !publicValid || publicHost != "" && !strings.EqualFold(r.Host, publicHost) && !mcpLoopbackHost(r.Host) {
+			writeError(w, 403, "forbidden_host", "MCP host is not allowed")
+			return
+		}
 		origins := r.Header.Values("Origin")
 		if len(origins) > 1 || len(origins) == 1 && !allowed[origins[0]] {
 			writeError(w, 403, "forbidden_origin", "MCP browser origin is not allowed")
@@ -77,6 +87,26 @@ func registerContextMCP(mux *http.ServeMux, config Config) {
 		}
 		handler(w, r)
 	})
+}
+
+func mcpLoopbackHost(host string) bool {
+	u, err := url.Parse("//" + host)
+	if err != nil || u.User != nil || u.Host != host || u.Path != "" {
+		return false
+	}
+	name := u.Hostname()
+	return strings.EqualFold(name, "localhost") || net.ParseIP(name).IsLoopback()
+}
+
+func mcpPublicHost(raw string) (string, bool) {
+	if raw == "" {
+		return "", true
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || u.User != nil || u.Opaque != "" || u.Path != "" || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || raw != u.Scheme+"://"+u.Host || u.Scheme != "https" && (u.Scheme != "http" || !mcpLoopbackHost(u.Host)) {
+		return "", false
+	}
+	return u.Host, true
 }
 
 func contextMCPServer(service RetrievalService, codeService CodeService, packs ContextPackService, browser ContextBrowseService, p access.Principal) *mcp.Server {

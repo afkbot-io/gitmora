@@ -196,14 +196,12 @@ def main():
             acme = folder / "acme/.well-known/acme-challenge"
             acme.mkdir(parents=True)
             (acme / "probe").write_text("owned ACME challenge")
-            (folder / "tls.conf").write_text("ssl_protocols TLSv1.2 TLSv1.3;\n")
             replacements = {
                 "listen 80;": f"listen 127.0.0.1:{http_port};", "listen [::]:80;": "",
                 "listen 443 ssl http2;": f"listen 127.0.0.1:{tls_port} ssl http2;" + (f"\nlisten {private['gateway']}:{tls_port} ssl http2;" if private else ""),
                 "listen [::]:443 ssl http2;": "",
                 "/etc/letsencrypt/live/" + HOST + "/fullchain.pem": str(folder / "leaf.pem"),
                 "/etc/letsencrypt/live/" + HOST + "/privkey.pem": str(folder / "leaf.key"),
-                "/etc/letsencrypt/options-ssl-nginx.conf": str(folder / "tls.conf"), "/etc/letsencrypt/ssl-dhparams.pem": str(folder / "dh.pem"),
                 "/srv/gitmora/acme": str(folder / "acme"), "127.0.0.1:18081": "127.0.0.1:" + str(backend.server_port),
                 "127.0.0.1:8080": "127.0.0.1:" + str(application.server_port),
                 "/var/log/nginx/gitmora.access.log": str(folder / "access.log"), "/var/log/nginx/gitmora.error.log": str(folder / "proxy-error.log"),

@@ -1,4 +1,4 @@
-# GitHub.com
+# GitHub.com and GitHub Enterprise
 
 Gitmora can verify exact commits and index their changed source files from GitHub.com, synchronize pull requests and GitHub Actions runs, and connect that evidence to captured agent sessions. GitLab remains supported independently, including Self-Managed instances. Local project membership determines access inside Gitmora.
 
@@ -22,7 +22,7 @@ A repository URL can use an operator-approved Enterprise base, including an inst
 
 Native deployments use public IPv4 routing by default. `WORKGRAPH_GITHUB_PRIVATE=true` deliberately selects private destinations for the Enterprise routes only. Configure the internal CA in the selected container trust store; TLS verification is not disabled. An explicit `WORKGRAPH_GITHUB_ENTERPRISE_PROXY_URL` selects a private CONNECT proxy independently of the GitHub.com proxy.
 
-For Docker, copy `deploy/compose.github-enterprise.example.yaml` into the installation's private policy folder, replace its example web bases and exact TLS target, inspect it, and append it to the existing ordered overlays. Keep the GitHub.com overlay when both are used. Choose `--visibility private` on the Enterprise relay only for an intentionally private service. Each fixed relay accepts only its approved authority; additional hosts need corresponding trusted proxy policy. The normal UI accepts custom URLs but never opens private network access by itself.
+For Docker, copy `deploy/compose.github-enterprise.example.yaml` into the installation's private policy folder, fill `GITMORA_GITHUB_ENTERPRISE_URL`, `GITMORA_GITHUB_ENTERPRISE_AUTHORITY` and visibility in the installation `compose.env`, inspect it, and append it to the existing ordered overlays. Keep the GitHub.com overlay when both are used. Choose `--visibility private` on the Enterprise relay only for an intentionally private service. Each fixed relay accepts only its approved authority; additional hosts need corresponding trusted proxy policy. The normal UI accepts custom URLs but never opens private network access by itself.
 
 ## Dedicated read token
 

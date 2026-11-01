@@ -1,13 +1,14 @@
 #!/bin/sh
 # Gitmora CLI installer. Downloads are verified before any executable is run.
 set -eu
-gitmora_server=https://gitmora.tasktopia.online
+gitmora_server=
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --server) [ "$#" -ge 2 ] || exit 2; gitmora_server=$2; shift 2 ;;
-    *) printf '%s\n' 'Usage: sh install.sh [--server https://gitmora.example.com]' >&2; exit 2 ;;
+    *) printf '%s\n' 'Usage: sh install.sh --server https://gitmora.example.com' >&2; exit 2 ;;
   esac
 done
+[ -n "$gitmora_server" ] || { printf '%s\n' 'Pass --server with your Gitmora HTTPS address.' >&2; exit 2; }
 case "$gitmora_server" in https://* ) ;; *) printf '%s\n' 'Use an HTTPS Gitmora address.' >&2; exit 2 ;; esac
 case "$gitmora_server" in *\?*|*\#*|*@*|*\'*) printf '%s\n' 'Invalid Gitmora address.' >&2; exit 2 ;; esac
 gitmora_server=${gitmora_server%/}

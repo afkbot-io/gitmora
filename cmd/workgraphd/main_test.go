@@ -101,3 +101,23 @@ func TestContainerReadinessWorksWithoutDatabaseConfigurationAndRejectsUnsafeOrMi
 		t.Fatal(e)
 	}
 }
+
+func TestPreparedEncryptionKeysDoNotRequireEnablingAForge(t *testing.T) {
+	for _, key := range []string{"WORKGRAPH_GITLAB_ALLOWLIST", "WORKGRAPH_GITLAB_PROXY_URL", "WORKGRAPH_GITHUB_ENABLED", "WORKGRAPH_GITHUB_API_URL", "WORKGRAPH_GITHUB_PROXY_URL", "WORKGRAPH_GITHUB_ALLOWLIST", "WORKGRAPH_GITHUB_PRIVATE", "WORKGRAPH_GITHUB_ENTERPRISE_PROXY_URL", "WORKGRAPH_TASKTOPIA_ALLOWLIST"} {
+		t.Setenv(key, "")
+	}
+	t.Setenv("WORKGRAPH_ENCRYPTION_KEYS_FILE", "")
+	if err := os.Unsetenv("WORKGRAPH_ENCRYPTION_KEYS_FILE"); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("WORKGRAPH_ENCRYPTION_KEYS", `{"primary":"`+base64.StdEncoding.EncodeToString(make([]byte, 32))+`"}`)
+	t.Setenv("WORKGRAPH_ENCRYPTION_ACTIVE_KEY", "primary")
+	forge, code, err := forgeServices(nil)
+	if err != nil || forge != nil || code != nil {
+		t.Fatal("An unconnected installation must start without source clients", err)
+	}
+	t.Setenv("WORKGRAPH_ENCRYPTION_KEYS", `{"primary":"invalid"}`)
+	if _, _, err = forgeServices(nil); err == nil {
+		t.Fatal("Malformed prepared keys were accepted")
+	}
+}

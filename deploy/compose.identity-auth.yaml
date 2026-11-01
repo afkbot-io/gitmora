@@ -3,6 +3,7 @@
 services:
   api:
     environment:
-      WORKGRAPH_OIDC_ISSUER: https://gitmora.tasktopia.online/auth/realms/gitmora
-      WORKGRAPH_OIDC_CLIENT_ID: gitmora
+      WORKGRAPH_PUBLIC_URL: https://${GITMORA_PUBLIC_HOST:-gitmora.tasktopia.online}
+      WORKGRAPH_OIDC_ISSUER: https://${GITMORA_PUBLIC_HOST:-gitmora.tasktopia.online}/auth/realms/${GITMORA_REALM:-gitmora}
+      WORKGRAPH_OIDC_CLIENT_ID: ${GITMORA_CLIENT_ID:-gitmora}
       WORKGRAPH_OIDC_CLIENT_SECRET_FILE: /run/secrets/oidc_client_secret
