@@ -95,6 +95,7 @@ def main():
             capture["commit_ranges"]=[dict(commit_sha="a"*40,start=0,end=20,basis="observed_checkpoint"),dict(commit_sha="b"*40,start=20,end=65,basis="observed_checkpoint")]
             capture["messages"][20]=dict(role="user",text="PR4BoundaryMarker: обнови поиск только для этого изменения")
             capture["messages"][21]=dict(role="assistant",text="Обновлю поиск и проверю границы PR 4.")
+            capture["messages"][22]=dict(role="tool",tool_name="Bash",text=json.dumps(dict(command="git diff --stat",output="x"*50000+"FullToolTailMarker",exit_code=0)))
         assert call("/v1/captures", capture)[0] == 201
         if args.history:
             digest = call(f'/v1/repositories/{identity["repository_id"]}/sessions/{session}')[1]["digest"]

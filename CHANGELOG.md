@@ -1,5 +1,11 @@
 # Changes
 
+## 0.6.1
+
+- Add compact PR dialogue pages: long hidden tool outputs become explicitly marked previews with exact source cursors. Expanding a tool reads its complete original through the same PR, revision and head checks.
+- Expose `message_view=compact|full` in `context.pack` for agents. Full Unicode-safe pagination remains available; source text is never silently replaced by a preview.
+- Test large tool outputs through PostgreSQL, HTTP MCP and real desktop/mobile browsers. Schema remains 26.
+
 ## 0.6.0
 
 - Scope PR/commit dialogue reads to recorded half-open message intervals. Full-session navigation no longer lists every associated PR; PR dialogue links retain their selected PR and breadcrumb. Technical capture pages are consumed internally.

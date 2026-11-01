@@ -81,6 +81,13 @@ func readContextMessages(ctx context.Context, tx pgx.Tx, q domain.Query, page *d
 			if !included {
 				continue
 			}
+			preview := q.MessageView == "compact" && message.Role == "tool" && len([]rune(message.Text)) > 1200
+			if preview {
+				if after != nil && repo == after.RepositoryID && id == after.SessionID && index == after.Offset && after.RuneOffset != 0 {
+					return domain.ErrInvalid
+				}
+				message.Text = compactToolText(message.Text)
+			}
 			// Page before the next item; callers can use the same validated cursor to retry.
 			if len(page.Items) >= 20 || bytes+len(message.Text) > 24000 && len(page.Items) > 0 {
 				page.Next = &domain.MessageCursor{RepositoryID: repo, SessionID: id, Revision: rev, Digest: digest, Segment: segment, Offset: index, Head: q.ExpectedHead, ScopeKey: q.MRReadKey}
@@ -89,6 +96,10 @@ func readContextMessages(ctx context.Context, tx pgx.Tx, q domain.Query, page *d
 			}
 			slices.Sort(shas)
 			source := domain.ScopedMessage{Segment: segment, Index: index, Message: message, CommitSHAs: slices.Compact(shas)}
+			if preview {
+				source.TextPreview = true
+				source.FullTextAfter = &domain.MessageCursor{RepositoryID: repo, SessionID: id, Revision: rev, Digest: digest, Segment: segment, Offset: index, Head: q.ExpectedHead, ScopeKey: q.MRReadKey}
+			}
 			source.Source.Kind = "capture"
 			source.Source.ProjectID = q.ProjectID
 			source.Source.RepositoryID = repo
@@ -124,4 +135,54 @@ func readContextMessages(ctx context.Context, tx pgx.Tx, q domain.Query, page *d
 		return domain.ErrInvalid
 	}
 	return nil
+}
+
+// Compact previews avoid paging through long hidden outputs. Exact originals
+// remain available through the same authorized, revision-pinned scope.
+func compactToolText(text string) string {
+	var value map[string]any
+	if json.Unmarshal([]byte(text), &value) != nil {
+		return domain.Clip(text, 800).Text
+	}
+	input := value
+	for _, key := range []string{"arguments", "input"} {
+		if nested, ok := value[key].(map[string]any); ok {
+			input = nested
+			break
+		}
+		if encoded, ok := value[key].(string); ok {
+			var nested map[string]any
+			if json.Unmarshal([]byte(encoded), &nested) == nil && nested != nil {
+				input = nested
+				break
+			}
+		}
+	}
+	first := func(v map[string]any, keys ...string) string {
+		for _, key := range keys {
+			if s, ok := v[key].(string); ok && s != "" {
+				return s
+			}
+		}
+		return ""
+	}
+	command := first(input, "cmd", "command", "code", "path", "file_path", "url", "q")
+	output := first(value, "output", "stdout", "result")
+	if command == "" && output == "" {
+		return domain.Clip(text, 800).Text
+	}
+	preview := map[string]any{"command": domain.Clip(command, 240).Text, "output": domain.Clip(output, 600).Text}
+	for _, key := range []string{"exit_code", "isError"} {
+		if v, ok := value[key]; ok {
+			switch v.(type) {
+			case bool, float64:
+				preview[key] = v
+			}
+		}
+	}
+	if status, ok := value["status"].(string); ok {
+		preview["status"] = domain.Clip(status, 32).Text
+	}
+	raw, _ := json.Marshal(preview)
+	return string(raw)
 }

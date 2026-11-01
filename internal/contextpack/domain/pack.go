@@ -29,6 +29,7 @@ type MRCursor struct {
 
 // Query selects an exact capture stream, confirmed commit or explicit MR in one local project.
 type Query struct {
+	MessageView        string         `json:"message_view,omitempty"`
 	MRReadKey          string         `json:"-"`
 	MRTargetRepository string         `json:"-"`
 	MRCodeKey          string         `json:"-"`
@@ -48,6 +49,9 @@ type Query struct {
 
 // Normalize owns cursor values and rejects ambiguous selectors before any source query.
 func Normalize(q Query) (Query, error) {
+	if q.MessageView != "" && q.MessageView != "full" && q.MessageView != "compact" {
+		return Query{}, ErrInvalid
+	}
 	if (q.MessageAfter != nil && q.SessionID == "" && q.DialogueID == "") || (q.MessageAfter != nil && q.MR > 0 && (q.MessageAfter.Head == "" || q.MessageAfter.ScopeKey == "")) || (q.DialogueID != "" && (!identifier.Valid(q.DialogueID) || q.SessionID != "")) || (q.MessageAfter != nil && q.MessageAfter.Validate() != nil) || q.MRReadKey != "" || q.MRTargetRepository != "" || q.MRCodeKey != "" || q.MRSourceProject != 0 || !identifier.Valid(q.ProjectID) || q.RepositoryID != "" && !identifier.Valid(q.RepositoryID) || q.SessionID != "" && (!identifier.Valid(q.SessionID) || q.RepositoryID == "") || q.CommitSHA != "" && (!identifier.ValidCommit(q.CommitSHA) || q.RepositoryID == "") || q.MR < 0 || q.MR > 0 && q.RepositoryID == "" || q.ExpectedHead != "" && (!identifier.ValidCommit(q.ExpectedHead) || q.MR == 0) || q.Limit < 0 || q.Limit > 12 {
 		return Query{}, ErrInvalid
 	}
@@ -219,6 +223,8 @@ func (c MessageCursor) Validate() error {
 }
 
 type ScopedMessage struct {
+	TextPreview   bool             `json:"text_preview,omitempty"`
+	FullTextAfter *MessageCursor   `json:"full_text_after,omitempty"`
 	MessageOffset int              `json:"message_offset,omitempty"`
 	TextTruncated bool             `json:"text_truncated,omitempty"`
 	Source        retrieval.Source `json:"source"`

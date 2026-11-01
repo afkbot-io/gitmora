@@ -1,7 +1,13 @@
-import type { CaptureWindow, SessionRevision } from "./history.js";
+import type {
+  CaptureWindow,
+  SessionRevision,
+  MessageCursor,
+} from "./history.js";
 
 export type Message = SessionRevision["snapshot"]["messages"][number];
 export interface IndexedMessage {
+  preview?: boolean;
+  fullTextAfter?: MessageCursor;
   message: Message;
   index: number;
 }
