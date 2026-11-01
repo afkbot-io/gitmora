@@ -120,7 +120,7 @@ export const sourceNames: Record<string, string> = {
   task: "Задача",
   document: "Документ задачи",
   code_reference: "Ссылка на код",
-  code: "Код GitLab",
+  code: "Код репозитория",
 };
 
 /** The server interprets a complete SHA as a confirmed-commit filter. */

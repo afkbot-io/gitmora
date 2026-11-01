@@ -66,7 +66,14 @@ Optional `continuation` fixes an exact previous session/revision/digest, root UU
 - `422`: domain contract violation.
 - `500` / `503`: failed operation; retry the same immutable revision with bounded backoff.
 
-An acknowledged write includes the revision and its indexing outbox event in the same transaction. A pending outbox event is not evidence that indexing has run. Uploaded commit SHAs begin unconfirmed. The independently running [GitLab worker](gitlab.md) confirms exact object existence through the configured project's API; webhook/client claims alone cannot do so. Separate authorized metadata routes expose immutable MR observations, CI/deployment evidence and completed squash lineage. None substitutes for human task acceptance.
+An acknowledged write includes the revision and its indexing outbox event in the same transaction. A pending outbox event is not evidence that indexing has run. Uploaded commit SHAs begin unconfirmed. The independently running [GitLab](gitlab.md)/[GitHub](github.md) worker confirms exact object existence through the configured project's API; webhook/client claims alone cannot do so. Separate authorized metadata routes expose immutable MR observations, CI/deployment evidence and completed squash lineage. None substitutes for human task acceptance.
 
 
 Native agents can use [CLI API access and the stdio MCP bridge](native-context.md) with the same account.
+
+
+## Provider identities
+
+GitHub catalog registration uses `provider: "github"`, the canonical full `provider_url` and positive `provider_repository_id`. Legacy GitLab registration keeps `gitlab_url` and `gitlab_project_id`. Mixed/unknown provider fields are rejected. Public URL resolution is `POST /v1/projects/{project}/repositories/lookup` with `{ "url": "https://github.com/owner/repository" }`, authorized before external I/O.
+
+Both providers use `/v1/repositories/{id}/forge` for connection health/configuration and its metadata subpaths. The legacy `/gitlab` route remains an alias; the route name never overrides immutable provider identity. GitHub accepts only `webhook_mode: "disabled"`, with either explicit `anonymous: true` or an `api_token`. It advertises PR and Actions streams; GitLab additionally has child-pipeline/deployment streams and optional authenticated webhooks. See [GitHub setup and limits](github.md).

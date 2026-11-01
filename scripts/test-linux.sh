@@ -27,6 +27,7 @@ CGO_ENABLED=0 GOOS=linux GOARCH="$target_arch" go test -c -o bin/verification/ta
 CGO_ENABLED=0 GOOS=linux GOARCH="$target_arch" go test -c -o bin/verification/retrieval-domain.test ./internal/retrieval/domain
 CGO_ENABLED=0 GOOS=linux GOARCH="$target_arch" go test -c -o bin/verification/forge-domain.test ./internal/forge/domain
 CGO_ENABLED=0 GOOS=linux GOARCH="$target_arch" go test -c -o bin/verification/gitlab.test ./internal/forge/gitlab
+CGO_ENABLED=0 GOOS=linux GOARCH="$target_arch" go test -c -o bin/verification/github.test ./internal/forge/github
 CGO_ENABLED=0 GOOS=linux GOARCH="$target_arch" go test -c -o bin/verification/contextpack-domain.test ./internal/contextpack/domain
 CGO_ENABLED=0 GOOS=linux GOARCH="$target_arch" go test -c -o bin/verification/contextpack-application.test ./internal/contextpack/application
 CGO_ENABLED=0 GOOS=linux GOARCH="$target_arch" go test -c -o bin/verification/context-http-mcp.test ./internal/transport/httpapi
@@ -70,6 +71,7 @@ docker compose -f compose.test.yaml exec -T -u postgres postgres /tmp/workgraph-
 docker compose -f compose.test.yaml exec -T -u postgres postgres /tmp/workgraph-verification/retrieval-domain.test -test.v
 docker compose -f compose.test.yaml exec -T -u postgres postgres /tmp/workgraph-verification/forge-domain.test -test.v
 docker compose -f compose.test.yaml exec -T -u postgres postgres /tmp/workgraph-verification/gitlab.test -test.v
+docker compose -f compose.test.yaml exec -T -u postgres postgres /tmp/workgraph-verification/github.test -test.v
 docker compose -f compose.test.yaml exec -T -u postgres postgres /tmp/workgraph-verification/contextpack-domain.test -test.v
 docker compose -f compose.test.yaml exec -T -u postgres postgres /tmp/workgraph-verification/contextpack-application.test -test.v
 docker compose -f compose.test.yaml exec -T -u postgres postgres /tmp/workgraph-verification/context-http-mcp.test -test.v

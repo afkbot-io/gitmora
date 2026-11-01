@@ -276,13 +276,11 @@ export const english: Readonly<Record<string, string>> = {
     "Saved keys will be deleted and this connection will stop syncing or accepting webhooks. An external request already in progress may finish.",
   "Ключи и браузерные сессии вашей учётной записи. Доступ к проектам проверяется отдельно.":
     "Keys and browser sessions for your account. Project access is checked separately.",
-  "Код GitLab": "GitLab code",
   "Код входа CLI": "CLI sign-in code",
   "Код:": "Code:",
   "Команда проверяет два SHA-256 перед запуском. Проверяйте версию по составу сборки. Добавьте":
     "The command verifies both SHA-256 checksums before running. Check the release contents and add",
   "Комментарии:": "Comments:",
-  "Коммит GitLab": "GitLab commit",
   "Коммиты, указанные агентом:": "Agent-reported commits:",
   "Контекст источника": "Source context",
   "Контекст не совпал с выбранным источником.":
@@ -450,7 +448,6 @@ export const english: Readonly<Record<string, string>> = {
   "Подтверждение входа CLI": "CLI sign-in confirmation",
   "Подтверждение принято. Проверьте завершение входа в терминале.":
     "Approved. Check that sign-in completes in your terminal.",
-  "Подтверждено GitLab:": "Confirmed by GitLab:",
   "Подтверждено коммитов: {0}": "Confirmed commits: {0}",
   "Подтверждённое членство указанного коммита":
     "Verified membership of the selected commit",
@@ -735,7 +732,6 @@ export const english: Readonly<Record<string, string>> = {
   "Читаем условия подключения…": "Loading connection details…",
   "Читать доступные проекты и репозитории":
     "Read available projects and repositories",
-  "Читать задачи и данные GitLab": "Read tasks and GitLab data",
   "Читать интеграции и внешние источники":
     "Read integrations and external sources",
   "Читать каталог и участников": "Read the catalog and members",
@@ -798,4 +794,8 @@ export const english: Readonly<Record<string, string>> = {
   "Проверен Git blob": "Verified Git blob",
   "Удаляет связанные данные Gitmora. Репозитории и задачи во внешних сервисах сохраняются.":
     "Deletes related Gitmora data. Repositories and tasks in external services are retained.",
+  "Код репозитория": "Repository code",
+  "Коммит репозитория": "Repository commit",
+  "Подтверждено провайдером:": "Confirmed by provider:",
+  "Читать задачи и данные репозиториев": "Read tasks and repository data",
 };

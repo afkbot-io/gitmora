@@ -40,6 +40,7 @@ The gateway publishes only numeric loopback HTTP, normally `127.0.0.1:8080`. Hos
 
 Before configuring an external provider, provision an explicit reviewed route/DNS/CA policy. Do not attach secret-bearing API/worker services to a general outbound network as a connectivity fix.
 
+- GitHub.com: append [the fixed API relay overlay](../deploy/compose.github-com.yaml); see [repository setup](github.md).
 - GitLab.com: use [the exact-authority relay overlay](../deploy/compose.gitlab-com.yaml).
 - Self-Managed GitLab: follow [custom host/port/prefix/CA instructions](gitlab-self-managed.md).
 - Same-host Tasktopia: [the example overlay](../deploy/compose.tasktopia.yaml) maps its HTTPS hostname to an explicit private host gateway. Adapt the hostname/subnet to the installation and inspect conflicts first.
