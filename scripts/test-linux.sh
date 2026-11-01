@@ -51,9 +51,10 @@ for module in domain application; do
 done
 docker compose -f compose.test.yaml exec -T -u 0 postgres sh -c 'command -v git >/dev/null && command -v python3 >/dev/null || apk add --no-cache git python3'
 container_id=$(docker compose -f compose.test.yaml ps -q postgres)
-docker cp bin/verification/. "$container_id:/tmp/workgraph-verification/"
+# Stream through the running process: Docker's archive copy may bypass tmpfs mounts.
 docker compose -f compose.test.yaml exec -T -u 0 postgres mkdir -p /tmp/workgraph-verification/compatibility/testdata
-docker cp internal/compatibility/domain/testdata/. "$container_id:/tmp/workgraph-verification/compatibility/testdata/"
+COPYFILE_DISABLE=1 tar -C bin/verification -cf - . | docker exec -i "$container_id" tar -C /tmp/workgraph-verification -xf -
+COPYFILE_DISABLE=1 tar -C internal/compatibility/domain/testdata -cf - . | docker exec -i "$container_id" tar -C /tmp/workgraph-verification/compatibility/testdata -xf -
 docker compose -f compose.test.yaml exec -T postgres git --version
 docker compose -f compose.test.yaml exec -T -u postgres postgres /tmp/workgraph-verification/collector-sqlite.test -test.v
 docker compose -f compose.test.yaml exec -T -u postgres postgres /tmp/workgraph-verification/capture-domain.test -test.v
