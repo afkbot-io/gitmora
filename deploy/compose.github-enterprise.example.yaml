@@ -1,0 +1,41 @@
+# Copy outside the release directory, replace the three example addresses, then append
+# to the selected installation's overlays. Keep compose.github-com.yaml for GitHub.com.
+services:
+  api:
+    environment:
+      WORKGRAPH_GITHUB_ENABLED: "true"
+      WORKGRAPH_GITHUB_ALLOWLIST: https://github.example.com
+      WORKGRAPH_GITHUB_ENTERPRISE_PROXY_URL: http://github-enterprise-egress:8080
+    depends_on:
+      github-enterprise-egress: {condition: service_healthy}
+  worker:
+    environment:
+      WORKGRAPH_GITHUB_ENABLED: "true"
+      WORKGRAPH_GITHUB_ALLOWLIST: https://github.example.com
+      WORKGRAPH_GITHUB_ENTERPRISE_PROXY_URL: http://github-enterprise-egress:8080
+    depends_on:
+      github-enterprise-egress: {condition: service_healthy}
+  github-enterprise-egress:
+    image: ${WORKGRAPH_IMAGE:-gitmora:local}
+    command: [egress, --listen, "0.0.0.0:8080", --target, "github.example.com:443", --visibility, public]
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=16m,mode=1777"]
+    networks: [private, github_enterprise_outbound]
+    pids_limit: 128
+    mem_limit: 128m
+    cpus: 0.5
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, /gitmorad, healthcheck]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+networks:
+  github_enterprise_outbound:
