@@ -10,6 +10,7 @@ import (
 	"path"
 	"strings"
 
+	"workgraph.local/platform/internal/endpoint"
 	"workgraph.local/platform/internal/identifier"
 	"workgraph.local/platform/internal/redact"
 )
@@ -52,15 +53,29 @@ type MRLink struct {
 
 // NewMRLink validates the provider's human URL and derives a stable non-sensitive title.
 func NewMRLink(repo, base string, project, iid int64, value string) (MRLink, error) {
-	l := MRLink{RepositoryID: repo, BaseURL: base, ProjectID: project, IID: iid, URL: value, Title: fmt.Sprintf("GitLab MR !%d", iid)}
+	l := MRLink{RepositoryID: repo, BaseURL: base, ProjectID: project, IID: iid, URL: value, Title: MRLinkTitle(base, iid)}
 	if l.Validate() != nil {
 		return MRLink{}, ErrInvalid
 	}
 	return l, nil
 }
 
+// MRLinkTitle derives display copy without authorizing an untrusted provider URL.
+func MRLinkTitle(base string, iid int64) string {
+	if canonical, ok := endpoint.GitHubRepository(base); ok && canonical == base {
+		return fmt.Sprintf("GitHub PR #%d", iid)
+	}
+	return fmt.Sprintf("GitLab MR !%d", iid)
+}
+
 // Validate binds a bounded credential-free link to its provider origin, base path and exact MR IID.
 func (l MRLink) Validate() error {
+	if canonical, ok := endpoint.GitHubRepository(l.BaseURL); ok && canonical == l.BaseURL {
+		if !identifier.Valid(l.RepositoryID) || l.ProjectID < 1 || l.IID < 1 || l.Title != fmt.Sprintf("GitHub PR #%d", l.IID) || l.URL != canonical+fmt.Sprintf("/pull/%d", l.IID) || redact.Text(l.URL) != l.URL {
+			return ErrInvalid
+		}
+		return nil
+	}
 	base, e := url.Parse(l.BaseURL)
 	target, err := url.Parse(l.URL)
 	root, _ := url.Parse(canonicalLinkURL(l.BaseURL))

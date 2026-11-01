@@ -218,7 +218,7 @@ verify-ui:
 	GITMORA_UI_AUDIT=1 $(MAKE) smoke-design smoke-web smoke-work smoke-settings smoke-credentials smoke-cli-consent smoke-registration
 
 # Source-backed Tasktopia gates additionally require TASKTOPIA_SOURCE and Node 24+; see development.md.
-verify-release: verify verify-linux smoke-cli-auth test-native-secret-store-linux smoke-forge-subpath smoke-gitlab-profile smoke-onboarding smoke-design smoke-browser-compat
+verify-release: smoke-github-profile smoke-github smoke-github-ui verify verify-linux smoke-cli-auth test-native-secret-store-linux smoke-forge-subpath smoke-gitlab-profile smoke-onboarding smoke-design smoke-browser-compat
 
 smoke-browser-compat: build test-web build-postgres-image
 	mkdir -p bin/verification
@@ -233,3 +233,23 @@ smoke-browser-compat: build test-web build-postgres-image
 	GITMORA_UI_AUDIT=0 GITMORA_BROWSER=webkit GITMORA_MOBILE_DEVICE=1 python3 scripts/smoke-web.py --work
 	GITMORA_UI_AUDIT=0 GITMORA_BROWSER=chromium GITMORA_MOBILE_DEVICE=1 python3 scripts/smoke-web.py
 	GITMORA_UI_AUDIT=0 GITMORA_BROWSER=chromium GITMORA_MOBILE_DEVICE=1 python3 scripts/smoke-web.py --work
+
+.PHONY: smoke-github smoke-github-ui smoke-load
+smoke-github: build build-postgres-image
+	docker compose -f compose.test.yaml up -d --wait
+	python3 scripts/smoke-github.py
+
+smoke-github-ui: build test-web build-postgres-image
+	mkdir -p bin/verification
+	go build -trimpath -o bin/verification/oidc-fixture ./internal/identity/oidc/testdata/fixture.go
+	docker compose -f compose.test.yaml up -d --wait
+	python3 scripts/smoke-settings.py --github
+	GITMORA_BROWSER=webkit GITMORA_MOBILE_DEVICE=1 python3 scripts/smoke-settings.py --github
+
+smoke-load: build build-postgres-image
+	docker compose -f compose.test.yaml up -d --wait
+	python3 scripts/smoke-load.py --output build/load/report.json
+
+.PHONY: smoke-github-profile
+smoke-github-profile:
+	python3 scripts/smoke-github-profile.py

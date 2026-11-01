@@ -1,8 +1,8 @@
 import { t as translate } from "../../domain/locale.js";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import type { Project, Repository } from "../../domain/context.js";
 import type { ApiClient } from "../../transport/api.js";
-import { GitLabConnection } from "./GitLabConnection.js";
+import { ForgeConnection } from "./ForgeConnection.js";
 import { TasktopiaConnection } from "./TasktopiaConnection.js";
 
 export function Connections({
@@ -18,6 +18,7 @@ export function Connections({
   canRead: boolean;
   canManage: boolean;
 }) {
+  const selectorID = useId();
   const [selected, setSelected] = useState("");
   useEffect(() => {
     if (!repositories.some((item) => item.id === selected))
@@ -33,14 +34,17 @@ export function Connections({
         canManage={canManage}
       />
       <section className="settings-section border-t border-line px-0 py-7 mt-6 [&_h2]:text-2xl [&_h3]:text-base [&_h3]:font-medium [&_h3]:mt-0">
-        <h2>GitLab</h2>
+        <h2>{repository?.provider === "github" ? "GitHub" : "GitLab"}</h2>
         <p className="muted text-muted">
-          {translate("Синхронизация коммитов, merge requests и CI.")}
+          {translate("Синхронизация коммитов, MR/PR и проверок CI.")}
         </p>
         {repositories.length ? (
-          <label className="repository-choice max-w-110 flex flex-col gap-2">
-            {translate("Репозиторий интеграции")}
+          <div className="repository-choice max-w-110 flex flex-col gap-2">
+            <label htmlFor={selectorID}>
+              {translate("Репозиторий интеграции")}
+            </label>
             <select
+              id={selectorID}
               value={selected}
               onChange={(e) => setSelected(e.target.value)}
             >
@@ -50,7 +54,7 @@ export function Connections({
                 </option>
               ))}
             </select>
-          </label>
+          </div>
         ) : (
           <p>
             {translate(
@@ -59,7 +63,7 @@ export function Connections({
           </p>
         )}
         {repository && (
-          <GitLabConnection
+          <ForgeConnection
             key={repository.id}
             client={client}
             repository={repository}

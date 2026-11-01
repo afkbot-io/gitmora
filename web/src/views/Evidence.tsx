@@ -99,7 +99,7 @@ export function Evidence({ client, hit }: { client: ApiClient; hit: Hit }) {
           )}
           {source.commit_sha && (
             <>
-              <dt>{translate("Коммит GitLab")}</dt>
+              <dt>{translate("Коммит репозитория")}</dt>
               <dd className="mono font-mono text-xs wrap-anywhere">
                 {source.commit_sha}
               </dd>
@@ -125,7 +125,7 @@ export function Evidence({ client, hit }: { client: ApiClient; hit: Hit }) {
         `}
         >
           <summary>
-            {translate("Подтверждено GitLab:")} {current.confirmed_count}
+            {translate("Подтверждено провайдером:")} {current.confirmed_count}
           </summary>
           <ul>
             {current.confirmed_commits.map((sha) => (

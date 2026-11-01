@@ -14,6 +14,8 @@ import (
 
 // Status is credential-free connection state suitable for authorized API responses.
 type Status struct {
+	Anonymous     bool           `json:"anonymous,omitempty"`
+	Provider      string         `json:"provider,omitempty"`
 	RepositoryID  string         `json:"repository_id"`
 	Enabled       bool           `json:"enabled"`
 	Generation    int64          `json:"generation"`
@@ -57,7 +59,7 @@ type Outcome struct {
 type Store interface {
 	MetadataStore
 	RepositoryForAdmin(context.Context, string, string) (domain.Repository, error)
-	Connect(context.Context, string, domain.Repository, []byte, string) (Status, error)
+	Connect(context.Context, string, domain.Repository, []byte, string, bool) (Status, error)
 	Status(context.Context, string, string) (Status, error)
 	Disconnect(context.Context, string, string) error
 	RequestSync(context.Context, string, string) error
@@ -89,7 +91,7 @@ type ProviderError struct {
 	RetryAfter time.Duration
 }
 
-func (e *ProviderError) Error() string { return "GitLab request failed: " + e.Code }
+func (e *ProviderError) Error() string { return "Forge request failed: " + e.Code }
 
 // Service keeps provider I/O outside local database transactions.
 type Service struct {
@@ -116,6 +118,9 @@ func (s *Service) Connect(ctx context.Context, subject, repository string, secre
 	if err != nil {
 		return Status{}, err
 	}
+	if err := secrets.ValidateForProvider(repo.Provider); err != nil {
+		return Status{}, err
+	}
 	if err := s.provider.VerifyProject(ctx, repo, secrets.APIToken); err != nil {
 		return Status{}, err
 	}
@@ -123,11 +128,11 @@ func (s *Service) Connect(ctx context.Context, subject, repository string, secre
 	if err != nil {
 		return Status{}, domain.ErrInvalid
 	}
-	envelope, err := s.vault.Seal("gitlab:"+repository, raw)
+	envelope, err := s.vault.Seal(repo.CredentialScope(), raw)
 	if err != nil {
 		return Status{}, err
 	}
-	return s.store.Connect(ctx, subject, repo, envelope, secrets.Mode())
+	return s.store.Connect(ctx, subject, repo, envelope, secrets.Mode(), secrets.Anonymous)
 }
 
 // Status returns only authorized metadata and integration health.
@@ -146,12 +151,12 @@ func (s *Service) RequestSync(ctx context.Context, subject, repository string) e
 }
 
 func (s *Service) secrets(connection Connection) (domain.Secrets, error) {
-	raw, err := s.vault.Open("gitlab:"+connection.Repository.ID, connection.Envelope)
+	raw, err := s.vault.Open(connection.Repository.CredentialScope(), connection.Envelope)
 	if err != nil {
 		return domain.Secrets{}, err
 	}
 	var secrets domain.Secrets
-	if json.Unmarshal(raw, &secrets) != nil || secrets.Validate() != nil {
+	if json.Unmarshal(raw, &secrets) != nil || secrets.ValidateForProvider(connection.Repository.Provider) != nil {
 		return domain.Secrets{}, domain.ErrInvalid
 	}
 	return secrets, nil

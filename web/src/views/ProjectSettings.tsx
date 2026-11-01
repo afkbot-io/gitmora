@@ -112,7 +112,7 @@ export function ProjectSettings({
           <h2>{translate("Удаление проекта")}</h2>
           <p>
             {translate(
-              "Удаляет связанные данные Gitmora. GitLab и Tasktopia сохраняют свои репозитории и задачи.",
+              "Удаляет связанные данные Gitmora. Репозитории и задачи во внешних сервисах сохраняются.",
             )}
           </p>
           <button

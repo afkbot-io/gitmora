@@ -105,7 +105,23 @@ func (s *DirectoryStore) Project(ctx context.Context, p access.Principal, id str
 	})
 }
 
-const directoryRepoColumns = `r.id::text,r.project_id::text,r.name,r.gitlab_url,r.gitlab_project_id,r.version,r.created_at`
+const directoryRepoColumns = `r.id::text,r.project_id::text,r.name,r.gitlab_url,r.gitlab_project_id,r.version,r.created_at,r.provider`
+
+func exposeRepositoryProvider(v domain.Repository) domain.Repository {
+	if v.Provider == "github" {
+		v.ProviderURL, v.ProviderRepositoryID = v.GitLabURL, v.GitLabProjectID
+		v.GitLabURL, v.GitLabProjectID = "", 0
+	}
+	return v
+}
+
+// AuthorizeRepositoryCreate shares the exact current catalog authority with repository writes.
+func (s *DirectoryStore) AuthorizeRepositoryCreate(ctx context.Context, p access.Principal, project string) error {
+	_, err := directoryRead(ctx, s.pool, p, true, func(tx pgx.Tx, a directoryActor) (bool, error) {
+		return true, directoryProjectAuthority(ctx, tx, a, project, true)
+	})
+	return err
+}
 
 func (s *DirectoryStore) Repositories(ctx context.Context, p access.Principal, project string, c domain.Cursor) (domain.Page[domain.Repository], error) {
 	c, e := c.Normalize()
@@ -124,10 +140,10 @@ func (s *DirectoryStore) Repositories(ctx context.Context, p access.Principal, p
 		items := []domain.Repository{}
 		for rows.Next() {
 			var v domain.Repository
-			if e = rows.Scan(&v.ID, &v.ProjectID, &v.Name, &v.GitLabURL, &v.GitLabProjectID, &v.Version, &v.CreatedAt); e != nil {
+			if e = rows.Scan(&v.ID, &v.ProjectID, &v.Name, &v.GitLabURL, &v.GitLabProjectID, &v.Version, &v.CreatedAt, &v.Provider); e != nil {
 				return domain.Page[domain.Repository]{}, e
 			}
-			items = append(items, v)
+			items = append(items, exposeRepositoryProvider(v))
 		}
 		return directoryPage(items, c.Limit, func(v domain.Repository) string { return v.ID }), rows.Err()
 	})
@@ -138,14 +154,14 @@ func (s *DirectoryStore) Repository(ctx context.Context, p access.Principal, id 
 	}
 	return directoryRead(ctx, s.pool, p, true, func(tx pgx.Tx, a directoryActor) (domain.Repository, error) {
 		var v domain.Repository
-		e := tx.QueryRow(ctx, `SELECT `+directoryRepoColumns+` FROM repositories r WHERE r.id=$1 AND($2 OR EXISTS(SELECT 1 FROM memberships m WHERE m.project_id=r.project_id AND m.user_id=$3))`, id, a.platform(), p.UserID).Scan(&v.ID, &v.ProjectID, &v.Name, &v.GitLabURL, &v.GitLabProjectID, &v.Version, &v.CreatedAt)
+		e := tx.QueryRow(ctx, `SELECT `+directoryRepoColumns+` FROM repositories r WHERE r.id=$1 AND($2 OR EXISTS(SELECT 1 FROM memberships m WHERE m.project_id=r.project_id AND m.user_id=$3))`, id, a.platform(), p.UserID).Scan(&v.ID, &v.ProjectID, &v.Name, &v.GitLabURL, &v.GitLabProjectID, &v.Version, &v.CreatedAt, &v.Provider)
 		if e != nil {
 			return v, directoryNoRows(e)
 		}
 		if e = directoryProjectAuthority(ctx, tx, a, v.ProjectID, false); e != nil {
 			return domain.Repository{}, e
 		}
-		return v, nil
+		return exposeRepositoryProvider(v), nil
 	})
 }
 func (s *DirectoryStore) Members(ctx context.Context, p access.Principal, project string, c domain.Cursor) (domain.Page[domain.Member], error) {

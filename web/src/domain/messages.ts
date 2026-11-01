@@ -14,17 +14,17 @@ export const english: Readonly<Record<string, string>> = {
     "without replacing other settings, then restart your agent. Ask it to find available sessions using",
   "--codex /полный/путь/к/codex": "--codex /absolute/path/to/codex",
   ". Вход остаётся обязательным.": ". Sign-in is always required.",
-  ". Данные отражают последние доступные наблюдения источников и не являются единым снимком GitLab и Tasktopia.":
-    ". Sources reflect their latest available updates, not a single synchronized GitLab/Tasktopia snapshot.",
   ". Если агент не видит PATH вашего терминала, замените":
     ". If your agent cannot use your terminal's PATH, replace",
   ". Изменения источников появятся при обновлении.":
     ". Refresh to see source changes.",
   ". Корень, указанный источником:": ". Source-reported root:",
-  ". Обновлено в GitLab": ". Updated in GitLab",
+  ". Обновлено у провайдера": ". Updated at provider",
   ". Ошибки индексации:": ". Indexing errors:",
   ". Подтверждённых коммитов этой ревизии:":
     ". Verified commits in this revision:",
+  ". Показаны последние доступные наблюдения источников.":
+    ". Latest available source observations are shown.",
   ". Полная запись доступна в источнике.":
     ". The full record is available from the source.",
   ". Родитель:": ". Parent:",
@@ -38,10 +38,10 @@ export const english: Readonly<Record<string, string>> = {
     "2. Sign in and connect your repository",
   "3. Включите нужный агент": "3. Enable your agent",
   "API-ключ": "API key",
-  "API-ключ GitLab": "GitLab API key",
+  "API-ключ {0}": "{0} API key",
   "CI для наблюдаемого head": "CI for observed head",
-  "GitLab отключён. Сохранённые ключи соединения удалены.":
-    "GitLab disconnected. Its saved connection keys were deleted.",
+  "Fine-grained token: Contents, Pull requests и Actions — Read-only. Metadata предоставляется автоматически.":
+    "Fine-grained token: Contents, Pull requests and Actions — Read-only. Metadata access is included automatically.",
   "Gitmora связывает сессии агентов, коммиты и задачи в одну историю. Находите решения команды и продолжайте работу с нужным контекстом.":
     "Gitmora connects agent sessions, commits and tasks into one history. Find your team's decisions and continue with the context you need.",
   "Gitmora — история разработки": "Gitmora — development history",
@@ -51,6 +51,7 @@ export const english: Readonly<Record<string, string>> = {
     "ID cannot be displayed precisely in this browser",
   "ID проекта GitLab должен быть точным положительным целым числом.":
     "Enter a positive GitLab project ID within the exact integer range.",
+  "ID репозитория источника": "Source repository ID",
   "ID указан в настройках проекта GitLab. Используйте адрес сервера без имени проекта. После создания изменить привязку нельзя.":
     "Find the project ID in GitLab settings. Use the server address without a project name. The connection cannot be changed after creation.",
   "IID превышает точный числовой диапазон интерфейса.":
@@ -76,20 +77,22 @@ export const english: Readonly<Record<string, string>> = {
   "Администратор проекта": "Project administrator",
   "Администратор сервера должен настроить шифрование и разрешённые адреса интеграций.":
     "Ask the server administrator to configure encryption and allowed integration servers.",
-  "Адрес GitLab недоступен": "GitLab address unavailable",
   "Адрес MCP": "MCP address",
   "Адрес и страна Tasktopia уже закреплены за проектом. Проверьте исходную привязку.":
     "This project's Tasktopia server and country are already fixed. Check the existing connection.",
+  "Адрес репозитория недоступен": "Repository URL is unavailable",
   "Адрес сервера GitLab": "GitLab server address",
   "Без роли в проекте": "No project role",
+  "Без токена действует небольшой общий лимит GitHub API. При его достижении очередь сохранится и сверка продолжится позже.":
+    "Without a token, GitHub applies a small shared API limit. If it is reached, the queue is retained and synchronization resumes later.",
   "Блоки вне текстового импорта:": "Blocks outside this text import:",
   "Браузерная сессия": "Browser session",
   "Будет удалено членство в этом проекте. Учётная запись и доступ к другим проектам сохранятся.":
     "Project membership will be removed. The account and other project access will remain.",
   "Будут отозваны этот ключ и все его дочерние ключи.":
     "This key and all its child keys will be revoked.",
-  "Будут удалены запись репозитория и связанные локальные сессии, индексы и результаты. Репозиторий GitLab останется на сервере GitLab.":
-    "The repository record and its local sessions and indexes will be deleted. The repository in GitLab will be retained.",
+  "Будут удалены запись репозитория и связанные локальные сессии, индексы и результаты. Исходный репозиторий останется у вашего провайдера.":
+    "The repository record and its local sessions, indexes and results will be deleted. The source repository stays with your provider.",
   "Будут удалены локальные репозитории, сессии, индексы, соединения и результаты проекта. Для повторной регистрации потребуется новый идентификатор.":
     "Local repositories, sessions, indexes and integrations will be deleted. Re-adding the project requires a new ID.",
   "Введите название ключа длиной до 120 байт UTF-8.":
@@ -172,6 +175,8 @@ export const english: Readonly<Record<string, string>> = {
     "Start a new sign-in from your terminal to try again.",
   "Для подтверждения CLI войдите через организацию заново по ссылке из терминала.":
     "Sign in again using the link from your terminal to approve CLI access.",
+  "Для публичного репозитория можно начать без токена. Для регулярной синхронизации используйте отдельный токен чтения этого репозитория.":
+    "You can start without a token for a public repository. For regular synchronization, use a dedicated read token for this repository.",
   "Добавить репозиторий": "Add repository",
   "Добавить участника": "Add member",
   "Добавление MR": "Add MR links",
@@ -184,18 +189,17 @@ export const english: Readonly<Record<string, string>> = {
     "Add an existing account using its UUID.",
   "Документ задачи": "Task document",
   "Документы:": "Documents:",
-  "Доступ к GitLab": "GitLab access",
   "Доступ к Tasktopia": "Tasktopia access",
+  "Доступ к {0}": "{0} access",
   "Доступ к проектам назначается отдельно.":
     "Project access is assigned separately.",
   "Доступ терминала сохранится после выхода из браузера. Отозвать ключ можно в разделе «Личные ключи». Отключение учётной записи или OIDC-привязки также закроет доступ.":
     "Terminal access remains after browser sign-out. Revoke it in Personal keys. Disabling the account or its sign-in binding also removes terminal access.",
-  "Доступность MR зависит от актуальной сверки GitLab.":
-    "MR availability depends on current GitLab synchronization.",
-  "Доступных подтверждённых связей с MR пока нет. Это не доказывает отсутствие MR в GitLab.":
-    "No verified MR links are available yet. The MR may still exist in GitLab.",
+  "Доступность MR/PR зависит от сверки репозитория.":
+    "MR/PR availability depends on repository synchronization.",
   "Доступных цитат пока нет. Проверьте права и индексацию.":
     "No source fragments are available yet. Check access and indexing.",
+  "Дочерние проверки CI": "Child CI checks",
   "Единый вход Gitmora": "Sign in to Gitmora",
   "Есть дополнительные MR, не вошедшие в контекст.":
     "More MRs exist outside this context.",
@@ -224,7 +228,6 @@ export const english: Readonly<Record<string, string>> = {
     "Tasks appear through links or explicit project synchronization.",
   "Задачи, код и решения вместе.": "Tasks, code and decisions together.",
   "Закрыть цитату": "Close fragment",
-  "Заменить ключи GitLab": "Replace GitLab keys",
   "Запись агента": "Agent record",
   "Запись будет отключена и исключена из проектов; ключи отозваны. Исторический идентификатор автора сохраняется.":
     "The account will be disabled and removed from projects; its keys will be revoked. Historical author identity is retained.",
@@ -246,12 +249,13 @@ export const english: Readonly<Record<string, string>> = {
   "Запрос отменён в терминале. Ключ не создан.":
     "Request cancelled in the terminal. No key was created.",
   "Запрос превышает допустимый размер.": "The request exceeds the size limit.",
-  "Запросить сверку GitLab": "Sync GitLab now",
+  "Запросить сверку {0}": "Request {0} sync",
+  "Запросы на слияние": "Merge/pull requests",
   "Запрошенный срок превышает 90 дней или оставшийся срок текущего ключа или сессии.":
     "The requested lifetime exceeds 90 days or the remaining connection lifetime.",
   "Зарегистрировать репозиторий": "Add repository",
-  "Зарегистрируйте репозиторий, затем подключите GitLab в настройках проекта.":
-    "Add a repository, then connect GitLab in project settings.",
+  "Зарегистрируйте репозиторий, затем настройте соединение в настройках проекта.":
+    "Register a repository, then configure its connection in project settings.",
   "Здесь появятся задача, окна сессии, подтверждённые изменения и точные цитаты.":
     "Task details, session windows, verified changes and source fragments will appear here.",
   "Здесь появятся полный фрагмент, точная версия и происхождение источника.":
@@ -261,6 +265,7 @@ export const english: Readonly<Record<string, string>> = {
   "Изменения в коде": "Code changes",
   "Изменить Tasktopia": "Edit Tasktopia",
   "Изменить полномочия {0}?": "Change permissions for {0}?",
+  "Изменить соединение {0}": "Edit {0} connection",
   "Импорт:": "Import:",
   Имя: "Name",
   Интеграции: "Integrations",
@@ -296,14 +301,14 @@ export const english: Readonly<Record<string, string>> = {
     "Saved keys will be deleted and this connection will stop syncing or accepting webhooks. An external request already in progress may finish.",
   "Ключи и браузерные сессии вашей учётной записи. Доступ к проектам проверяется отдельно.":
     "Keys and browser sessions for your account. Project access is checked separately.",
-  "Код GitLab": "GitLab code",
   "Код входа CLI": "CLI sign-in code",
+  "Код репозитория": "Repository code",
   "Код:": "Code:",
   "Команда проверяет два SHA-256 перед запуском. Проверяйте версию по составу сборки. Добавьте":
     "The command verifies both SHA-256 checksums before running. Check the release contents and add",
   "Комментарии:": "Comments:",
   Коммит: "Commit",
-  "Коммит GitLab": "GitLab commit",
+  "Коммит репозитория": "Repository commit",
   "Коммиты, указанные агентом:": "Agent-reported commits:",
   Контекст: "Context",
   "Контекст источника": "Source context",
@@ -334,8 +339,8 @@ export const english: Readonly<Record<string, string>> = {
   "Например, обновление токена доступа": "For example, refresh access token",
   "Настраивать интеграции проекта": "Configure project integrations",
   "Настроенный issuer": "Configured issuer",
-  "Настроить GitLab": "Connect GitLab",
   "Настроить Tasktopia": "Connect Tasktopia",
+  "Настроить {0}": "Configure {0}",
   Настройки: "Settings",
   "Настройки проекта": "Project settings",
   Начало: "Started",
@@ -367,7 +372,7 @@ export const english: Readonly<Record<string, string>> = {
   "Нет доступных проектов": "No available projects",
   "Нет зарегистрированной ошибки": "No error recorded",
   "Нет наблюдаемого SHA": "No observed SHA",
-  "Нет подтверждения GitLab": "Not verified by GitLab",
+  "Нет подтверждения провайдера": "Not verified by provider",
   "Нет проектов": "No projects",
   "Нет разрешения на данные задачи": "No task data access",
   "Новая OIDC-привязка": "New sign-in binding",
@@ -393,8 +398,8 @@ export const english: Readonly<Record<string, string>> = {
   "Обновить источники": "Refresh sources",
   "Обновить контекст": "Refresh context",
   "Обновить проект": "Refresh project",
-  "Обновить состояние GitLab": "Refresh GitLab status",
   "Обновить состояние Tasktopia": "Refresh Tasktopia status",
+  "Обновить состояние {0}": "Refresh {0} status",
   "Обновить список ключей": "Refresh keys",
   "Обновить участников": "Refresh members",
   "Обновить учётные записи": "Refresh accounts",
@@ -432,17 +437,16 @@ export const english: Readonly<Record<string, string>> = {
   "Отклонить запрос CLI…": "Deny CLI request…",
   "Отклонить запрос терминала?": "Deny terminal request?",
   Отключено: "Disconnected",
-  "Отключить GitLab": "Disconnect GitLab",
-  "Отключить GitLab?": "Disconnect GitLab?",
   "Отключить Tasktopia": "Disconnect Tasktopia",
   "Отключить Tasktopia?": "Disconnect Tasktopia?",
+  "Отключить {0}": "Disconnect {0}",
+  "Отключить {0}?": "Disconnect {0}?",
   Откройте: "Open",
   "Откройте источник": "Open a source",
   "Откройте результат поиска, чтобы увидеть точную версию источника, связанные коммиты и задачи.":
     "Open a result to see the source version, linked commits and tasks.",
   "Откройте фрагмент": "Open a fragment",
   Открыто: "Open",
-  "Открыть в GitLab": "Open in GitLab",
   "Открыть в Tasktopia": "Open in Tasktopia",
   "Открыть задачу из привязки агента": "Open agent-linked task",
   "Открыть контекст MR": "Open MR context",
@@ -450,6 +454,7 @@ export const english: Readonly<Record<string, string>> = {
   "Открыть окно": "Open window",
   "Открыть проект": "Open project",
   "Открыть ревизию": "Open revision",
+  "Открыть у провайдера": "Open at provider",
   Отмена: "Cancel",
   "Отменить настройку": "Cancel setup",
   Отозван: "Revoked",
@@ -491,22 +496,24 @@ export const english: Readonly<Record<string, string>> = {
   "Подтверждение входа CLI": "CLI sign-in confirmation",
   "Подтверждение принято. Проверьте завершение входа в терминале.":
     "Approved. Check that sign-in completes in your terminal.",
-  "Подтверждено GitLab:": "Confirmed by GitLab:",
   "Подтверждено коммитов: {0}": "Confirmed commits: {0}",
-  "Подтверждён GitLab": "Verified by GitLab",
+  "Подтверждено провайдером:": "Confirmed by provider:",
+  "Подтверждён провайдером": "Verified by provider",
   "Подтверждённое членство указанного коммита":
     "Verified membership of the selected commit",
   "Подтверждённые коммиты связанного потока сессии":
     "Verified commits in the linked session stream",
   "Подтверждённые результирующие SHA": "Verified resulting SHAs",
+  "Подтверждённых связей с MR/PR пока нет. Проверьте состояние синхронизации репозитория.":
+    "No verified MR/PR links yet. Check repository synchronization status.",
   "Подходящих наблюдений CI нет. Успешная проверка не предполагается.":
     "No matching CI records. A successful check cannot be assumed.",
   "Подходящих наблюдений deployment нет.": "No matching deployment records.",
   "Подходящих принятых окон пока нет.": "No matching accepted windows yet.",
   "Поиск и контекст через MCP": "Search and context through MCP",
   "Поиск по истории разработки": "Search development history",
-  "Показана часть CI. Откройте MR в GitLab для полного списка.":
-    "Some CI records are omitted. Open the MR in GitLab for the complete list.",
+  "Показана часть CI. Полный список доступен у провайдера.":
+    "Some CI observations are shown. The full list is available at the provider.",
   "Показана часть deployment.": "Some deployment records are omitted.",
   "Показана часть подтверждённых SHA. Полная запись доступна в деталях сессии.":
     "Some verified SHAs are omitted. Open the session record for the full list.",
@@ -534,7 +541,7 @@ export const english: Readonly<Record<string, string>> = {
   "Последняя ревизия": "Latest revision",
   "Последняя сверка": "Last sync",
   "Последняя сохранённая версия": "Latest saved version",
-  "Потоки синхронизации GitLab": "GitLab sync streams",
+  "Потоки синхронизации {0}": "{0} synchronization streams",
   "Права и срок ключа ограничены текущей сессией. Выход завершит работу выданных через неё ключей.":
     "Key permissions and lifetime are limited by this session. Signing out revokes keys issued through it.",
   "Предыдущие диапазоны": "Previous ranges",
@@ -552,11 +559,12 @@ export const english: Readonly<Record<string, string>> = {
   "Пример: задача, сессия агента, коммит и merge request связаны между собой":
     "Example: a task, agent session, commit and merge request linked together",
   "Пример: работа над входом": "Example: updating sign-in",
-  "Проверен blob GitLab": "Verified GitLab blob",
-  "Проверить и сохранить GitLab": "Verify and save GitLab",
+  "Проверен Git blob": "Verified Git blob",
   "Проверить и сохранить Tasktopia": "Verify and save Tasktopia",
+  "Проверить и сохранить {0}": "Verify and save {0}",
   "Проверить сбор и повторить доставку": "Check collection and retry delivery",
   "Проверка вебхука": "Webhook verification",
+  "Проверки CI": "CI checks",
   "Проверьте введённые данные и параметры запроса.":
     "Check the entered details and request parameters.",
   "Проверьте выбранный вид, фильтр и состояние интеграций.":
@@ -566,16 +574,17 @@ export const english: Readonly<Record<string, string>> = {
   "Проверяем доступ и ищем источники…": "Checking access and searching…",
   Проект: "Project",
   "Проект GitLab": "GitLab project",
-  "Проект источника GitLab": "Source GitLab project",
   "Проект создан.": "Project created.",
   Проекты: "Projects",
   "Происхождение импорта": "Import provenance",
   Прочитано: "Read",
+  "Публичный доступ": "Public access",
   "Пустой список не означает отсутствие работы во внешнем сервисе.":
     "An empty list does not prove there is no work in the external service.",
   "Пути, указанные агентом:": "Agent-reported paths:",
   Работа: "Work",
   "Рабочие источники": "Work sources",
+  Развёртывания: "Deployments",
   Разделы: "Sections",
   "Разделы проекта": "Project sections",
   "Разрешения нового ключа": "New key permissions",
@@ -594,8 +603,9 @@ export const english: Readonly<Record<string, string>> = {
   Репозитории: "Repositories",
   "Репозитории ещё не зарегистрированы": "No repositories added yet",
   Репозиторий: "Repository",
-  "Репозиторий зарегистрирован. Теперь настройте соединение GitLab.":
-    "Repository added. Connect GitLab in project settings.",
+  "Репозиторий GitHub": "GitHub repository",
+  "Репозиторий зарегистрирован. Настройте соединение в настройках проекта.":
+    "Repository registered. Configure its connection in project settings.",
   "Репозиторий интеграции": "Integration repository",
   "Репозиторий источника": "Source repository",
   Родитель: "Parent",
@@ -648,8 +658,8 @@ export const english: Readonly<Record<string, string>> = {
   "Сессия:": "Session:",
   "Символы {0}–{1}": "Characters {0}–{1}",
   Синхронизация: "Sync",
-  "Синхронизация коммитов, merge requests и CI.":
-    "Sync commits, merge requests and CI.",
+  "Синхронизация коммитов, MR/PR и проверок CI.":
+    "Sync commits, merge/pull requests and CI checks.",
   "Синхронизация работает автоматически. Вебхуки ускоряют обновления.":
     "Synchronization runs automatically. Webhooks speed up updates.",
   "Система компьютера разработчика": "Your computer",
@@ -683,12 +693,15 @@ export const english: Readonly<Record<string, string>> = {
   "Собираем доступные наблюдения…": "Loading available source data…",
   "Совпадает с наблюдаемым head.": "Matches the observed head.",
   "Совпадений пока нет": "No matches yet",
-  "Соединение GitLab ещё не настроено.": "GitLab is not connected yet.",
-  "Соединение GitLab сохранено после проверки доступа.":
-    "GitLab connection verified and saved.",
   "Соединение Tasktopia сохранено после проверки страны.":
     "Tasktopia country verified and connection saved.",
+  "Соединение {0} ещё не настроено.":
+    "The {0} connection is not configured yet.",
   "Соединение включено": "Connected",
+  "Соединение отключено. Сохранённые ключи удалены.":
+    "Connection disconnected. Saved keys were deleted.",
+  "Соединение сохранено после проверки доступа.":
+    "Connection saved after verifying access.",
   "Создайте в GitLab токен с ограниченным сроком и правами":
     "Create a GitLab token with an expiry date and permissions",
   "Создайте привязку, чтобы пользователь мог войти через организацию.":
@@ -717,10 +730,12 @@ export const english: Readonly<Record<string, string>> = {
     "The list does not match the selected scope.",
   "Список прочитан": "List retrieved",
   "Список пуст": "No keys",
+  "Способ доступа": "Access method",
   "Срок в минутах": "Lifetime in minutes",
   "Срок ключа": "Key lifetime",
   "Ссылка на код": "Code reference",
   "Ссылка на предыдущую ревизию:": "Previous revision reference:",
+  "Ссылка на репозиторий GitHub": "GitHub repository URL",
   "Старые ключи, сессии и полномочия оператора не восстанавливаются.":
     "Previous keys, sessions and administrator permissions are not restored.",
   "Статус, офлайн-очередь и отключение": "Status, offline queue and collection",
@@ -736,6 +751,7 @@ export const english: Readonly<Record<string, string>> = {
   "Текущее подключение завершится.": "Your current connection will end.",
   "Терминал получит перечисленные права на указанный срок. Ключ останется отдельным от браузерной сессии.":
     "The terminal will receive these permissions for the stated lifetime, independently of your browser session.",
+  "Токен чтения": "Read token",
   "Только API, без вебхуков": "API only, without webhooks",
   "Только API, вебхуки отключены": "API only; webhooks disabled",
   "Только доступ к каталогу": "Catalog access only",
@@ -755,10 +771,12 @@ export const english: Readonly<Record<string, string>> = {
   "Удалить проект и его данные": "Delete project and data",
   "Удалить репозиторий": "Delete repository",
   "Удалить учётную запись": "Delete account",
-  "Удаляет связанные данные Gitmora. GitLab и Tasktopia сохраняют свои репозитории и задачи.":
-    "Deletes this project's Gitmora data. GitLab repositories and Tasktopia tasks are retained.",
+  "Удаляет связанные данные Gitmora. Репозитории и задачи во внешних сервисах сохраняются.":
+    "Deletes related Gitmora data. Repositories and tasks in external services are retained.",
   "Укажите постоянный subject пользователя в провайдере входа. Исправить ошибочную привязку можно, отключив её и создав новую.":
     "Use the user's permanent provider subject. To fix an incorrect binding, disable it and create a new one.",
+  "Укажите ссылку на публичный репозиторий. Gitmora проверит его и определит ID автоматически.":
+    "Enter a public repository URL. Gitmora will verify it and resolve its ID automatically.",
   "Управлять каталогом проекта": "Manage the project catalog",
   "Управлять своими ключами": "Manage your keys",
   "Управлять установкой при наличии роли оператора":
@@ -780,6 +798,7 @@ export const english: Readonly<Record<string, string>> = {
   "Фрагмент источника": "Source fragment",
   "Фрагмент прочитан до конца": "End of fragment",
   "Фрагменты:": "Fragments:",
+  "Хостинг репозитория": "Repository host",
   "Цепочка точных родительских ссылок проверена.":
     "The exact parent-reference chain is verified.",
   "Цитаты контекста": "Context fragments",
@@ -791,21 +810,23 @@ export const english: Readonly<Record<string, string>> = {
   "Числовой ID проекта GitLab": "GitLab project ID",
   "Читаем доступные источники…": "Loading available sources…",
   "Читаем запись сессии…": "Loading session…",
-  "Читаем состояние GitLab…": "Loading GitLab status…",
   "Читаем состояние Tasktopia…": "Loading Tasktopia status…",
+  "Читаем состояние {0}…": "Reading {0} status…",
   "Читаем условия подключения…": "Loading connection details…",
   "Читать доступные проекты и репозитории":
     "Read available projects and repositories",
-  "Читать задачи и данные GitLab": "Read tasks and GitLab data",
+  "Читать задачи и данные репозиториев": "Read tasks and repository data",
   "Читать интеграции и внешние источники":
     "Read integrations and external sources",
   "Читать каталог и участников": "Read the catalog and members",
+  "Читать публичный репозиторий без токена":
+    "Read the public repository without a token",
   "Читать сессии агента": "Read agent sessions",
   "Членство исходных коммитов:": "Source commit membership:",
   Чтение: "Read only",
   "Чтение проекта": "Project reader",
-  "Это ссылки из записи агента; наличие файла в GitLab проверяется отдельно.":
-    "These paths come from the agent record. File existence is checked against GitLab separately.",
+  "Это пути из записи агента; наличие файла в репозитории проверяется отдельно.":
+    "These are paths from the agent record; file existence in the repository is checked separately.",
   "Этот запрос уже завершён. Новый вход начинается в терминале.":
     "This request has ended. Start a new sign-in from your terminal.",
   "Этот идентификатор уже удалён. Создайте новую запись.":
@@ -816,7 +837,7 @@ export const english: Readonly<Record<string, string>> = {
     "This key does not add project memberships or change your role.",
   "Этот раздел доступен администраторам Gitmora.":
     "This area is available to Gitmora administrators.",
-  "Явно выбранный MR GitLab": "Explicitly selected GitLab MR",
+  "Явно выбранный MR/PR": "Explicitly selected MR/PR",
   "Явные привязки внешней идентичности к существующей локальной учётной записи.":
     "Link provider identities to existing Gitmora accounts.",
   Язык: "Language",

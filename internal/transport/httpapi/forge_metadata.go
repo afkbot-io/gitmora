@@ -61,49 +61,50 @@ func registerForgeMetadata(mux *http.ServeMux, config Config) {
 			next(w, r, p)
 		})
 	}
-	root := "/v1/repositories/{repository}/gitlab"
-	mux.HandleFunc("GET "+root+"/merge-requests/{iid}", read(func(w http.ResponseWriter, r *http.Request, p access.Principal) {
-		query, err := metadataQuery(r, true)
-		if err != nil {
-			writeError(w, 400, "invalid_request", "Invalid metadata query")
-			return
-		}
-		query.IID, err = strconv.ParseInt(r.PathValue("iid"), 10, 64)
-		if err != nil || query.IID < 1 {
-			writeError(w, 400, "invalid_request", "Invalid merge request IID")
-			return
-		}
-		result, err := config.Forge.MergeRequest(r.Context(), p.UserID, r.PathValue("repository"), query)
-		if err != nil {
-			forgeError(w, err)
-			return
-		}
-		writeJSON(w, 200, result)
-	}))
-	mux.HandleFunc("GET "+root+"/pipelines", read(func(w http.ResponseWriter, r *http.Request, p access.Principal) {
-		query, err := metadataQuery(r, false)
-		if err != nil {
-			writeError(w, 400, "invalid_request", "Invalid metadata query")
-			return
-		}
-		result, err := config.Forge.Pipelines(r.Context(), p.UserID, r.PathValue("repository"), query)
-		if err != nil {
-			forgeError(w, err)
-			return
-		}
-		writeJSON(w, 200, result)
-	}))
-	mux.HandleFunc("GET "+root+"/deployments", read(func(w http.ResponseWriter, r *http.Request, p access.Principal) {
-		query, err := metadataQuery(r, false)
-		if err != nil {
-			writeError(w, 400, "invalid_request", "Invalid metadata query")
-			return
-		}
-		result, err := config.Forge.Deployments(r.Context(), p.UserID, r.PathValue("repository"), query)
-		if err != nil {
-			forgeError(w, err)
-			return
-		}
-		writeJSON(w, 200, result)
-	}))
+	for _, root := range []string{"/v1/repositories/{repository}/gitlab", "/v1/repositories/{repository}/forge"} {
+		mux.HandleFunc("GET "+root+"/merge-requests/{iid}", read(func(w http.ResponseWriter, r *http.Request, p access.Principal) {
+			query, err := metadataQuery(r, true)
+			if err != nil {
+				writeError(w, 400, "invalid_request", "Invalid metadata query")
+				return
+			}
+			query.IID, err = strconv.ParseInt(r.PathValue("iid"), 10, 64)
+			if err != nil || query.IID < 1 {
+				writeError(w, 400, "invalid_request", "Invalid merge request IID")
+				return
+			}
+			result, err := config.Forge.MergeRequest(r.Context(), p.UserID, r.PathValue("repository"), query)
+			if err != nil {
+				forgeError(w, err)
+				return
+			}
+			writeJSON(w, 200, result)
+		}))
+		mux.HandleFunc("GET "+root+"/pipelines", read(func(w http.ResponseWriter, r *http.Request, p access.Principal) {
+			query, err := metadataQuery(r, false)
+			if err != nil {
+				writeError(w, 400, "invalid_request", "Invalid metadata query")
+				return
+			}
+			result, err := config.Forge.Pipelines(r.Context(), p.UserID, r.PathValue("repository"), query)
+			if err != nil {
+				forgeError(w, err)
+				return
+			}
+			writeJSON(w, 200, result)
+		}))
+		mux.HandleFunc("GET "+root+"/deployments", read(func(w http.ResponseWriter, r *http.Request, p access.Principal) {
+			query, err := metadataQuery(r, false)
+			if err != nil {
+				writeError(w, 400, "invalid_request", "Invalid metadata query")
+				return
+			}
+			result, err := config.Forge.Deployments(r.Context(), p.UserID, r.PathValue("repository"), query)
+			if err != nil {
+				forgeError(w, err)
+				return
+			}
+			writeJSON(w, 200, result)
+		}))
+	}
 }

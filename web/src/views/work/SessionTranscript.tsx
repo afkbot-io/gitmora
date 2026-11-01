@@ -181,8 +181,8 @@ export function SessionTranscript({
                   </button>
                   <span className="small text-sm">
                     {value.confirmed_commits.includes(sha)
-                      ? translate("Подтверждён GitLab")
-                      : translate("Нет подтверждения GitLab")}
+                      ? translate("Подтверждён провайдером")
+                      : translate("Нет подтверждения провайдера")}
                   </span>
                 </li>
               ))}
@@ -194,7 +194,7 @@ export function SessionTranscript({
             </summary>
             <p className="small muted text-muted text-sm">
               {translate(
-                "Это ссылки из записи агента; наличие файла в GitLab проверяется отдельно.",
+                "Это пути из записи агента; наличие файла в репозитории проверяется отдельно.",
               )}
             </p>
             <ul>

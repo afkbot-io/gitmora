@@ -150,7 +150,7 @@ func (s *Service) Login(ctx context.Context, options LoginOptions, prompt func(P
 	if r.Secret == "" {
 		label := options.Label
 		if label == "" {
-			label = "Workgraph CLI"
+			label = "Gitmora CLI"
 		}
 		scopes := options.Scopes
 		if scopes == nil {
@@ -237,7 +237,7 @@ func ValidateLoginOptions(o LoginOptions) error {
 	// Validate all requested authority/label before opening the system store, using no device secret.
 	label := o.Label
 	if label == "" {
-		label = "Workgraph CLI"
+		label = "Gitmora CLI"
 	}
 	scopes := o.Scopes
 	if scopes == nil {

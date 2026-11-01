@@ -34,6 +34,15 @@ type Repository struct {
 	ID        string
 	BaseURL   string
 	ProjectID int64
+	Provider  string
+}
+
+// CredentialScope keeps existing GitLab envelopes compatible and isolates GitHub credentials.
+func (r Repository) CredentialScope() string {
+	if r.Provider == "github" {
+		return "github:" + r.ID
+	}
+	return "gitlab:" + r.ID
 }
 
 // Secrets is encrypted as one scoped envelope and is never returned by read endpoints.
@@ -42,10 +51,17 @@ type Secrets struct {
 	WebhookMode  string `json:"webhook_mode,omitempty"`
 	SigningToken string `json:"webhook_signing_token,omitempty"`
 	LegacyToken  string `json:"legacy_webhook_token,omitempty"`
+	Anonymous    bool   `json:"anonymous,omitempty"`
 }
 
 // Validate rejects ambiguous authentication modes and header-unsafe or weak key material.
 func (s Secrets) Validate() error {
+	if s.Anonymous {
+		if s.APIToken != "" || s.WebhookMode != "disabled" || s.SigningToken != "" || s.LegacyToken != "" {
+			return ErrInvalid
+		}
+		return nil
+	}
 	if !token(s.APIToken, 8, 4096) {
 		return ErrInvalid
 	}
@@ -63,6 +79,23 @@ func (s Secrets) Validate() error {
 			return err
 		}
 	} else if !token(s.LegacyToken, 16, 256) {
+		return ErrInvalid
+	}
+	return nil
+}
+
+// ValidateForProvider never treats an absent private token as a public fallback.
+func (s Secrets) ValidateForProvider(provider string) error {
+	if s.Validate() != nil {
+		return ErrInvalid
+	}
+	if provider == "github" {
+		if s.Mode() != "disabled" {
+			return ErrInvalid
+		}
+		return nil
+	}
+	if provider != "" || s.Anonymous {
 		return ErrInvalid
 	}
 	return nil

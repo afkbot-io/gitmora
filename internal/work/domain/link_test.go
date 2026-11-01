@@ -32,3 +32,17 @@ func TestLinkReadbackRecognizesTasktopiaURLSerialization(t *testing.T) {
 		t.Fatal("escaped reserved separator was treated as an identical link")
 	}
 }
+
+func TestGitHubPullRequestLinkKeepsExactRepositoryAndNumber(t *testing.T) {
+	repo := "11111111-1111-4111-8111-111111111111"
+	base := "https://github.com/example/project"
+	link, err := domain.NewMRLink(repo, base, 42, 7, base+"/pull/7")
+	if err != nil || link.Validate() != nil || link.Title != "GitHub PR #7" {
+		t.Fatal(link, err)
+	}
+	for _, target := range []string{base + "/pull/8", base + "/pull/7?token=secret", base + "/pull/7#comment", "https://github.com/other/project/pull/7", base + "/-/merge_requests/7"} {
+		if _, err := domain.NewMRLink(repo, base, 42, 7, target); err == nil {
+			t.Fatal("foreign or ambiguous PR link accepted", target)
+		}
+	}
+}

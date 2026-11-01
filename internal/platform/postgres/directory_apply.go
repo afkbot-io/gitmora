@@ -210,7 +210,11 @@ func directoryChangeRepository(ctx context.Context, tx pgx.Tx, c domain.Command,
 		if e := directoryReserve(ctx, tx, "repository", c.EntityID); e != nil {
 			return e
 		}
-		if e := tx.QueryRow(ctx, `INSERT INTO repositories(id,project_id,name,gitlab_url,gitlab_project_id)VALUES($1,$2,$3,$4,$5)RETURNING version`, c.EntityID, c.ProjectID, *c.Name, c.GitLabURL, c.GitLabProjectID).Scan(&r.Version); e != nil {
+		base, providerID := c.GitLabURL, c.GitLabProjectID
+		if c.Provider == "github" {
+			base, providerID = c.ProviderURL, c.ProviderRepositoryID
+		}
+		if e := tx.QueryRow(ctx, `INSERT INTO repositories(id,project_id,name,gitlab_url,gitlab_project_id,provider)VALUES($1,$2,$3,$4,$5,$6)RETURNING version`, c.EntityID, c.ProjectID, *c.Name, base, providerID, c.Provider).Scan(&r.Version); e != nil {
 			return e
 		}
 	} else {

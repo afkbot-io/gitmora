@@ -1,9 +1,18 @@
 import { t as translate } from "../domain/locale.js";
 import { buttonStyles, sharedStyles } from "./ui.js";
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { FormEvent } from "react";
-import type { Me, Project, Repository } from "../domain/context.js";
-import { safeExternalURL } from "../domain/context.js";
+import type {
+  Me,
+  Project,
+  Repository,
+  ResolvedRepository,
+} from "../domain/context.js";
+import {
+  safeExternalURL,
+  repositoryURL,
+  repositoryProviderID,
+} from "../domain/context.js";
 import {
   capabilities,
   providerLabel,
@@ -176,7 +185,7 @@ export function RepositoryCatalog({
       {repositories.length === 0 && (
         <Empty title={translate("Репозитории ещё не зарегистрированы")}>
           {translate(
-            "Зарегистрируйте репозиторий, затем подключите GitLab в настройках проекта.",
+            "Зарегистрируйте репозиторий, затем настройте соединение в настройках проекта.",
           )}
         </Empty>
       )}
@@ -202,9 +211,13 @@ function RepositoryCreate({
   project: Project;
   onSaved: () => Promise<void>;
 }) {
+  const hostID = useId();
   const [name, setName] = useState("");
   const [url, setURL] = useState("");
   const [provider, setProvider] = useState("");
+  const [host, setHost] = useState<"gitlab" | "github">("gitlab");
+  const [resolved, setResolved] = useState<ResolvedRepository | null>(null);
+  const lookup = useMutation(client);
   const [id, setID] = useState(() => crypto.randomUUID());
   const [error, setError] = useState("");
   const action = useMutation(client);
@@ -212,19 +225,47 @@ function RepositoryCreate({
     event.preventDefault();
     setError("");
     try {
-      const number = providerNumber(provider);
-      if (!safeExternalURL(url))
-        throw new Error(
-          "Введите полный HTTP(S)-адрес GitLab без учётных данных.",
-        );
+      let identity: Record<string, unknown>;
+      let repositoryName = name.trim();
+      if (host === "github") {
+        let value = resolved;
+        if (!value) {
+          const result = await lookup.run<ResolvedRepository>(
+            "POST",
+            `/v1/projects/${project.id}/repositories/lookup`,
+            { url: url.trim() },
+          );
+          if (!result) return;
+          value = result.value;
+          if (
+            value.provider !== "github" ||
+            !Number.isSafeInteger(value.provider_repository_id) ||
+            value.provider_repository_id < 1
+          )
+            throw new Error("ID вне точного диапазона браузера");
+          setResolved(value);
+        }
+        identity = {
+          provider: "github",
+          provider_url: value.provider_url,
+          provider_repository_id: value.provider_repository_id,
+        };
+        if (!repositoryName) repositoryName = value.name;
+      } else {
+        const number = providerNumber(provider);
+        if (!safeExternalURL(url))
+          throw new Error(
+            "Введите полный HTTP(S)-адрес GitLab без учётных данных.",
+          );
+        identity = { gitlab_url: url.trim(), gitlab_project_id: number };
+      }
       const saved = await action.run(
         "POST",
         `/v1/projects/${project.id}/repositories`,
         {
           id,
-          name: name.trim(),
-          gitlab_url: url.trim(),
-          gitlab_project_id: number,
+          name: repositoryName,
+          ...identity,
         },
         true,
       );
@@ -232,8 +273,9 @@ function RepositoryCreate({
         setID(crypto.randomUUID());
         setName("");
         setProvider("");
+        setResolved(null);
         action.setMessage(
-          "Репозиторий зарегистрирован. Теперь настройте соединение GitLab.",
+          "Репозиторий зарегистрирован. Настройте соединение в настройках проекта.",
         );
         await onSaved();
       }
@@ -243,48 +285,80 @@ function RepositoryCreate({
   }
   return (
     <MutationForm
-      pending={action.pending}
+      pending={action.pending || lookup.pending}
       className={sharedStyles.setup}
       onSubmit={(event) => void create(event)}
     >
       <h2>{translate("Новый репозиторий")}</h2>
+      <div className="mb-4">
+        <label htmlFor={hostID}>{translate("Хостинг репозитория")}</label>
+        <select
+          id={hostID}
+          value={host}
+          onChange={(event) => {
+            setHost(event.target.value as "gitlab" | "github");
+            setURL("");
+            setProvider("");
+            setResolved(null);
+          }}
+        >
+          <option value="gitlab">GitLab</option>
+          <option value="github">GitHub</option>
+        </select>
+      </div>
       <div className={sharedStyles.formGrid}>
         <label>
           {translate("Название репозитория")}
           <input
-            required
+            required={host === "gitlab"}
             maxLength={200}
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
         </label>
         <label>
-          {translate("Адрес сервера GitLab")}
+          {host === "github"
+            ? translate("Ссылка на репозиторий GitHub")
+            : translate("Адрес сервера GitLab")}
           <input
             type="url"
             required
             maxLength={2000}
-            placeholder="https://gitlab.internal"
+            placeholder={
+              host === "github"
+                ? "https://github.com/owner/repository"
+                : "https://gitlab.internal"
+            }
             value={url}
-            onChange={(e) => setURL(e.target.value)}
+            onChange={(e) => {
+              setURL(e.target.value);
+              setResolved(null);
+            }}
           />
         </label>
-        <label>
-          {translate("Числовой ID проекта GitLab")}
-          <input
-            inputMode="numeric"
-            required
-            value={provider}
-            onChange={(e) => setProvider(e.target.value)}
-          />
-        </label>
+        {host === "gitlab" && (
+          <label>
+            {translate("Числовой ID проекта GitLab")}
+            <input
+              inputMode="numeric"
+              required
+              value={provider}
+              onChange={(e) => setProvider(e.target.value)}
+            />
+          </label>
+        )}
       </div>
       <p className="field-help text-sm text-muted mx-0 mt-2 mb-5 leading-[1.5]">
-        {translate(
-          "ID указан в настройках проекта GitLab. Используйте адрес сервера без имени проекта. После создания изменить привязку нельзя.",
-        )}
+        {host === "github"
+          ? translate(
+              "Укажите ссылку на публичный репозиторий. Gitmora проверит его и определит ID автоматически.",
+            )
+          : translate(
+              "ID указан в настройках проекта GitLab. Используйте адрес сервера без имени проекта. После создания изменить привязку нельзя.",
+            )}
       </p>
       <ErrorNotice>{error}</ErrorNotice>
+      <MutationNotice action={lookup} />
       <MutationNotice action={action} />
       <button className={buttonStyles.primary} disabled={action.pending}>
         {translate("Зарегистрировать репозиторий")}
@@ -322,7 +396,8 @@ function RepositoryEntry({
       await onSaved();
     }
   }
-  const url = safeExternalURL(repository.gitlab_url);
+  const origin = repositoryURL(repository);
+  const url = safeExternalURL(origin);
   return (
     <article
       className={`
@@ -343,10 +418,10 @@ function RepositoryEntry({
           <p>
             {url ? (
               <a href={url} target="_blank" rel="noopener noreferrer">
-                {repository.gitlab_url}
+                {origin}
               </a>
             ) : (
-              translate("Адрес GitLab недоступен")
+              translate("Адрес репозитория недоступен")
             )}
           </p>
           <p className="mono muted text-muted font-mono text-xs wrap-anywhere">
@@ -354,9 +429,13 @@ function RepositoryEntry({
           </p>
         </div>
         <dl>
-          <dt>{translate("Проект GitLab")}</dt>
+          <dt>
+            {repository.provider === "github"
+              ? translate("Репозиторий GitHub")
+              : translate("Проект GitLab")}
+          </dt>
           <dd className="mono font-mono text-xs wrap-anywhere">
-            {providerLabel(repository.gitlab_project_id)}
+            {providerLabel(repositoryProviderID(repository))}
           </dd>
         </dl>
         {capabilities(me, project).catalog && (
@@ -399,7 +478,7 @@ function RepositoryEntry({
         >
           <p>
             {translate(
-              "Будут удалены запись репозитория и связанные локальные сессии, индексы и результаты. Репозиторий GitLab останется на сервере GitLab.",
+              "Будут удалены запись репозитория и связанные локальные сессии, индексы и результаты. Исходный репозиторий останется у вашего провайдера.",
             )}
           </p>
         </ConfirmAction>

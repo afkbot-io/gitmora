@@ -21,15 +21,39 @@ export interface Project {
   version: number;
   created_at: string;
 }
-export interface Repository {
+interface RepositoryMetadata {
   id: string;
   project_id: string;
   name: string;
-  gitlab_url: string;
-  gitlab_project_id: number;
   version: number;
   created_at: string;
 }
+export type Repository = RepositoryMetadata &
+  (
+    | { provider?: ""; gitlab_url: string; gitlab_project_id: number }
+    | {
+        provider: "github";
+        provider_url: string;
+        provider_repository_id: number;
+      }
+  );
+export interface ResolvedRepository {
+  provider: "github";
+  provider_url: string;
+  provider_repository_id: number;
+  name: string;
+}
+export function repositoryURL(repository: Repository): string {
+  return repository.provider === "github"
+    ? repository.provider_url
+    : repository.gitlab_url;
+}
+export function repositoryProviderID(repository: Repository): number {
+  return repository.provider === "github"
+    ? repository.provider_repository_id
+    : repository.gitlab_project_id;
+}
+
 export interface Page<T> {
   items: T[];
   next_id?: string;
@@ -96,7 +120,7 @@ export const sourceNames: Record<string, string> = {
   task: "Задача",
   document: "Документ задачи",
   code_reference: "Ссылка на код",
-  code: "Код GitLab",
+  code: "Код репозитория",
 };
 
 /** The server interprets a complete SHA as a confirmed-commit filter. */

@@ -1,5 +1,17 @@
 # Changes
 
+## 0.3.0
+
+- Standalone CLI 0.3.0 with corrected Gitmora command hints and four platform builds.
+- Faster lexical ranking by evaluating each distinct language query once, with existing source authorization preserved.
+
+- GitHub.com repository registration by public URL, explicit provider identity and read-only public/token connections.
+- Exact commit confirmation, hash-checked source files, guarded PR commit membership and Actions synchronization.
+- Provider-neutral connection API and workspace copy; existing GitLab paths and stored identities remain compatible.
+- Git-backed offline push/restart/search/MCP and signed desktop/mobile GitHub setup checks.
+- Bounded isolated load harness and clearer GitHub/install instructions.
+- Existing standalone CLI 0.2.0 remains supported; GitHub webhooks and Enterprise hosts are outside this release.
+
 ## 0.2.1
 
 - A compact public presentation and centered account forms.

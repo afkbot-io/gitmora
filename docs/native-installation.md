@@ -4,14 +4,14 @@ The current native client includes Codex/OpenCode adapters, native CLI API/MCP a
 
 ## Select and verify a release
 
-The selected installation publishes **0.2.0**: [release metadata](https://gitmora.tasktopia.online/downloads/cli/0.2.0/release.json) and [checksums](https://gitmora.tasktopia.online/downloads/cli/0.2.0/SHA256SUMS). Your installation can publish its own reviewed artifacts using the build procedure below. Versioned public artifacts live under `https://gitmora.tasktopia.online/downloads/cli/<release-version>/`. Each directory contains those two manifests and four standalone files:
+The selected installation publishes **0.3.0**: [release metadata](https://gitmora.tasktopia.online/downloads/cli/0.3.0/release.json) and [checksums](https://gitmora.tasktopia.online/downloads/cli/0.3.0/SHA256SUMS). Your installation can publish its own reviewed artifacts using the build procedure below. Versioned public artifacts live under `https://gitmora.tasktopia.online/downloads/cli/<release-version>/`. Each directory contains those two manifests and four standalone files:
 
 | Machine             | File                                                                                                        |
 | ------------------- | ----------------------------------------------------------------------------------------------------------- |
-| macOS Apple Silicon | [gitmora_darwin_arm64](https://gitmora.tasktopia.online/downloads/cli/0.2.0/gitmora_darwin_arm64) |
-| macOS Intel         | [gitmora_darwin_amd64](https://gitmora.tasktopia.online/downloads/cli/0.2.0/gitmora_darwin_amd64) |
-| Linux arm64         | [gitmora_linux_arm64](https://gitmora.tasktopia.online/downloads/cli/0.2.0/gitmora_linux_arm64)   |
-| Linux x86-64        | [gitmora_linux_amd64](https://gitmora.tasktopia.online/downloads/cli/0.2.0/gitmora_linux_amd64)   |
+| macOS Apple Silicon | [gitmora_darwin_arm64](https://gitmora.tasktopia.online/downloads/cli/0.3.0/gitmora_darwin_arm64) |
+| macOS Intel         | [gitmora_darwin_amd64](https://gitmora.tasktopia.online/downloads/cli/0.3.0/gitmora_darwin_amd64) |
+| Linux arm64         | [gitmora_linux_arm64](https://gitmora.tasktopia.online/downloads/cli/0.3.0/gitmora_linux_arm64)   |
+| Linux x86-64        | [gitmora_linux_amd64](https://gitmora.tasktopia.online/downloads/cli/0.3.0/gitmora_linux_amd64)   |
 
 Use a private new download directory. Download the selected executable, `release.json` and `SHA256SUMS` from the same reviewed versioned HTTPS path. Validate their exact named checksums **before** making the client executable or running it. macOS has `shasum -a 256 -c`; Linux normally has `sha256sum -c`. For Apple Silicon:
 
@@ -19,11 +19,11 @@ Use a private new download directory. Download the selected executable, `release
 gitmora_download_directory=$(mktemp -d)
 cd "$gitmora_download_directory"
 curl --proto '=https' --tlsv1.2 --fail --show-error --output gitmora_darwin_arm64 \
-  https://gitmora.tasktopia.online/downloads/cli/0.2.0/gitmora_darwin_arm64
+  https://gitmora.tasktopia.online/downloads/cli/0.3.0/gitmora_darwin_arm64
 curl --proto '=https' --tlsv1.2 --fail --show-error --output release.json \
-  https://gitmora.tasktopia.online/downloads/cli/0.2.0/release.json
+  https://gitmora.tasktopia.online/downloads/cli/0.3.0/release.json
 curl --proto '=https' --tlsv1.2 --fail --show-error --output SHA256SUMS \
-  https://gitmora.tasktopia.online/downloads/cli/0.2.0/SHA256SUMS
+  https://gitmora.tasktopia.online/downloads/cli/0.3.0/SHA256SUMS
 awk '$2 == "gitmora_darwin_arm64" {binary_count++; print} $2 == "release.json" {manifest_count++; print} END {if (binary_count != 1 || manifest_count != 1) exit 1}' SHA256SUMS > selected.sha256
 shasum -a 256 -c selected.sha256
 chmod 700 gitmora_darwin_arm64

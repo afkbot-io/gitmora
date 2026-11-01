@@ -27,6 +27,7 @@ import (
 	contextapp "workgraph.local/platform/internal/contextpack/application"
 	directoryapp "workgraph.local/platform/internal/directory/application"
 	forgeapp "workgraph.local/platform/internal/forge/application"
+	"workgraph.local/platform/internal/forge/github"
 	"workgraph.local/platform/internal/forge/gitlab"
 	identityapp "workgraph.local/platform/internal/identity/application"
 	identitydomain "workgraph.local/platform/internal/identity/domain"
@@ -270,8 +271,16 @@ func run(ctx context.Context, args []string, output io.Writer) error {
 			identityPort = identities
 			cliEnrollment = identityapp.NewCLIService(postgres.NewIdentityStore(pool), identities.Config())
 		}
+		githubClient, err := configuredGitHub()
+		if err != nil {
+			return err
+		}
+		directoryService := directoryapp.NewService(postgres.NewDirectoryStore(pool), time.Now)
+		if githubClient != nil {
+			directoryService.WithRepositoryResolver(githubClient)
+		}
 		retrievalService := retrievalapp.NewService(postgres.NewRetrievalStore(pool))
-		handler := httpapi.NewHandler(httpapi.Config{Captures: application.NewService(postgres.NewCaptureStore(pool)), Authenticator: postgres.NewCredentialStore(pool), Ready: func(ctx context.Context) error { return postgres.VerifySchema(ctx, pool) }, Forge: forgePort, Code: codePort, Work: workPort, Retrieval: retrievalService, ContextPacks: contextapp.NewService(postgres.NewContextStore(pool), retrievalService), ContextBrowser: contextapp.NewBrowser(postgres.NewContextStore(pool)), Directory: directoryapp.NewService(postgres.NewDirectoryStore(pool), time.Now), Identity: identityPort, CLIEnrollment: cliEnrollment, MCPAllowedOrigins: origins, WebUI: webui.Embedded()})
+		handler := httpapi.NewHandler(httpapi.Config{Captures: application.NewService(postgres.NewCaptureStore(pool)), Authenticator: postgres.NewCredentialStore(pool), Ready: func(ctx context.Context) error { return postgres.VerifySchema(ctx, pool) }, Forge: forgePort, Code: codePort, Work: workPort, Retrieval: retrievalService, ContextPacks: contextapp.NewService(postgres.NewContextStore(pool), retrievalService), ContextBrowser: contextapp.NewBrowser(postgres.NewContextStore(pool)), Directory: directoryService, Identity: identityPort, CLIEnrollment: cliEnrollment, MCPAllowedOrigins: origins, WebUI: webui.Embedded()})
 		return serve(ctx, listen, handler)
 	default:
 		return errors.New("unsupported command")
@@ -325,40 +334,73 @@ func identityService(ctx context.Context, pool *pgxpool.Pool) (*identityapp.Serv
 	return identityapp.NewService(store, provider, config, time.Now), nil
 }
 
+// configuredGitHub activates one fixed read-only API route; development overrides are loopback-only.
+func configuredGitHub() (*github.Client, error) {
+	enabled := os.Getenv("WORKGRAPH_GITHUB_ENABLED")
+	base := os.Getenv("WORKGRAPH_GITHUB_API_URL")
+	proxy := os.Getenv("WORKGRAPH_GITHUB_PROXY_URL")
+	if enabled != "true" {
+		if (enabled != "" && enabled != "false") || base != "" || proxy != "" {
+			return nil, errors.New("invalid GitHub configuration")
+		}
+		return nil, nil
+	}
+	if base == "" {
+		base = "https://api.github.com"
+	}
+	client, err := github.New(base, proxy)
+	if err != nil {
+		return nil, errors.New("invalid GitHub API or private proxy configuration")
+	}
+	return client, nil
+}
+
 func forgeServices(pool *pgxpool.Pool) (*forgeapp.Service, *forgeapp.CodeService, error) {
 	keys, err := runtimeconfig.Secret(runtimeconfig.EncryptionKeys)
 	if err != nil {
 		return nil, nil, err
 	}
 	keyring := keys.Reveal()
+	githubClient, err := configuredGitHub()
+	if err != nil {
+		return nil, nil, err
+	}
 	allowed := os.Getenv("WORKGRAPH_GITLAB_ALLOWLIST")
 	proxy := os.Getenv("WORKGRAPH_GITLAB_PROXY_URL")
 	if proxy != "" && allowed == "" {
 		return nil, nil, errors.New("allowed GitLab endpoints are required for the explicit proxy")
 	}
 	active := os.Getenv("WORKGRAPH_ENCRYPTION_ACTIVE_KEY")
-	if allowed == "" && os.Getenv("WORKGRAPH_TASKTOPIA_ALLOWLIST") != "" {
+	if allowed == "" && githubClient == nil && os.Getenv("WORKGRAPH_TASKTOPIA_ALLOWLIST") != "" {
 		return nil, nil, nil
 	}
-	if keyring == "" && allowed == "" && active == "" {
+	if keyring == "" && allowed == "" && active == "" && githubClient == nil {
 		return nil, nil, nil
 	}
-	if allowed == "" {
-		return nil, nil, errors.New("allowed GitLab endpoints are required")
+	if allowed == "" && githubClient == nil {
+		return nil, nil, errors.New("allowed forge endpoints are required")
 	}
 	box, err := configuredVault()
 	if err != nil {
 		return nil, nil, err
 	}
-	bases := strings.Split(allowed, ",")
-	for i := range bases {
-		bases[i] = strings.TrimSpace(bases[i])
+
+	providers := forgeapp.Providers{}
+	if allowed != "" {
+		bases := strings.Split(allowed, ",")
+		for i := range bases {
+			bases[i] = strings.TrimSpace(bases[i])
+		}
+		provider, err := gitlab.NewWithProxy(bases, proxy)
+		if err != nil {
+			return nil, nil, errors.New("invalid allowed GitLab endpoint or explicit proxy")
+		}
+		providers.GitLab = provider
 	}
-	provider, err := gitlab.NewWithProxy(bases, proxy)
-	if err != nil {
-		return nil, nil, errors.New("invalid allowed GitLab endpoint or explicit proxy")
+	if githubClient != nil {
+		providers.GitHub = githubClient
 	}
-	return forgeapp.NewService(postgres.NewForgeStore(pool), box, provider, time.Now), forgeapp.NewCodeService(postgres.NewForgeStore(pool), box, provider), nil
+	return forgeapp.NewService(postgres.NewForgeStore(pool), box, providers, time.Now), forgeapp.NewCodeService(postgres.NewForgeStore(pool), box, providers), nil
 }
 
 // reconciler is shared orchestration, while each bounded context retains its own durable leases.

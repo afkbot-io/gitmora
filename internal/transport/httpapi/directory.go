@@ -14,6 +14,7 @@ import (
 
 // DirectoryService exposes catalog/account metadata; content operations retain their own authorities.
 type DirectoryService interface {
+	LookupRepository(context.Context, access.Principal, string, string) (domain.ResolvedRepository, error)
 	Apply(context.Context, access.Principal, domain.Command) (domain.Receipt, bool, error)
 	Me(context.Context, access.Principal) (domain.Me, error)
 	Projects(context.Context, access.Principal, domain.Cursor) (domain.Page[domain.Project], error)
@@ -53,8 +54,11 @@ type directoryRename struct {
 }
 type directoryRepository struct {
 	directoryCreate
-	GitLabURL       string `json:"gitlab_url"`
-	GitLabProjectID int64  `json:"gitlab_project_id"`
+	GitLabURL            string `json:"gitlab_url"`
+	GitLabProjectID      int64  `json:"gitlab_project_id"`
+	Provider             string `json:"provider"`
+	ProviderURL          string `json:"provider_url"`
+	ProviderRepositoryID int64  `json:"provider_repository_id"`
 }
 type directoryUserCreate struct {
 	RequestID   string  `json:"request_id"`
@@ -224,7 +228,30 @@ func registerDirectory(mux *http.ServeMux, c Config) {
 		return domain.Command{RequestID: i.RequestID, Action: domain.DeleteProject, EntityID: r.PathValue("project"), ExpectedVersion: i.ExpectedVersion}
 	}))
 	mux.HandleFunc("POST /v1/projects/{project}/repositories", directoryMutation(c, func(r *http.Request, i directoryRepository) domain.Command {
-		return domain.Command{RequestID: i.RequestID, Action: domain.CreateRepository, ProjectID: r.PathValue("project"), EntityID: i.ID, Name: i.Name, GitLabURL: i.GitLabURL, GitLabProjectID: i.GitLabProjectID}
+		return domain.Command{RequestID: i.RequestID, Action: domain.CreateRepository, ProjectID: r.PathValue("project"), EntityID: i.ID, Name: i.Name, GitLabURL: i.GitLabURL, GitLabProjectID: i.GitLabProjectID, Provider: i.Provider, ProviderURL: i.ProviderURL, ProviderRepositoryID: i.ProviderRepositoryID}
+	}))
+	mux.HandleFunc("POST /v1/projects/{project}/repositories/lookup", directoryAuthorized(c, func(w http.ResponseWriter, r *http.Request, p access.Principal) {
+		if r.URL.RawQuery != "" {
+			directoryError(w, domain.ErrInvalid)
+			return
+		}
+		raw, ok := forgeBody(w, r, 4096)
+		if !ok {
+			return
+		}
+		var input struct {
+			URL string `json:"url"`
+		}
+		if jsonwire.DecodeObject(raw, &input) != nil {
+			directoryError(w, domain.ErrInvalid)
+			return
+		}
+		result, err := c.Directory.LookupRepository(r.Context(), p, r.PathValue("project"), input.URL)
+		if err != nil {
+			directoryError(w, err)
+			return
+		}
+		writeJSON(w, 200, result)
 	}))
 	mux.HandleFunc("PATCH /v1/projects/{project}/repositories/{repository}", directoryMutation(c, func(r *http.Request, i directoryRename) domain.Command {
 		return domain.Command{RequestID: i.RequestID, Action: domain.RenameRepository, ProjectID: r.PathValue("project"), EntityID: r.PathValue("repository"), ExpectedVersion: i.ExpectedVersion, Name: i.Name}
@@ -284,6 +311,8 @@ func registerDirectory(mux *http.ServeMux, c Config) {
 
 func directoryError(w http.ResponseWriter, e error) {
 	switch {
+	case errors.Is(e, domain.ErrProviderUnavailable):
+		writeError(w, 503, "repository_lookup_unavailable", "Repository lookup is unavailable")
 	case errors.Is(e, domain.ErrInvalid):
 		writeError(w, 422, "invalid_directory_request", "Invalid directory input or pagination")
 	case errors.Is(e, domain.ErrNotFound):

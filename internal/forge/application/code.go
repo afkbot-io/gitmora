@@ -133,9 +133,9 @@ func (s *CodeService) ReconcileOnce(parent context.Context) (bool, error) {
 	ctx, cancel := context.WithTimeout(parent, 40*time.Second)
 	defer cancel()
 	out := CodeOutcome{}
-	raw, e := s.vault.Open("gitlab:"+work.Repository.ID, work.Envelope)
+	raw, e := s.vault.Open(work.Repository.CredentialScope(), work.Envelope)
 	var secrets domain.Secrets
-	if e != nil || json.Unmarshal(raw, &secrets) != nil || secrets.Validate() != nil {
+	if e != nil || json.Unmarshal(raw, &secrets) != nil || secrets.ValidateForProvider(work.Repository.Provider) != nil {
 		out.Code = "credential_unavailable"
 		out.Blocked = true
 	} else {

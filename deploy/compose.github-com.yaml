@@ -1,0 +1,40 @@
+# Explicit GitHub.com channel. API/worker retain their internal network; only the credential-free relay has egress.
+services:
+  api:
+    environment:
+      WORKGRAPH_GITHUB_ENABLED: "true"
+      WORKGRAPH_GITHUB_PROXY_URL: http://github-egress:8080
+    depends_on:
+      github-egress: {condition: service_healthy}
+  worker:
+    environment:
+      WORKGRAPH_GITHUB_ENABLED: "true"
+      WORKGRAPH_GITHUB_PROXY_URL: http://github-egress:8080
+    depends_on:
+      github-egress: {condition: service_healthy}
+  github-egress:
+    image: ${WORKGRAPH_IMAGE:-gitmora:local}
+    command: [egress, --listen, "0.0.0.0:8080", --target, "api.github.com:443"]
+    user: "65532:65532"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=16m,mode=1777"]
+    networks: [private, github_outbound]
+    pids_limit: 128
+    mem_limit: 128m
+    cpus: 0.5
+    stop_grace_period: 10s
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, /gitmorad, healthcheck]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+
+networks:
+  github_outbound:

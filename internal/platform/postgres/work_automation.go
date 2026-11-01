@@ -24,7 +24,7 @@ func wakeTaskDiscovery(ctx context.Context, tx pgx.Tx, repository string) error 
 // workMRMatches deliberately checks full source-project scope, current guarded membership and
 // current repository authority before a task/MR association can cause an outbound operation.
 const workMRMatches = `WITH bound AS (
- SELECT b.task_id,b.repository_id AS source_repository_id,b.session_id,rc.revision,cr.digest AS capture_digest,rc.sha,sr.gitlab_url,sr.gitlab_project_id AS source_project_id
+ SELECT b.task_id,b.repository_id AS source_repository_id,b.session_id,rc.revision,cr.digest AS capture_digest,rc.sha,sr.gitlab_url,sr.provider,sr.gitlab_project_id AS source_project_id
  FROM work_capture_bindings b JOIN repositories sr ON sr.id=b.repository_id
  JOIN capture_revision_commits rc ON rc.repository_id=b.repository_id AND rc.session_id=b.session_id
  JOIN capture_revisions cr ON cr.repository_id=rc.repository_id AND cr.session_id=rc.session_id AND cr.revision=rc.revision
@@ -33,7 +33,7 @@ const workMRMatches = `WITH bound AS (
  WHERE sr.project_id=$1 AND b.country_id=$2 AND ($3::text='' OR b.task_id::text=$3)
 ), matches AS (
  SELECT b.*,tr.id AS target_repository_id,tr.gitlab_url AS base_url,tr.gitlab_project_id AS provider_id,o.iid,o.model->>'url' AS url,o.digest AS mr_digest,o.code_key
- FROM bound b JOIN repositories tr ON tr.project_id=$1 AND tr.gitlab_url=b.gitlab_url
+ FROM bound b JOIN repositories tr ON tr.project_id=$1 AND tr.provider=b.provider AND (tr.provider='github' OR tr.gitlab_url=b.gitlab_url)
  JOIN forge_connections fc ON fc.repository_id=tr.id AND fc.enabled AND NOT fc.blocked AND fc.last_synced_at>now()-interval '10 minutes'
  JOIN forge_merge_requests m ON m.repository_id=tr.id AND m.available
  JOIN forge_mr_observations o ON o.repository_id=m.repository_id AND o.iid=m.iid AND o.digest=m.digest AND o.model->>'project_id'=tr.gitlab_project_id::text
@@ -46,19 +46,6 @@ const workMRMatches = `WITH bound AS (
  FROM matches m WHERE true `
 const workMRMatchOrder = ` ORDER BY m.task_id,m.target_repository_id,m.iid,m.url,m.revision DESC,m.source_repository_id,m.session_id,m.sha LIMIT 100`
 
-type linkMatch struct {
-	TaskID   string
-	Link     domain.MRLink
-	Evidence domain.LinkEvidence
-}
-type rowScanner interface{ Scan(...any) error }
-
-func readLinkMatch(row rowScanner) (linkMatch, error) {
-	var m linkMatch
-	err := row.Scan(&m.TaskID, &m.Link.RepositoryID, &m.Link.BaseURL, &m.Link.ProjectID, &m.Link.IID, &m.Link.URL, &m.Evidence.RepositoryID, &m.Evidence.SessionID, &m.Evidence.Revision, &m.Evidence.CaptureDigest, &m.Evidence.CommitSHA, &m.Evidence.MRObservation, &m.Evidence.MRCodeKey)
-	m.Link.Title = fmt.Sprintf("GitLab MR !%d", m.Link.IID)
-	return m, err
-}
 func linkRequestKey(task string, link domain.MRLink) string {
 	sum := sha256.Sum256([]byte(link.URL))
 	return fmt.Sprintf("mr-link:%s:%s:%d:%s", task, link.RepositoryID, link.IID, hex.EncodeToString(sum[:]))

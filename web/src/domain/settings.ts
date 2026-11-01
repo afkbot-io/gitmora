@@ -81,7 +81,9 @@ export interface StreamStatus {
   retry_at: string;
   error_code?: string;
 }
-export interface GitLabStatus {
+export interface ForgeStatus {
+  anonymous?: boolean;
+  provider?: "github";
   repository_id: string;
   enabled: boolean;
   generation: number;

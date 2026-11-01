@@ -69,7 +69,14 @@ var eligibleSources = `(` + baseSourceAccess + `) AND ($4::text='' OR j.reposito
 // Parameters 1..5 are the shared authorized source scope; matching/ranking use 6..12.
 const sourceIdentityProjection = `j.source_kind,j.project_id,j.repository_id,j.session_id,j.revision,j.country_id::text AS source_country_id,j.task_id::text AS source_task_id,j.source_digest,j.code_sha,j.code_path,j.code_blob_id`
 
-var queryPrefix = `WITH terms AS (SELECT plainto_tsquery('simple',$10)||plainto_tsquery('english',$10)||plainto_tsquery('russian',$10) AS query),
+// Identical language alternatives have the same matches and score, but repeat ranking work.
+// Materialize the single query row once, including when PostgreSQL chooses a generic plan.
+var queryPrefix = `WITH forms AS (
+ SELECT plainto_tsquery('simple',$10) AS simple_terms,plainto_tsquery('english',$10) AS english_terms,plainto_tsquery('russian',$10) AS russian_terms
+ ), terms AS MATERIALIZED (
+ SELECT simple_terms || CASE WHEN english_terms=simple_terms THEN ''::tsquery ELSE english_terms END
+ || CASE WHEN russian_terms=simple_terms OR russian_terms=english_terms THEN ''::tsquery ELSE russian_terms END AS query FROM forms
+ ),
  allowed AS MATERIALIZED (
  SELECT d.*,` + sourceIdentityProjection + `,
  CASE WHEN j.source_kind='capture' THEN cs.latest_revision=j.revision WHEN j.source_kind='code' THEN true ELSE wt.digest=j.source_digest END AS current,

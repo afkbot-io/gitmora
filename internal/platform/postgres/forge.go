@@ -30,8 +30,8 @@ func (s *ForgeStore) authorized(ctx context.Context, subject, repository string,
 	defer tx.Rollback(ctx)
 	var role string
 	repo := domain.Repository{ID: repository}
-	err = tx.QueryRow(ctx, `SELECT m.role,r.gitlab_url,r.gitlab_project_id FROM memberships m JOIN repositories r ON r.project_id=m.project_id JOIN users u ON u.id=m.user_id
- WHERE r.id=$1 AND m.user_id=$2 AND u.enabled FOR SHARE OF m,r,u`, repository, subject).Scan(&role, &repo.BaseURL, &repo.ProjectID)
+	err = tx.QueryRow(ctx, `SELECT m.role,r.gitlab_url,r.gitlab_project_id,r.provider FROM memberships m JOIN repositories r ON r.project_id=m.project_id JOIN users u ON u.id=m.user_id
+ WHERE r.id=$1 AND m.user_id=$2 AND u.enabled FOR SHARE OF m,r,u`, repository, subject).Scan(&role, &repo.BaseURL, &repo.ProjectID, &repo.Provider)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return access.ErrDenied
 	}
@@ -55,8 +55,11 @@ func (s *ForgeStore) RepositoryForAdmin(ctx context.Context, subject, repository
 }
 
 // Connect rechecks administrator authority and catalog identity after provider verification.
-func (s *ForgeStore) Connect(ctx context.Context, subject string, repo domain.Repository, envelope []byte, mode string) (application.Status, error) {
+func (s *ForgeStore) Connect(ctx context.Context, subject string, repo domain.Repository, envelope []byte, mode string, anonymous bool) (application.Status, error) {
 	var result application.Status
+	if anonymous && repo.Provider != "github" {
+		return result, domain.ErrInvalid
+	}
 	if len(envelope) < 32 || len(envelope) > 16640 || (mode != "signature" && mode != "legacy" && mode != "disabled") {
 		return result, domain.ErrInvalid
 	}
@@ -64,8 +67,8 @@ func (s *ForgeStore) Connect(ctx context.Context, subject string, repo domain.Re
 		if current != repo {
 			return domain.ErrConflict
 		}
-		_, err := tx.Exec(ctx, `INSERT INTO forge_connections(repository_id,webhook_mode,secret_envelope,updated_by) VALUES($1,$2,$3,$4)
-   ON CONFLICT(repository_id) DO UPDATE SET generation=forge_connections.generation+1,enabled=true,webhook_mode=excluded.webhook_mode,secret_envelope=excluded.secret_envelope,updated_by=excluded.updated_by,updated_at=now(),requested_seq=forge_connections.requested_seq+1,next_sync_at=now(),last_synced_at=NULL,lease_owner=NULL,lease_until=NULL,attempts=0,blocked=false,last_error_code=NULL,code_lease_owner=NULL,code_lease_until=NULL,code_blocked=false,code_error=NULL,code_checked_at=NULL,code_next_at=now(),code_probe_at=now()`, repo.ID, mode, envelope, subject)
+		_, err := tx.Exec(ctx, `INSERT INTO forge_connections(repository_id,webhook_mode,secret_envelope,updated_by,anonymous) VALUES($1,$2,$3,$4,$5)
+   ON CONFLICT(repository_id) DO UPDATE SET generation=forge_connections.generation+1,enabled=true,anonymous=excluded.anonymous,webhook_mode=excluded.webhook_mode,secret_envelope=excluded.secret_envelope,updated_by=excluded.updated_by,updated_at=now(),requested_seq=forge_connections.requested_seq+1,next_sync_at=now(),last_synced_at=NULL,lease_owner=NULL,lease_until=NULL,attempts=0,blocked=false,last_error_code=NULL,code_lease_owner=NULL,code_lease_until=NULL,code_blocked=false,code_error=NULL,code_checked_at=NULL,code_next_at=now(),code_probe_at=now()`, repo.ID, mode, envelope, subject, anonymous)
 		if err != nil {
 			return err
 		}
@@ -86,7 +89,7 @@ func (s *ForgeStore) Connect(ctx context.Context, subject string, repo domain.Re
 
 func readForgeStatus(ctx context.Context, tx pgx.Tx, repository string) (application.Status, error) {
 	result := application.Status{RepositoryID: repository}
-	err := tx.QueryRow(ctx, `SELECT enabled,generation,webhook_mode,COALESCE(last_error_code,''),last_synced_at,next_sync_at,blocked FROM forge_connections WHERE repository_id=$1`, repository).Scan(&result.Enabled, &result.Generation, &result.WebhookMode, &result.LastErrorCode, &result.LastSyncedAt, &result.NextSyncAt, &result.Blocked)
+	err := tx.QueryRow(ctx, `SELECT c.enabled,c.generation,c.webhook_mode,COALESCE(c.last_error_code,''),c.last_synced_at,c.next_sync_at,c.blocked,r.provider,c.anonymous FROM forge_connections c JOIN repositories r ON r.id=c.repository_id WHERE c.repository_id=$1`, repository).Scan(&result.Enabled, &result.Generation, &result.WebhookMode, &result.LastErrorCode, &result.LastSyncedAt, &result.NextSyncAt, &result.Blocked, &result.Provider, &result.Anonymous)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return result, domain.ErrNotFound
 	}
@@ -158,7 +161,7 @@ func (s *ForgeStore) WebhookConnection(ctx context.Context, repository string) (
 	if !identifier.Valid(repository) {
 		return connection, domain.ErrNotFound
 	}
-	err := s.pool.QueryRow(ctx, `SELECT r.id::text,r.gitlab_url,r.gitlab_project_id,c.generation,c.secret_envelope FROM forge_connections c JOIN repositories r ON r.id=c.repository_id WHERE c.repository_id=$1 AND c.enabled AND c.webhook_mode IN('signature','legacy')`, repository).Scan(&connection.Repository.ID, &connection.Repository.BaseURL, &connection.Repository.ProjectID, &connection.Generation, &connection.Envelope)
+	err := s.pool.QueryRow(ctx, `SELECT r.id::text,r.gitlab_url,r.gitlab_project_id,r.provider,c.generation,c.secret_envelope FROM forge_connections c JOIN repositories r ON r.id=c.repository_id WHERE c.repository_id=$1 AND c.enabled AND c.webhook_mode IN('signature','legacy')`, repository).Scan(&connection.Repository.ID, &connection.Repository.BaseURL, &connection.Repository.ProjectID, &connection.Repository.Provider, &connection.Generation, &connection.Envelope)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return connection, domain.ErrNotFound
 	}
@@ -237,7 +240,7 @@ func (s *ForgeStore) Claim(ctx context.Context) (application.Lease, bool, error)
 	lease.Owner = owner
 	err = s.pool.QueryRow(ctx, `WITH candidate AS(SELECT repository_id FROM forge_connections WHERE enabled AND NOT blocked AND next_sync_at<=now() AND (lease_until IS NULL OR lease_until<=now()) ORDER BY next_sync_at,repository_id FOR UPDATE SKIP LOCKED LIMIT 1)
  UPDATE forge_connections c SET lease_owner=$1,lease_until=now()+make_interval(secs=>$2) FROM candidate q,repositories r WHERE c.repository_id=q.repository_id AND r.id=c.repository_id
- RETURNING r.id::text,r.gitlab_url,r.gitlab_project_id,c.generation,c.secret_envelope,c.requested_seq`, owner, application.LeaseDuration.Seconds()).Scan(&lease.Repository.ID, &lease.Repository.BaseURL, &lease.Repository.ProjectID, &lease.Generation, &lease.Envelope, &lease.Requested)
+ RETURNING r.id::text,r.gitlab_url,r.gitlab_project_id,r.provider,c.generation,c.secret_envelope,c.requested_seq`, owner, application.LeaseDuration.Seconds()).Scan(&lease.Repository.ID, &lease.Repository.BaseURL, &lease.Repository.ProjectID, &lease.Repository.Provider, &lease.Generation, &lease.Envelope, &lease.Requested)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return lease, false, nil
 	}
@@ -250,7 +253,7 @@ func (s *ForgeStore) withLease(ctx context.Context, lease application.Lease, fn 
 	}
 	defer tx.Rollback(ctx)
 	var repository string
-	err = tx.QueryRow(ctx, `SELECT c.repository_id::text FROM forge_connections c JOIN repositories r ON r.id=c.repository_id WHERE c.repository_id=$1 AND c.enabled AND c.generation=$2 AND c.lease_owner=$3 AND c.lease_until>now() AND r.gitlab_url=$4 AND r.gitlab_project_id=$5 FOR UPDATE OF c FOR SHARE OF r`, lease.Repository.ID, lease.Generation, lease.Owner, lease.Repository.BaseURL, lease.Repository.ProjectID).Scan(&repository)
+	err = tx.QueryRow(ctx, `SELECT c.repository_id::text FROM forge_connections c JOIN repositories r ON r.id=c.repository_id WHERE c.repository_id=$1 AND c.enabled AND c.generation=$2 AND c.lease_owner=$3 AND c.lease_until>now() AND r.gitlab_url=$4 AND r.gitlab_project_id=$5 AND r.provider=$6 FOR UPDATE OF c FOR SHARE OF r`, lease.Repository.ID, lease.Generation, lease.Owner, lease.Repository.BaseURL, lease.Repository.ProjectID, lease.Repository.Provider).Scan(&repository)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.ErrConflict
 	}

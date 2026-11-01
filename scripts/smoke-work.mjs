@@ -231,7 +231,7 @@ try {
       (await fetch(fixture.gitlab + "/__test/head", { method: "POST" })).ok,
     );
     assert.equal(
-      (await api(`/v1/repositories/${fixture.repository}/gitlab/sync`, {}))
+      (await api(`/v1/repositories/${fixture.repository}/forge/sync`, {}))
         .status,
       202,
     );
