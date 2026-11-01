@@ -22,6 +22,8 @@ func TestActualAdministrationProtocolRetiresBootstrapAndReplaysWithoutPasswordRe
 	foreign := false
 	unsafeClient := false
 	transient := false
+	ownerUsername := "gitmora.admin"
+	ownerID := i.UserID
 	bootstrapID := "99999999-9999-4999-8999-999999999999"
 	actualMasterID := "88888888-8888-4888-8888-888888888888"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -98,7 +100,7 @@ func TestActualAdministrationProtocolRetiresBootstrapAndReplaysWithoutPasswordRe
 		case r.URL.Path == "/admin/realms/"+i.Profile.Realm+"/clients/"+i.ClientUUID+"/client-secret":
 			respond(map[string]string{"value": secret.ClientSecret})
 		case r.URL.Path == "/admin/realms/"+i.Profile.Realm+"/users/"+i.UserID:
-			respond(providerUser{ID: i.UserID, Username: "gitmora.admin", Enabled: true})
+			respond(providerUser{ID: ownerID, Username: ownerUsername, Enabled: true})
 		case r.URL.Path == "/admin/realms/master/clients":
 			if bootstrapAlive {
 				respond([]providerClient{{ID: bootstrapID, ClientID: "gitmora-bootstrap"}})
@@ -127,6 +129,20 @@ func TestActualAdministrationProtocolRetiresBootstrapAndReplaysWithoutPasswordRe
 	if _, err := admin.Finalize(context.Background(), i); err != nil || created != 1 || deleted != 1 {
 		t.Fatalf("active replay changed authority: %v", err)
 	}
+	ownerUsername = "renamed-owner"
+	if _, err := admin.Finalize(context.Background(), i); err != nil || created != 1 || deleted != 1 {
+		t.Fatalf("active owner rename changed authority: %v", err)
+	}
+	i.Phase = "bootstrap"
+	if _, err := admin.Finalize(context.Background(), i); err == nil {
+		t.Fatal("unexpected bootstrap owner name accepted")
+	}
+	i.Phase = "active"
+	ownerID = "77777777-7777-4777-8777-777777777777"
+	if _, err := admin.Finalize(context.Background(), i); err == nil {
+		t.Fatal("renamed account with a different subject accepted")
+	}
+	ownerID = i.UserID
 	unsafeClient = true
 	if _, err := admin.Finalize(context.Background(), i); err == nil {
 		t.Fatal("provider client policy drift accepted")
