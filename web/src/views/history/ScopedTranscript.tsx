@@ -7,7 +7,11 @@ import {
   type Selection,
   type ScopedMessage,
 } from "../../domain/history.js";
-import type { ConversationItem } from "../../domain/conversation.js";
+import type {
+  ConversationItem,
+  IndexedMessage,
+  Message,
+} from "../../domain/conversation.js";
 import { readableError } from "../../domain/context.js";
 import type { ApiClient } from "../../transport/api.js";
 import { ConversationMessage } from "./ConversationMessage.js";
@@ -28,7 +32,12 @@ function group(
       !item.message.text.toLocaleLowerCase().includes(query.toLocaleLowerCase())
     )
       continue;
-    const entry = { message: item.message, index: item.index };
+    const entry = {
+      message: item.message,
+      index: item.index,
+      ...(item.text_preview ? { preview: true } : {}),
+      ...(item.full_text_after ? { fullTextAfter: item.full_text_after } : {}),
+    };
     const previous = result.at(-1);
     if (item.message.role === "tool") {
       if (previous?.kind === "tools") previous.entries.push(entry);
@@ -55,10 +64,12 @@ export function ScopedTranscript({
   const [query, setQuery] = useState("");
   const anchor = useRef<number | null>(null);
   const mounted = useRef(true);
+  const controllers = useRef(new Set<AbortController>());
   useLayoutEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
+      for (const c of controllers.current) c.abort();
     };
   }, []);
   useLayoutEffect(() => {
@@ -67,6 +78,51 @@ export function ScopedTranscript({
       anchor.current = null;
     }
   }, [items]);
+  async function readFull(entry: IndexedMessage): Promise<Message> {
+    if (!entry.fullTextAfter)
+      throw new Error("Контекст не совпал с выбранным источником.");
+    const controller = new AbortController();
+    controllers.current.add(controller);
+    let cursor = entry.fullTextAfter;
+    let text = "";
+    try {
+      for (let page = 0; page < 32; page++) {
+        const query = {
+          ...selection,
+          message_view: "full" as const,
+          message_after: cursor,
+        };
+        const result = await client.request<ContextPack>(
+          "/v1/context/pack",
+          packQuery(query),
+          controller.signal,
+        );
+        if (!sameSelection(query, result.query))
+          throw new Error("Контекст не совпал с выбранным источником.");
+        const item = result.transcript?.items.find(
+          (m) =>
+            m.source.session_id === entry.fullTextAfter!.session_id &&
+            m.index === entry.index,
+        );
+        if (
+          !item ||
+          (item.message_offset ?? 0) !== Array.from(text).length ||
+          item.source.revision !== entry.fullTextAfter.revision ||
+          item.source.digest !== entry.fullTextAfter.digest
+        )
+          throw new Error("Контекст не совпал с выбранным источником.");
+        text += item.message.text;
+        if (!item.text_truncated) return { ...item.message, text };
+        if (!result.transcript?.next) break;
+        cursor = result.transcript.next;
+      }
+      throw new Error(
+        "Не удалось загрузить полную запись. Попробуйте ещё раз.",
+      );
+    } finally {
+      controllers.current.delete(controller);
+    }
+  }
   async function append() {
     if (!next || loading) return;
     setLoading(true);
@@ -148,7 +204,11 @@ export function ScopedTranscript({
         {[...parts].map(([id, messages]) => (
           <section key={id} className="min-w-0 space-y-4">
             {group(messages, onlyDialogue, query).map((item) => (
-              <ConversationMessage key={item.key} item={item} />
+              <ConversationMessage
+                key={item.key}
+                item={item}
+                readFull={readFull}
+              />
             ))}
             {messages.some((m) => m.text_truncated) && (
               <p className="text-xs text-muted">

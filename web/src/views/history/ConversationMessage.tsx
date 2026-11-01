@@ -1,12 +1,16 @@
-import { memo } from "react";
+import { memo, useState } from "react";
 import { t } from "../../domain/locale.js";
 import {
   toolPresentation,
   type ConversationItem,
   type IndexedMessage,
+  type Message,
 } from "../../domain/conversation.js";
 import { Icon } from "../Icon.js";
 import { MessageContent } from "./MessageContent.js";
+import { readableError } from "../../domain/context.js";
+import { ErrorNotice, aborted } from "../shared.js";
+import { buttonStyles } from "../ui.js";
 
 const RawText = ({ text }: { text: string }) => (
   <pre
@@ -17,12 +21,42 @@ const RawText = ({ text }: { text: string }) => (
   </pre>
 );
 
-function ToolEntry({ entry }: { entry: IndexedMessage }) {
-  const view = toolPresentation(entry.message);
+function ToolEntry({
+  entry,
+  readFull,
+}: {
+  entry: IndexedMessage;
+  readFull?: (entry: IndexedMessage) => Promise<Message>;
+}) {
+  const [full, setFull] = useState<Message | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  async function read() {
+    if (!readFull || loading || full) return;
+    setLoading(true);
+    setError("");
+    try {
+      setFull(await readFull(entry));
+    } catch (e) {
+      if (!aborted(e)) setError(readableError(e));
+    } finally {
+      setLoading(false);
+    }
+  }
+  const view = toolPresentation(full ?? entry.message);
   return (
     <details
       data-message-index={entry.index + 1}
       className="tool-entry group/tool border-t border-line first:border-0"
+      onToggle={(e) => {
+        if (
+          e.target === e.currentTarget &&
+          e.currentTarget.open &&
+          entry.preview &&
+          !error
+        )
+          void read();
+      }}
     >
       <summary className="flex min-h-11 cursor-pointer items-start gap-3 px-3 py-3 text-sm hover:bg-canvas mobile:flex-wrap">
         <span className="shrink-0 text-muted transition-transform group-open/tool:rotate-90">
@@ -38,6 +72,17 @@ function ToolEntry({ entry }: { entry: IndexedMessage }) {
         )}
       </summary>
       <div className="space-y-3 px-3 pb-3">
+        {loading && (
+          <p role="status" className="text-xs text-muted">
+            {t("Загрузка полной записи…")}
+          </p>
+        )}
+        <ErrorNotice>{error}</ErrorNotice>
+        {error && (
+          <button className={buttonStyles.text} onClick={() => void read()}>
+            {t("Попробовать ещё раз")}
+          </button>
+        )}
         {view.command && (
           <div>
             <p className="mb-2 text-xs font-medium text-muted">
@@ -54,12 +99,14 @@ function ToolEntry({ entry }: { entry: IndexedMessage }) {
             <RawText text={view.output} />
           </div>
         )}
-        <details>
-          <summary className="py-2 text-xs text-muted">
-            {t("Исходная запись")}
-          </summary>
-          <RawText text={entry.message.text} />
-        </details>
+        {(!entry.preview || full) && (
+          <details>
+            <summary className="py-2 text-xs text-muted">
+              {t("Исходная запись")}
+            </summary>
+            <RawText text={(full ?? entry.message).text} />
+          </details>
+        )}
       </div>
     </details>
   );
@@ -67,8 +114,10 @@ function ToolEntry({ entry }: { entry: IndexedMessage }) {
 
 export const ConversationMessage = memo(function ConversationMessage({
   item,
+  readFull,
 }: {
   item: ConversationItem;
+  readFull?: (entry: IndexedMessage) => Promise<Message>;
 }) {
   if (item.kind === "tools")
     return (
@@ -87,7 +136,11 @@ export const ConversationMessage = memo(function ConversationMessage({
         </summary>
         <div>
           {item.entries.map((entry) => (
-            <ToolEntry key={entry.index} entry={entry} />
+            <ToolEntry
+              key={entry.index}
+              entry={entry}
+              {...(readFull ? { readFull } : {})}
+            />
           ))}
         </div>
       </details>

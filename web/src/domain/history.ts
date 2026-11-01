@@ -3,6 +3,7 @@ import type { Hit, Source } from "./context.js";
 
 export type SourceKind = "session" | "merge_request";
 export interface Selection {
+  message_view?: "compact" | "full";
   project_id: string;
   repository_id?: string;
   session_id?: string;
@@ -136,6 +137,8 @@ export interface MessageCursor {
   head?: string;
 }
 export interface ScopedMessage {
+  text_preview?: boolean;
+  full_text_after?: MessageCursor;
   message_offset?: number;
   source: Source;
   segment: number;
@@ -276,7 +279,11 @@ export function packQuery(q: Selection): Selection {
         q.merge_requests_after.iid < 1))
   )
     throw new Error("Источник не содержит однозначной области навигации.");
-  return { ...q, limit: 6 };
+  return {
+    ...q,
+    ...(q.dialogue_id ? { message_view: q.message_view ?? "compact" } : {}),
+    limit: 6,
+  };
 }
 export function browseQuery(
   project: string,
@@ -320,13 +327,17 @@ export function navigateEntry(entry: BrowseEntry, project: string): Selection {
 }
 /** Ignore page size/cursors while requiring the original selector and expected head to match. */
 export function sameSelection(a: Selection, b: Selection): boolean {
-  return [
-    "project_id",
-    "repository_id",
-    "session_id",
-    "dialogue_id",
-    "commit_sha",
-    "merge_request_iid",
-    "expected_head_sha",
-  ].every((k) => a[k as keyof Selection] === b[k as keyof Selection]);
+  return (
+    [
+      "project_id",
+      "repository_id",
+      "session_id",
+      "dialogue_id",
+      "commit_sha",
+      "merge_request_iid",
+      "expected_head_sha",
+    ].every((k) => a[k as keyof Selection] === b[k as keyof Selection]) &&
+    (a.message_view ?? (a.dialogue_id ? "compact" : "full")) ===
+      (b.message_view ?? (b.dialogue_id ? "compact" : "full"))
+  );
 }

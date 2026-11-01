@@ -160,6 +160,7 @@ export const english: Readonly<Record<string, string>> = {
   "Загрузить ещё сообщения": "Load more messages",
   "Загрузить ещё участников": "Load more members",
   "Загрузка подтверждения CLI…": "Loading CLI confirmation…",
+  "Загрузка полной записи…": "Loading full record…",
   "Загрузка…": "Loading…",
   Закрыт: "Closed",
   "Запись не найдена или больше недоступна.":
@@ -255,6 +256,8 @@ export const english: Readonly<Record<string, string>> = {
   "Не удалось выполнить запрос. Повторите попытку.":
     "The request failed. Try again.",
   "Не удалось завершить сессию.": "Could not end your session.",
+  "Не удалось загрузить полную запись. Попробуйте ещё раз.":
+    "Could not load the full record. Try again.",
   "Не удалось проверить доступ к внешнему сервису. Проверьте адрес, ключ и его права.":
     "Could not verify external service access. Check the address, key and permissions.",
   "Не указана": "Not specified",
@@ -373,6 +376,7 @@ export const english: Readonly<Record<string, string>> = {
   "Показать ещё": "Show more",
   "Полная история": "Full history",
   "Полная история диалога": "Full conversation history",
+  "Попробовать ещё раз": "Try again",
   "Попробуйте другие слова или полный SHA коммита.":
     "Try other words or a full commit SHA.",
   "Последняя версия": "Latest version",

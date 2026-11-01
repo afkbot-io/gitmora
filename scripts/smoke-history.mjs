@@ -352,6 +352,24 @@ try {
   );
   await auditUI(page, "history-pr-scoped", { enabled: true });
   // The same scoped cursor path is read through the real HTTP MCP adapter.
+  await scoped.locator(".tool-activity > summary").click();
+  const expandedTool = scoped.locator('.tool-entry[data-message-index="23"]');
+  await expandedTool.locator(":scope > summary").click();
+  await visible(
+    expandedTool
+      .locator("pre")
+      .filter({ hasText: "FullToolTailMarker" })
+      .first(),
+  );
+  assert(
+    (
+      await expandedTool
+        .locator("pre")
+        .filter({ hasText: "FullToolTailMarker" })
+        .first()
+        .innerText()
+    ).length > 50000,
+  );
   const rpcHeaders = {
     Authorization: "Bearer " + fixture.admin,
     "Content-Type": "application/json",
@@ -377,6 +395,7 @@ try {
             repository_id: fixture.repository,
             merge_request_iid: 4,
             dialogue_id: fixture.session,
+            message_view: "compact",
             ...(cursor ? { message_after: cursor } : {}),
           },
           _meta: {

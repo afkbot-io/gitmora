@@ -41,6 +41,8 @@ func TestPRContextReturnsOnlyItsRecordedMessageIntervals(t *testing.T) {
 		source.Messages = append(source.Messages, capture.Message{Role: "user", Text: text})
 	}
 	source.Messages[0].Text = strings.Repeat("🧪", 10000)
+	toolRaw, _ := json.Marshal(map[string]any{"command": "git status --short", "output": strings.Repeat("x", 18000) + "DetailedToolTailMarker", "exit_code": 0})
+	source.Messages[5] = capture.Message{Role: "tool", ToolName: "Bash", Text: string(toolRaw)}
 	source.CommitRanges = []capture.CommitRange{{CommitSHA: source.Commits[0], Start: 0, End: 30, Basis: "observed_checkpoint"}, {CommitSHA: source.Commits[1], Start: 30, End: 60, Basis: "observed_checkpoint"}}
 	if _, err := captureapp.NewService(postgres.NewCaptureStore(pool)).Ingest(ctx, subject, source); err != nil {
 		t.Fatal(err)
@@ -86,6 +88,45 @@ func TestPRContextReturnsOnlyItsRecordedMessageIntervals(t *testing.T) {
 	}
 	if len(texts) != 30 || texts[0] != source.Messages[0].Text {
 		t.Fatal("message/Unicode fragment lost", len(texts), len(texts[0]))
+	}
+	compactQuery := pack.Query{ProjectID: project, RepositoryID: repository, MR: 7, DialogueID: source.SessionID, MessageView: "compact"}
+	preview, err := store.Read(ctx, principal, compactQuery)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var detail *pack.MessageCursor
+	for _, item := range preview.Transcript.Items {
+		if item.Index == 5 {
+			if !item.TextPreview || item.FullTextAfter == nil || strings.Contains(item.Message.Text, "DetailedToolTailMarker") || len(item.Message.Text) > 2000 {
+				t.Fatal("unbounded or unmarked preview")
+			}
+			detail = item.FullTextAfter
+		}
+	}
+	// The first page can end in the long user message; compact tools follow its cursor.
+	for tries := 0; tries < 10 && detail == nil && preview.Transcript.Next != nil; tries++ {
+		compactQuery.MessageAfter = preview.Transcript.Next
+		preview, err = store.Read(ctx, principal, compactQuery)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, item := range preview.Transcript.Items {
+			if item.Index == 5 {
+				if !item.TextPreview || item.FullTextAfter == nil || len(item.Message.Text) > 2000 {
+					t.Fatal("invalid preview")
+				}
+				detail = item.FullTextAfter
+			}
+		}
+	}
+	if detail == nil {
+		t.Fatal("tool preview missing")
+	}
+	compactQuery.MessageView = "full"
+	compactQuery.MessageAfter = detail
+	expanded, err := store.Read(ctx, principal, compactQuery)
+	if err != nil || len(expanded.Transcript.Items) == 0 || expanded.Transcript.Items[0].Index != 5 || expanded.Transcript.Items[0].TextPreview || !strings.HasPrefix(source.Messages[5].Text, expanded.Transcript.Items[0].Message.Text) {
+		t.Fatal("exact detail unavailable", err)
 	}
 	bad := *firstCursor
 	bad.Digest = strings.Repeat("f", 64)
