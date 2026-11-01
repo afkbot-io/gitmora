@@ -46,19 +46,6 @@ const workMRMatches = `WITH bound AS (
  FROM matches m WHERE true `
 const workMRMatchOrder = ` ORDER BY m.task_id,m.target_repository_id,m.iid,m.url,m.revision DESC,m.source_repository_id,m.session_id,m.sha LIMIT 100`
 
-type linkMatch struct {
-	TaskID   string
-	Link     domain.MRLink
-	Evidence domain.LinkEvidence
-}
-type rowScanner interface{ Scan(...any) error }
-
-func readLinkMatch(row rowScanner) (linkMatch, error) {
-	var m linkMatch
-	err := row.Scan(&m.TaskID, &m.Link.RepositoryID, &m.Link.BaseURL, &m.Link.ProjectID, &m.Link.IID, &m.Link.URL, &m.Evidence.RepositoryID, &m.Evidence.SessionID, &m.Evidence.Revision, &m.Evidence.CaptureDigest, &m.Evidence.CommitSHA, &m.Evidence.MRObservation, &m.Evidence.MRCodeKey)
-	m.Link.Title = fmt.Sprintf("GitLab MR !%d", m.Link.IID)
-	return m, err
-}
 func linkRequestKey(task string, link domain.MRLink) string {
 	sum := sha256.Sum256([]byte(link.URL))
 	return fmt.Sprintf("mr-link:%s:%s:%d:%s", task, link.RepositoryID, link.IID, hex.EncodeToString(sum[:]))
