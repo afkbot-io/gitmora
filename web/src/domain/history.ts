@@ -6,6 +6,8 @@ export interface Selection {
   project_id: string;
   repository_id?: string;
   session_id?: string;
+  dialogue_id?: string;
+  message_after?: MessageCursor;
   commit_sha?: string;
   merge_request_iid?: number;
   expected_head_sha?: string;
@@ -48,6 +50,13 @@ export interface MRCursor {
   iid: number;
 }
 export interface CaptureWindow {
+  range_status?: string;
+  message_ranges?: {
+    commit_sha: string;
+    start: number;
+    end: number;
+    basis: string;
+  }[];
   source: Source;
   root_session_id: string;
   segment: number;
@@ -115,7 +124,33 @@ export interface MRContext {
   deployments_for_result_or_head: Deployment[];
   deployments_have_more: boolean;
 }
+export interface MessageCursor {
+  scope_key?: string;
+  rune_offset?: number;
+  repository_id: string;
+  session_id: string;
+  revision: number;
+  digest: string;
+  segment: number;
+  offset: number;
+  head?: string;
+}
+export interface ScopedMessage {
+  message_offset?: number;
+  source: Source;
+  segment: number;
+  index: number;
+  message: SessionRevision["snapshot"]["messages"][number];
+  commit_shas?: string[];
+  text_truncated?: boolean;
+}
 export interface ContextPack {
+  scope?: { kind: string; missing_commit_ranges: boolean };
+  transcript?: {
+    items: ScopedMessage[];
+    next?: MessageCursor;
+    has_more: boolean;
+  };
   schema_version: number;
   query: Selection;
   read_at: string;
@@ -220,6 +255,7 @@ export function packQuery(q: Selection): Selection {
     (q.repository_id !== undefined && !id(q.repository_id)) ||
     selectors.length !== 1 ||
     (q.session_id && (!id(q.session_id) || !q.repository_id)) ||
+    (q.dialogue_id && (!id(q.dialogue_id) || !!q.session_id)) ||
     (q.commit_sha && (!sha.test(q.commit_sha) || !q.repository_id)) ||
     (q.merge_request_iid !== undefined &&
       (!Number.isSafeInteger(q.merge_request_iid) ||
@@ -288,6 +324,7 @@ export function sameSelection(a: Selection, b: Selection): boolean {
     "project_id",
     "repository_id",
     "session_id",
+    "dialogue_id",
     "commit_sha",
     "merge_request_iid",
     "expected_head_sha",

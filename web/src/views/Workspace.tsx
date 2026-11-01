@@ -155,14 +155,14 @@ export function Workspace({
     { view: "setup", label: "CLI и MCP", icon: "setup" },
   ] as const;
   return (
-    <div className="workspace grid h-dvh w-full grid-cols-[232px_minmax(0,1fr)] overflow-hidden mobile:block mobile:h-auto mobile:min-h-dvh mobile:overflow-visible">
+    <div className="workspace grid min-h-dvh w-full grid-cols-[232px_minmax(0,1fr)] mobile:block">
       <a
         className="skip absolute -top-25 left-64 z-50 bg-paper p-3 focus:top-3 mobile:left-4"
         href="#workspace-main"
       >
         {translate("К содержимому")}
       </a>
-      <aside className="sidebar flex min-w-0 flex-col border-r border-line bg-paper h-full overflow-y-auto mobile:h-auto mobile:border-r-0 mobile:border-b">
+      <aside className="sidebar sticky top-0 flex h-dvh min-w-0 flex-col overflow-y-auto border-r border-line bg-paper mobile:static mobile:h-auto mobile:overflow-visible mobile:border-r-0 mobile:border-b">
         <div className="flex items-center justify-between gap-3 px-4 py-4 mobile:py-3">
           <Brand />
           <button
@@ -292,7 +292,7 @@ export function Workspace({
         id="workspace-main"
         ref={main}
         tabIndex={-1}
-        className="main min-w-0 h-full overflow-y-auto mobile:h-auto mobile:overflow-visible"
+        className="main min-w-0 min-h-dvh"
       >
         <div className="p-6 mobile:p-4">
           <ErrorNotice>{error}</ErrorNotice>

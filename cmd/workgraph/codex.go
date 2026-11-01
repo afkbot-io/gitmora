@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"workgraph.local/platform/internal/agent/codex"
@@ -197,13 +198,15 @@ func collectCodex(ctx context.Context, request codexRequest, reader codex.Reader
 	}
 	result.SkippedTypes = history.SkippedTypes
 	lastWindow := map[string]int{}
+	messageEnd := map[string]int{}
 	for index, window := range history.Windows {
-		for _, item := range window.ItemIDs {
+		for position, item := range window.ItemIDs {
 			frontier, e := domain.BeginFrontier(config.RepositoryID, source, item, "")
 			if e != nil {
 				return result, e
 			}
 			lastWindow[frontier.ID] = index
+			messageEnd[frontier.ID] = position + 1
 		}
 	}
 	for index, window := range history.Windows {
@@ -213,11 +216,15 @@ func collectCodex(ctx context.Context, request codexRequest, reader codex.Reader
 				bindings = append(bindings, frontier.ID)
 			}
 		}
+		sort.Slice(bindings, func(i, j int) bool { return messageEnd[bindings[i]] < messageEnd[bindings[j]] })
 		if _, err = service.RecordNativeFrontiers(ctx, worktree, window.Observation, bindings); err != nil {
 			return result, err
 		}
 		result.Windows++
 		for _, id := range bindings {
+			if err = service.SetFrontierMessageEnd(ctx, worktree, id, messageEnd[id]); err != nil {
+				return result, err
+			}
 			frontier, e := service.Frontier(ctx, worktree, id)
 			if e != nil {
 				return result, e

@@ -147,6 +147,7 @@ type State struct {
 	PendingFiles     []string         `json:"pending_files"`
 	LastRevision     int64            `json:"last_revision"`
 	Dirty            bool             `json:"dirty"`
+	CommitBoundary   *int             `json:"commit_boundary,omitempty"`
 	NativeMessageIDs []string         `json:"native_message_ids,omitempty"`
 }
 
@@ -176,6 +177,15 @@ func NewRecording(repository, id, worktree string, task *capture.TaskRef, o Norm
 
 // Restore validates stored recording bounds and consistency before exposing an aggregate.
 func Restore(state State) (*Recording, error) {
+	if state.CommitBoundary == nil && len(state.Snapshot.Commits) > 0 {
+		// Old broad associations have no recoverable cursor. Future capture starts
+		// after the known legacy observation instead of assigning it to a new commit.
+		boundary := len(state.Snapshot.Messages)
+		state.CommitBoundary = &boundary
+	}
+	if state.CommitBoundary != nil && (*state.CommitBoundary < 0 || *state.CommitBoundary > len(state.Snapshot.Messages)) {
+		return nil, ErrInvalid
+	}
 	if state.Version != 1 || state.LastRevision < 0 || state.LastRevision > 1_000_000_000 || !boundedID(state.Worktree, 256) {
 		return nil, ErrInvalid
 	}
@@ -216,6 +226,10 @@ func Restore(state State) (*Recording, error) {
 // State returns detached persistence data.
 func (r *Recording) State() State {
 	state := r.state
+	if state.CommitBoundary != nil {
+		boundary := *state.CommitBoundary
+		state.CommitBoundary = &boundary
+	}
 	session, _ := capture.NewSession(state.Snapshot)
 	state.Snapshot = session.Snapshot()
 	state.PendingFiles = slices.Clone(state.PendingFiles)
@@ -285,16 +299,27 @@ func (r *Recording) Associate(sha string, changed, remaining []string) (bool, er
 		return false, nil
 	}
 	candidate := r.State().Snapshot
+	rangeCount := len(candidate.CommitRanges)
+	r.addCommitRange(&candidate, sha, "observed_checkpoint")
+	if len(candidate.CommitRanges) == rangeCount && !slices.Contains(candidate.Commits, sha) {
+		r.state.PendingFiles = pending
+		return false, nil
+	}
 	if !slices.Contains(candidate.Commits, sha) {
 		candidate.Commits = append(candidate.Commits, sha)
-		validated, err := capture.NewSession(candidate)
-		if err != nil {
-			return false, ErrInvalid
-		}
+	}
+	validated, err := capture.NewSession(candidate)
+	if err != nil {
+		return false, ErrInvalid
+	}
+	before, _ := capture.NewSession(r.state.Snapshot)
+	if before.Digest() != validated.Digest() {
 		r.state.Snapshot = validated.Snapshot()
 		r.state.Dirty = true
 	}
 	r.state.PendingFiles = pending
+	boundary := len(r.state.Snapshot.Messages)
+	r.state.CommitBoundary = &boundary
 	return true, nil
 }
 
@@ -333,6 +358,25 @@ func (r *Recording) Rewrite(mapping map[string]string) (bool, error) {
 	for _, old := range slices.Clone(candidate.Commits) {
 		if replacement, ok := mapping[old]; ok && !slices.Contains(candidate.Commits, replacement) {
 			candidate.Commits = append(candidate.Commits, replacement)
+			changed = true
+		}
+	}
+	for _, interval := range slices.Clone(candidate.CommitRanges) {
+		replacement, ok := mapping[interval.CommitSHA]
+		if !ok || replacement == interval.CommitSHA {
+			continue
+		}
+		exists := false
+		for _, prior := range candidate.CommitRanges {
+			if prior.CommitSHA == replacement && prior.Start == interval.Start && prior.End == interval.End {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			interval.CommitSHA = replacement
+			interval.Basis = "carry_forward"
+			candidate.CommitRanges = append(candidate.CommitRanges, interval)
 			changed = true
 		}
 	}
@@ -378,4 +422,115 @@ func unique(values []string) []string {
 	copy := append([]string{}, values...)
 	slices.Sort(copy)
 	return slices.Compact(copy)
+}
+
+// LinkCommitCheckpointAt attaches the not-yet-committed interval ending at the observed tool boundary.
+func (r *Recording) LinkCommitCheckpointAt(commits []string, end int) (bool, error) {
+	if end < 0 || end > len(r.state.Snapshot.Messages) {
+		return false, ErrInvalid
+	}
+	start := 0
+	if r.state.CommitBoundary != nil {
+		start = *r.state.CommitBoundary
+	}
+	if end <= start {
+		return false, nil
+	}
+	candidate := r.State().Snapshot
+	before, _ := capture.NewSession(candidate)
+	for _, sha := range commits {
+		if !capture.ValidCommit(sha) {
+			return false, ErrInvalid
+		}
+		if !slices.Contains(candidate.Commits, sha) {
+			candidate.Commits = append(candidate.Commits, sha)
+		}
+		r.addCommitRangeAt(&candidate, sha, "observed_checkpoint", end)
+	}
+	after, err := capture.NewSession(candidate)
+	if err != nil {
+		return false, err
+	}
+	boundary := end
+	r.state.CommitBoundary = &boundary
+	changed := before.Digest() != after.Digest()
+	if changed {
+		r.state.Snapshot = after.Snapshot()
+		r.state.Dirty = true
+	}
+	return changed, nil
+}
+func (r *Recording) addCommitRange(candidate *capture.Snapshot, sha, basis string) {
+	r.addCommitRangeAt(candidate, sha, basis, len(candidate.Messages))
+}
+func (r *Recording) addCommitRangeAt(candidate *capture.Snapshot, sha, basis string, end int) {
+	for _, existing := range candidate.CommitRanges {
+		if existing.CommitSHA == sha && existing.End >= end {
+			return
+		}
+	}
+	start := 0
+	if r.state.CommitBoundary != nil {
+		start = *r.state.CommitBoundary
+	}
+	if start >= end {
+		if start != end || len(candidate.CommitRanges) == 0 {
+			return
+		}
+		prior := candidate.CommitRanges[len(candidate.CommitRanges)-1]
+		if prior.End != end {
+			return
+		}
+		start = prior.Start
+		basis = "carry_forward"
+	}
+	candidate.CommitRanges = append(candidate.CommitRanges, capture.CommitRange{CommitSHA: sha, Start: start, End: end, Basis: basis})
+}
+
+// MergeRecoveredRanges preserves checkpoints while adding explicit recovery from verified Git objects and recorded tool output.
+func (r *Recording) MergeRecoveredRanges(ranges []capture.CommitRange) error {
+	snapshot := r.State().Snapshot
+	preserveCursor := r.state.CommitBoundary != nil
+	for _, interval := range ranges {
+		exists := false
+		for _, prior := range snapshot.CommitRanges {
+			if prior.CommitSHA == interval.CommitSHA {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			snapshot.CommitRanges = append(snapshot.CommitRanges, interval)
+		}
+	}
+	for _, interval := range ranges {
+		if !slices.Contains(snapshot.Commits, interval.CommitSHA) {
+			snapshot.Commits = append(snapshot.Commits, interval.CommitSHA)
+		}
+	}
+	session, err := capture.NewSession(snapshot)
+	if err != nil {
+		return err
+	}
+	current, _ := capture.NewSession(r.state.Snapshot)
+	if session.Digest() != current.Digest() {
+		r.state.Snapshot = session.Snapshot()
+		r.state.Dirty = true
+	}
+	boundary := 0
+	for _, interval := range snapshot.CommitRanges {
+		boundary = max(boundary, interval.End)
+	}
+	if preserveCursor && r.state.CommitBoundary != nil {
+		boundary = max(boundary, *r.state.CommitBoundary)
+	}
+	r.state.CommitBoundary = &boundary
+	covered := 0
+	for _, interval := range snapshot.CommitRanges {
+		covered = max(covered, interval.End)
+	}
+	if covered == len(snapshot.Messages) {
+		r.state.PendingFiles = []string{}
+	}
+	return nil
 }

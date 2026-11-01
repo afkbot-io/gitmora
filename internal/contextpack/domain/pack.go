@@ -3,6 +3,7 @@ package domain
 
 import (
 	"errors"
+	"strings"
 	"time"
 	capture "workgraph.local/platform/internal/capture/domain"
 
@@ -28,23 +29,26 @@ type MRCursor struct {
 
 // Query selects an exact capture stream, confirmed commit or explicit MR in one local project.
 type Query struct {
-	MRTargetRepository string    `json:"-"`
-	MRCodeKey          string    `json:"-"`
-	MRSourceProject    int64     `json:"-"`
-	ProjectID          string    `json:"project_id"`
-	RepositoryID       string    `json:"repository_id,omitempty"`
-	SessionID          string    `json:"session_id,omitempty"`
-	CommitSHA          string    `json:"commit_sha,omitempty"`
-	MR                 int64     `json:"merge_request_iid,omitempty"`
-	ExpectedHead       string    `json:"expected_head_sha,omitempty"`
-	Limit              int       `json:"limit,omitempty"`
-	After              *Cursor   `json:"capture_after,omitempty"`
-	MRAfter            *MRCursor `json:"merge_requests_after,omitempty"`
+	MRReadKey          string         `json:"-"`
+	MRTargetRepository string         `json:"-"`
+	MRCodeKey          string         `json:"-"`
+	MRSourceProject    int64          `json:"-"`
+	ProjectID          string         `json:"project_id"`
+	DialogueID         string         `json:"dialogue_id,omitempty"`
+	MessageAfter       *MessageCursor `json:"message_after,omitempty"`
+	RepositoryID       string         `json:"repository_id,omitempty"`
+	SessionID          string         `json:"session_id,omitempty"`
+	CommitSHA          string         `json:"commit_sha,omitempty"`
+	MR                 int64          `json:"merge_request_iid,omitempty"`
+	ExpectedHead       string         `json:"expected_head_sha,omitempty"`
+	Limit              int            `json:"limit,omitempty"`
+	After              *Cursor        `json:"capture_after,omitempty"`
+	MRAfter            *MRCursor      `json:"merge_requests_after,omitempty"`
 }
 
 // Normalize owns cursor values and rejects ambiguous selectors before any source query.
 func Normalize(q Query) (Query, error) {
-	if q.MRTargetRepository != "" || q.MRCodeKey != "" || q.MRSourceProject != 0 || !identifier.Valid(q.ProjectID) || q.RepositoryID != "" && !identifier.Valid(q.RepositoryID) || q.SessionID != "" && (!identifier.Valid(q.SessionID) || q.RepositoryID == "") || q.CommitSHA != "" && (!identifier.ValidCommit(q.CommitSHA) || q.RepositoryID == "") || q.MR < 0 || q.MR > 0 && q.RepositoryID == "" || q.ExpectedHead != "" && (!identifier.ValidCommit(q.ExpectedHead) || q.MR == 0) || q.Limit < 0 || q.Limit > 12 {
+	if (q.MessageAfter != nil && q.SessionID == "" && q.DialogueID == "") || (q.MessageAfter != nil && q.MR > 0 && (q.MessageAfter.Head == "" || q.MessageAfter.ScopeKey == "")) || (q.DialogueID != "" && (!identifier.Valid(q.DialogueID) || q.SessionID != "")) || (q.MessageAfter != nil && q.MessageAfter.Validate() != nil) || q.MRReadKey != "" || q.MRTargetRepository != "" || q.MRCodeKey != "" || q.MRSourceProject != 0 || !identifier.Valid(q.ProjectID) || q.RepositoryID != "" && !identifier.Valid(q.RepositoryID) || q.SessionID != "" && (!identifier.Valid(q.SessionID) || q.RepositoryID == "") || q.CommitSHA != "" && (!identifier.ValidCommit(q.CommitSHA) || q.RepositoryID == "") || q.MR < 0 || q.MR > 0 && q.RepositoryID == "" || q.ExpectedHead != "" && (!identifier.ValidCommit(q.ExpectedHead) || q.MR == 0) || q.Limit < 0 || q.Limit > 12 {
 		return Query{}, ErrInvalid
 	}
 	selectors := 0
@@ -69,6 +73,10 @@ func Normalize(q Query) (Query, error) {
 		owned := *q.After
 		q.After = &owned
 	}
+	if q.MessageAfter != nil {
+		owned := *q.MessageAfter
+		q.MessageAfter = &owned
+	}
 	if q.MRAfter != nil {
 		owned := *q.MRAfter
 		q.MRAfter = &owned
@@ -78,6 +86,9 @@ func Normalize(q Query) (Query, error) {
 
 // Capture identifies one latest segment revision without claiming that it is the newest native conversation window.
 type Capture struct {
+	RangesMore              bool                  `json:"ranges_more,omitempty"`
+	MessageRanges           []capture.CommitRange `json:"message_ranges,omitempty"`
+	RangeStatus             string                `json:"range_status,omitempty"`
 	Source                  retrieval.Source      `json:"source"`
 	RootSessionID           string                `json:"root_session_id"`
 	Segment                 int64                 `json:"segment"`
@@ -167,6 +178,8 @@ type Evidence struct {
 
 // Pack assembles cached observations. It is never approval, a coherent provider snapshot or a whole repository inventory.
 type Pack struct {
+	Transcript     MessagePage `json:"transcript"`
+	Scope          Scope       `json:"scope"`
 	SchemaVersion  int         `json:"schema_version"`
 	Query          Query       `json:"query"`
 	ReadAt         time.Time   `json:"read_at"`
@@ -177,4 +190,56 @@ type Pack struct {
 	PendingSources int         `json:"pending_sources_in_project"`
 	FailedSources  int         `json:"failed_sources_in_project"`
 	BudgetLimited  bool        `json:"budget_limited"`
+}
+
+// MessageCursor pins immutable bytes and original positions across paged source reads.
+type MessageCursor struct {
+	ScopeKey     string `json:"scope_key,omitempty"`
+	RuneOffset   int    `json:"rune_offset,omitempty"`
+	RepositoryID string `json:"repository_id"`
+	SessionID    string `json:"session_id"`
+	Revision     int64  `json:"revision"`
+	Digest       string `json:"digest"`
+	Segment      int64  `json:"segment"`
+	Offset       int    `json:"offset"`
+	Head         string `json:"head,omitempty"`
+}
+
+func (c MessageCursor) Validate() error {
+	if c.ScopeKey != "" {
+		parts := strings.Split(c.ScopeKey, ":")
+		if len(parts) != 2 || !retrieval.Digest(parts[0]) || parts[1] != "head" && parts[1] != "commits" {
+			return ErrInvalid
+		}
+	}
+	if !identifier.Valid(c.RepositoryID) || !identifier.Valid(c.SessionID) || c.Revision < 1 || c.Revision > 1_000_000_000 || !retrieval.Digest(c.Digest) || c.Segment < 1 || c.Segment > 1_000_000_000 || c.Offset < 0 || c.Offset > 5000 || c.RuneOffset < 0 || c.RuneOffset > 128*1024 || c.Head != "" && !identifier.ValidCommit(c.Head) {
+		return ErrInvalid
+	}
+	return nil
+}
+
+type ScopedMessage struct {
+	MessageOffset int              `json:"message_offset,omitempty"`
+	TextTruncated bool             `json:"text_truncated,omitempty"`
+	Source        retrieval.Source `json:"source"`
+	Segment       int64            `json:"segment"`
+	Index         int              `json:"index"`
+	Message       capture.Message  `json:"message"`
+	CommitSHAs    []string         `json:"commit_shas,omitempty"`
+}
+type MessagePage struct {
+	Items   []ScopedMessage `json:"items"`
+	Next    *MessageCursor  `json:"next,omitempty"`
+	HasMore bool            `json:"has_more"`
+}
+type Scope struct {
+	Kind                string `json:"kind"`
+	MissingCommitRanges bool   `json:"missing_commit_ranges"`
+}
+
+func (m MR) MessageScopeKey() string {
+	if m.CommitsComplete && m.SourceRepositoryID != "" {
+		return m.CodeKey + ":commits"
+	}
+	return m.CodeKey + ":head"
 }

@@ -116,6 +116,10 @@ export const english: Readonly<Record<string, string>> = {
   "Действия проекта": "Project actions",
   Действует: "Active",
   "Действует до": "Expires",
+  Диалог: "Conversation",
+  "Диалог {0}": "Conversation {0}",
+  "Диалог изменения": "Change conversation",
+  "Диалог по коммиту {0}": "Conversation for commit {0}",
   "Диалог с агентом": "Conversation with agent",
   "Диалоги к этому изменению": "Conversations behind this change",
   "Диапазоны относятся к коммиту": "Ranges refer to commit",
@@ -126,8 +130,12 @@ export const english: Readonly<Record<string, string>> = {
     "Start a new sign-in from your terminal to try again.",
   "Для подтверждения CLI войдите через организацию заново по ссылке из терминала.":
     "Sign in again using the link from your terminal to approve CLI access.",
+  "Для части коммитов границы переписки не записаны.":
+    "Conversation boundaries were not recorded for some commits.",
   "Для этих коммитов ещё нет записанных сессий.":
     "No sessions have been recorded for these commits.",
+  "Для этого изменения границы переписки не записаны.":
+    "Conversation boundaries were not recorded for this change.",
   "Добавить репозиторий": "Add repository",
   "Добавить участника": "Add member",
   "Добавьте GitHub или GitLab, чтобы сохранять историю разработки.":
@@ -149,7 +157,6 @@ export const english: Readonly<Record<string, string>> = {
   "Загрузить ещё": "Load more",
   "Загрузить ещё ключи": "Load more keys",
   "Загрузить ещё репозитории": "Load more repositories",
-  "Загрузить ещё связи": "Load more links",
   "Загрузить ещё сообщения": "Load more messages",
   "Загрузить ещё участников": "Load more members",
   "Загрузка подтверждения CLI…": "Loading CLI confirmation…",
@@ -218,7 +225,6 @@ export const english: Readonly<Record<string, string>> = {
   "Коммит репозитория": "Repository commit",
   Коммиты: "Commits",
   "Коммиты, указанные агентом:": "Agent-reported commits:",
-  "Контекст MR/PR": "MR/PR context",
   "Контекст коммита": "Commit context",
   "Контекст не совпал с выбранным источником.":
     "The context does not match the selected source.",
@@ -227,7 +233,7 @@ export const english: Readonly<Record<string, string>> = {
   "Корневой ключ": "Root key",
   "Личные ключи": "Personal keys",
   "Личные настройки": "Personal settings",
-  "Назад к поиску": "Back to search",
+  Навигация: "Navigation",
   "Название в Gitmora": "Name in Gitmora",
   "Название и удаление": "Name and deletion",
   "Название ключа": "Key name",
@@ -235,6 +241,7 @@ export const english: Readonly<Record<string, string>> = {
   "Название сохранено.": "Name saved.",
   "Найдено фрагментов: {0}": "Excerpts found: {0}",
   Найти: "Search",
+  "Найти в загруженных сообщениях": "Find in loaded messages",
   "Найти в загруженных частях": "Find in loaded parts",
   "Например, alex…": "For example, alex…",
   "Например, локальный сборщик": "For example, local collector",
@@ -286,6 +293,7 @@ export const english: Readonly<Record<string, string>> = {
   "Обновить участников": "Refresh members",
   Обновлено: "Updated",
   "Обсуждение и изменения": "Discussion and changes",
+  "Обсуждение этого изменения": "Discussion of this change",
   "Объедините репозитории и команду в одном проекте.":
     "Bring your repositories and team together in one project.",
   Объект: "Object",
@@ -309,6 +317,8 @@ export const english: Readonly<Record<string, string>> = {
   "Открыть в {0}": "Open in {0}",
   "Открыть версию": "Open version",
   "Открыть контекст": "Open context",
+  "Открыть отдельно": "Open separately",
+  "Открыть полную историю отдельно": "Open full history separately",
   "Открыть последнюю версию": "Open latest version",
   "Открыть проект": "Open project",
   Отмена: "Cancel",
@@ -361,6 +371,8 @@ export const english: Readonly<Record<string, string>> = {
   "Поиск…": "Searching…",
   "Показаны первые 50 коммитов.": "Showing the first 50 commits.",
   "Показать ещё": "Show more",
+  "Полная история": "Full history",
+  "Полная история диалога": "Full conversation history",
   "Попробуйте другие слова или полный SHA коммита.":
     "Try other words or a full commit SHA.",
   "Последняя версия": "Latest version",
@@ -383,6 +395,8 @@ export const english: Readonly<Record<string, string>> = {
   "Проверьте параметры запроса.": "Check the request parameters.",
   "Проверяем…": "Checking…",
   "Продолжение диалога · часть {0}": "Conversation continued · part {0}",
+  "Продолжение длинной записи подгрузится ниже.":
+    "The rest of the long record will load below.",
   Проект: "Project",
   "Происхождение импорта": "Import provenance",
   Пропущено: "Skipped",
@@ -557,7 +571,6 @@ export const english: Readonly<Record<string, string>> = {
   "Фрагмент SHA-256": "Fragment SHA-256",
   "Фрагмент источника": "Source fragment",
   "Фрагмент прочитан до конца": "End of fragment",
-  "Частей загружено: {0}": "Parts loaded: {0}",
   "Часть {0}": "Part {0}",
   "Читаем запись сессии…": "Loading session…",
   "Читаем условия подключения…": "Loading connection details…",
@@ -570,6 +583,8 @@ export const english: Readonly<Record<string, string>> = {
   "Читать каталог и участников": "Read the catalog and members",
   "Читать сессии агента": "Read agent sessions",
   Чтение: "Read only",
+  "Эти записи могут включать другие изменения.":
+    "These records may include other changes.",
   "Этот запрос уже завершён. Новый вход начинается в терминале.":
     "This request has ended. Start a new sign-in from your terminal.",
   "Этот идентификатор уже удалён. Создайте новую запись.":

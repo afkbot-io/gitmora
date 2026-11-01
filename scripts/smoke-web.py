@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Actual browser + embedded API + signed local IdP + isolated PostgreSQL; synthetic source only."""
 import argparse
+import hashlib
 import importlib.util
 import json
 import os
@@ -89,6 +90,11 @@ def main():
         if args.history:
             capture["messages"][0] = dict(role="user", text="Проверь авторизацию и обнови CLI. Сохрани совместимость.\n\n<img src=x onerror=window.untrustedExecuted=true>\n[unsafe](javascript:alert(1))\n![remote image](https://tracking.invalid/pixel)")
             capture["messages"][2] = dict(role="assistant", text="## Проверка refreshToken\n\nПроверю настройки сервера и запись сессий. Результаты будут привязаны к коммиту.\n\n- Вход через браузер\n- Отправка истории через CLI\n\n```sh\ngitmora auth status --server https://gitmora.example.com\n```\n\n| Компонент | Результат |\n| --- | --- |\n| CLI | Готово |\n| MCP | Готово |")
+        if args.history:
+            capture["commits"]=["a"*40,"b"*40]
+            capture["commit_ranges"]=[dict(commit_sha="a"*40,start=0,end=20,basis="observed_checkpoint"),dict(commit_sha="b"*40,start=20,end=65,basis="observed_checkpoint")]
+            capture["messages"][20]=dict(role="user",text="PR4BoundaryMarker: обнови поиск только для этого изменения")
+            capture["messages"][21]=dict(role="assistant",text="Обновлю поиск и проверю границы PR 4.")
         assert call("/v1/captures", capture)[0] == 201
         if args.history:
             digest = call(f'/v1/repositories/{identity["repository_id"]}/sessions/{session}')[1]["digest"]
@@ -96,6 +102,7 @@ def main():
             previous_revision = 2
             for index in range(1, 22):
                 extra = {**capture, "revision": 1, "session_id": f"eeeeeeee-eeee-4eee-8eee-{index:012x}", "messages": [dict(role="assistant", text=f"Archive marker {index}")]}
+                extra.pop("commit_ranges",None)
                 if index <= 10:
                     extra["continuation"] = dict(root_session_id=session, previous_session_id=previous_session, previous_revision=previous_revision, previous_digest=digest, segment=index+1, reason="window")
                 else:
@@ -110,6 +117,15 @@ def main():
             if not json.loads(indexed.stdout)["worked"]:
                 break
         assert call("/v1/context/search", dict(project_id=identity["project_id"], text="refreshToken"))[1]["items"]
+        if args.history:
+            repo,owner=identity["repository_id"],identity["user_id"]
+            api.sql(f"UPDATE \"{schema}\".commits SET confirmed_at=now(); INSERT INTO \"{schema}\".forge_connections(repository_id,webhook_mode,secret_envelope,updated_by,last_synced_at) VALUES('{repo}','signature',decode(repeat('00',32),'hex'),'{owner}',now());")
+            for iid,sha in [(3,"a"*40),(4,"b"*40)]:
+                model=dict(id=100+iid,iid=iid,project_id=42,source_project_id=42,state="merged",title=f"PR boundary fixture {iid}",description="Scoped synthetic provider observation",url=f"https://gitlab.internal/-/merge_requests/{iid}",head=sha,base="c"*40,start="d"*40,merge="",squash="",updated_at="2026-10-30T10:00:00Z")
+                raw=json.dumps(model,separators=(',',':'));digest=hashlib.sha256(raw.encode()).hexdigest()
+                code=dict(Project=42,Source=42,IID=iid,State="merged",Head=sha,Base="c"*40,Start="d"*40,Merge="",Squash="")
+                key=hashlib.sha256(json.dumps(code,separators=(',',':')).encode()).hexdigest()
+                api.sql(f"INSERT INTO \"{schema}\".forge_mr_codes(repository_id,iid,code_key,complete) VALUES('{repo}',{iid},'{key}',true); INSERT INTO \"{schema}\".forge_mr_observations(repository_id,iid,digest,code_key,model,provider_updated_at) VALUES('{repo}',{iid},'{digest}','{key}',$fixture${raw}$fixture$,now()); INSERT INTO \"{schema}\".forge_merge_requests(repository_id,iid,digest,provider_updated_at) VALUES('{repo}',{iid},'{digest}',now()); INSERT INTO \"{schema}\".forge_mr_commits(repository_id,iid,code_key,source_project_id,sha) VALUES('{repo}',{iid},'{key}',42,'{sha}');")
         if args.serve:
             print(json.dumps({"url": public}), flush=True)
             signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))

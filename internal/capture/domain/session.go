@@ -66,6 +66,7 @@ type Snapshot struct {
 	Messages      []Message     `json:"messages"`
 	Files         []string      `json:"files"`
 	Commits       []string      `json:"commits"`
+	CommitRanges  []CommitRange `json:"commit_ranges,omitempty"`
 	Continuation  *Continuation `json:"continuation,omitempty"`
 	Origin        *ImportOrigin `json:"origin,omitempty"`
 }
@@ -138,6 +139,20 @@ func NewSession(input Snapshot) (Session, error) {
 			return invalid("commit sha")
 		}
 	}
+	if len(input.CommitRanges) > 4000 {
+		return invalid("commit ranges")
+	}
+	seenRanges := map[string]bool{}
+	for _, interval := range input.CommitRanges {
+		key := fmt.Sprintf("%s:%d:%d", interval.CommitSHA, interval.Start, interval.End)
+		if seenRanges[key] {
+			return invalid("duplicate commit range")
+		}
+		seenRanges[key] = true
+		if !slices.Contains(input.Commits, interval.CommitSHA) || interval.Start < 0 || interval.End <= interval.Start || interval.End > len(input.Messages) || !slices.Contains([]string{"observed_checkpoint", "recovered_git_output", "carry_forward"}, interval.Basis) {
+			return invalid("commit range")
+		}
+	}
 	if validateOrigin(input.Origin, input) != nil {
 		return invalid("import origin")
 	}
@@ -188,6 +203,7 @@ func cloneSnapshot(s Snapshot) Snapshot {
 	s.Messages = slices.Clone(s.Messages)
 	s.Files = slices.Clone(s.Files)
 	s.Commits = slices.Clone(s.Commits)
+	s.CommitRanges = slices.Clone(s.CommitRanges)
 	if s.Task != nil {
 		task := *s.Task
 		s.Task = &task

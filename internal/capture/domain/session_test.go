@@ -165,3 +165,25 @@ func TestSnapshotCopiesOptionalTaskAndEndTime(t *testing.T) {
 		t.Fatal("optional fields share mutable storage")
 	}
 }
+
+func TestCommitRangeValidationOwnsAndBoundsPositions(t *testing.T) {
+	input := fixture()
+	sha := strings.Repeat("a", 40)
+	input.Commits = []string{sha}
+	input.CommitRanges = []domain.CommitRange{{CommitSHA: sha, Start: 0, End: 1, Basis: "observed_checkpoint"}}
+	session, err := domain.NewSession(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	input.CommitRanges[0].End = 99
+	if session.Snapshot().CommitRanges[0].End != 1 {
+		t.Fatal("range ownership leaked")
+	}
+	for _, interval := range []domain.CommitRange{{CommitSHA: sha, Start: -1, End: 1, Basis: "observed_checkpoint"}, {CommitSHA: sha, Start: 0, End: 100, Basis: "observed_checkpoint"}, {CommitSHA: strings.Repeat("b", 40), Start: 0, End: 1, Basis: "observed_checkpoint"}} {
+		value := session.Snapshot()
+		value.CommitRanges = []domain.CommitRange{interval}
+		if _, err := domain.NewSession(value); err == nil {
+			t.Fatal("invalid range accepted", interval)
+		}
+	}
+}

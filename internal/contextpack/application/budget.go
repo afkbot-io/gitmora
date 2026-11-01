@@ -9,6 +9,22 @@ import (
 func bound(p *domain.Pack) error {
 	stages := []func(){
 		func() {
+			for len(p.Transcript.Items) > 1 {
+				raw, _ := json.Marshal(p)
+				if len(raw) <= 64*1024 {
+					break
+				}
+				last := p.Transcript.Items[len(p.Transcript.Items)-1]
+				p.Transcript.Items = p.Transcript.Items[:len(p.Transcript.Items)-1]
+				p.Transcript.HasMore = true
+				p.Transcript.Next = &domain.MessageCursor{RepositoryID: last.Source.RepositoryID, SessionID: last.Source.SessionID, Revision: last.Source.Revision, Digest: last.Source.Digest, Segment: last.Segment, Offset: last.Index, RuneOffset: last.MessageOffset}
+				if len(p.MergeRequests.Items) > 0 {
+					p.Transcript.Next.Head = p.MergeRequests.Items[0].Head
+					p.Transcript.Next.ScopeKey = p.MergeRequests.Items[0].MessageScopeKey()
+				}
+			}
+		},
+		func() {
 			for i := range p.MergeRequests.Items {
 				m := &p.MergeRequests.Items[i]
 				if len(m.Pipelines) > 2 {

@@ -285,8 +285,137 @@ try {
     path: "output/playwright/history-conversation.png",
     fullPage: false,
   });
+  // A PR with one conversation gets only its own commit interval.
+  await page.goto(
+    fixture.url +
+      `/#view=context&project=${fixture.project}&repository=${fixture.repository}&mr=4`,
+  );
+  await visible(page.getByRole("heading", { name: "MR !4", exact: true }));
+  await visible(page.getByRole("button", { name: /Читать диалог/ }));
+  assert.equal(
+    await page.getByText("PR boundary fixture 3", { exact: true }).count(),
+    0,
+  );
+  assert.equal(
+    await page
+      .getByRole("button", { name: "Загрузить ещё связи", exact: true })
+      .count(),
+    0,
+  );
+  await page.getByRole("button", { name: /Читать диалог/ }).click();
+  await visible(
+    page.getByRole("heading", { name: "Диалог MR !4", exact: true }),
+  );
+  const scoped = page.getByRole("region", {
+    name: "Диалог изменения",
+    exact: true,
+  });
+  await visible(
+    scoped.getByText(
+      "PR4BoundaryMarker: обнови поиск только для этого изменения",
+      { exact: true },
+    ),
+  );
+  assert(
+    new URLSearchParams(new URL(page.url()).hash.slice(1)).get("mr") === "4",
+  );
+  assert.equal(
+    await scoped
+      .getByText("Проверь авторизацию и обнови CLI.", { exact: false })
+      .count(),
+    0,
+  );
+  assert.equal(await page.locator(".mr-context").count(), 0);
+  for (let i = 0; i < 2; i++) {
+    const more = scoped.getByRole("button", {
+      name: "Загрузить ещё сообщения",
+      exact: true,
+    });
+    await more.scrollIntoViewIfNeeded();
+    const y = await page.evaluate(() => scrollY);
+    await more.click();
+    await page.waitForFunction(
+      () => !document.querySelector(".scoped-transcript button:disabled"),
+    );
+    assert(
+      Math.abs((await page.evaluate(() => scrollY)) - y) < 4,
+      "PR append lost reading position",
+    );
+  }
+  assert.equal(await scoped.locator('[data-message-index="65"]').count(), 1);
+  assert.equal(await scoped.locator('[data-message-index="1"]').count(), 0);
+  assert.equal(
+    await page.evaluate(
+      () => getComputedStyle(document.querySelector("main")).overflowY,
+    ),
+    "visible",
+  );
+  await auditUI(page, "history-pr-scoped", { enabled: true });
+  // The same scoped cursor path is read through the real HTTP MCP adapter.
+  const rpcHeaders = {
+    Authorization: "Bearer " + fixture.admin,
+    "Content-Type": "application/json",
+    Accept: "application/json, text/event-stream",
+    "MCP-Protocol-Version": "2026-07-28",
+    "Mcp-Method": "tools/call",
+    "Mcp-Name": "context.pack",
+  };
+  let cursor;
+  let mcpCount = 0;
+  for (let i = 0; i < 8; i++) {
+    const response = await fetch(fixture.url + "/mcp", {
+      method: "POST",
+      headers: rpcHeaders,
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: i + 1,
+        method: "tools/call",
+        params: {
+          name: "context.pack",
+          arguments: {
+            project_id: fixture.project,
+            repository_id: fixture.repository,
+            merge_request_iid: 4,
+            dialogue_id: fixture.session,
+            ...(cursor ? { message_after: cursor } : {}),
+          },
+          _meta: {
+            "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+            "io.modelcontextprotocol/clientInfo": {
+              name: "scoped-history",
+              version: "1",
+            },
+            "io.modelcontextprotocol/clientCapabilities": {},
+          },
+        },
+      }),
+    });
+    assert.equal(response.status, 200);
+    const wire = await response.json();
+    assert(!wire.result.isError);
+    const pack = wire.result.structuredContent.result;
+    assert(pack.merge_requests.items.every((m) => m.iid === 4));
+    assert(
+      pack.captures.items.every((c) =>
+        c.confirmed_commits.every((sha) => sha === "b".repeat(40)),
+      ),
+    );
+    for (const m of pack.transcript.items) {
+      assert(m.index >= 20 && m.index < 65);
+      mcpCount++;
+    }
+    cursor = pack.transcript.next;
+    if (!cursor) break;
+  }
+  assert.equal(mcpCount, 45);
+  await page
+    .getByRole("navigation", { name: "Навигация" })
+    .getByRole("button", { name: "MR !4", exact: true })
+    .click();
+  await visible(page.getByRole("heading", { name: "MR !4", exact: true }));
+  await openSession(fixture.session);
   await exerciseImportedOrigin();
-  await click("Назад к поиску");
+  await click("Поиск");
   await visible(page.locator(".context-view #search"));
   await page.locator(".context-view #search").fill("abcdef0");
   await click("Найти");
@@ -342,6 +471,9 @@ try {
     JSON.stringify({
       result: "passed",
       checks: [
+        "PR-scoped dialogue and MCP pagination",
+        "single scroll owner and append position",
+        "PR breadcrumb retained",
         "recent cursor",
         "session revisions",
         "message pagination",

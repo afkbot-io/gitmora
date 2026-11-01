@@ -168,11 +168,41 @@ func TestRejectedAssociationLeavesAggregateValid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	next := observation()
+	next.Messages = append(next.Messages, capture.Message{Role: "assistant", Text: "A new change after the legacy checkpoint"})
+	normalized, err := domain.Normalize(next)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := recording.Observe(normalized); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := recording.Associate(strings.Repeat("f", 40), []string{"a.go"}, nil); !errors.Is(err, domain.ErrInvalid) {
 		t.Fatal("oversized association accepted")
 	}
 	if _, err := domain.Restore(recording.State()); err != nil {
 		t.Fatal("failed transition corrupted aggregate")
+	}
+}
+
+func TestRepeatedCommitKeepsLaterObservedInterval(t *testing.T) {
+	input, _ := domain.Normalize(observation())
+	recording, err := domain.NewRecording(repoID, sessionID, "tree", nil, input, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sha := strings.Repeat("a", 40)
+	associate(t, recording, sha, []string{"a.go"}, nil)
+	next := observation()
+	next.Messages = append(next.Messages, capture.Message{Role: "assistant", Text: "Follow-up work"})
+	normalized, _ := domain.Normalize(next)
+	if err := recording.Observe(normalized); err != nil {
+		t.Fatal(err)
+	}
+	associate(t, recording, sha, []string{"a.go"}, nil)
+	sealed, _, err := recording.Seal()
+	if err != nil || len(sealed.Snapshot().CommitRanges) != 2 {
+		t.Fatal("later interval for the same Git object was discarded", err)
 	}
 }
 
@@ -235,5 +265,37 @@ func TestInvalidObservedCommitWindowDoesNotPartiallyMutateRecording(t *testing.T
 	}
 	if len(recording.State().Snapshot.Commits) != 0 {
 		t.Fatal("failed observed window mutated recording")
+	}
+}
+
+func TestCommitCheckpointPinsPositionWithinOneStoredWindow(t *testing.T) {
+	o := observation()
+	o.Messages = []capture.Message{{Role: "user", Text: "PR A"}, {Role: "assistant", Text: "A answer"}, {Role: "user", Text: "PR B"}, {Role: "assistant", Text: "B answer"}}
+	normalized, err := domain.Normalize(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := domain.NewRecording(repoID, sessionID, "tree", nil, normalized, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, b := strings.Repeat("a", 40), strings.Repeat("b", 40)
+	if changed, err := r.LinkCommitCheckpointAt([]string{a}, 2); err != nil || !changed {
+		t.Fatal(changed, err)
+	}
+	if changed, err := r.LinkCommitCheckpointAt([]string{b}, 4); err != nil || !changed {
+		t.Fatal(changed, err)
+	}
+	ranges := r.State().Snapshot.CommitRanges
+	if len(ranges) != 2 || ranges[0].Start != 0 || ranges[0].End != 2 || ranges[1].Start != 2 || ranges[1].End != 4 {
+		t.Fatal("checkpoint crossed later work", ranges)
+	}
+	state := r.State()
+	*state.CommitBoundary = 0
+	if *r.State().CommitBoundary != 4 {
+		t.Fatal("mutable cursor alias")
+	}
+	if changed, err := r.LinkCommitCheckpointAt([]string{strings.Repeat("c", 40)}, 2); err != nil || changed {
+		t.Fatal("old recovery relabelled later work", changed, err)
 	}
 }

@@ -52,6 +52,7 @@ type Frontier struct {
 	Before          string       `json:"before"`
 	After           *string      `json:"after"`
 	TargetSessionID string       `json:"target_session_id"`
+	MessageEnd      *int         `json:"message_end,omitempty"`
 	Applied         bool         `json:"applied"`
 	Abandoned       bool         `json:"abandoned"`
 	Reason          string       `json:"reason"`
@@ -70,11 +71,15 @@ func BeginFrontier(repository string, source NativeSource, call, before string) 
 
 // RestoreFrontier checks persisted state and returns an owned copy.
 func RestoreFrontier(f Frontier) (Frontier, error) {
-	if !frontierKey.MatchString(f.ID) || !frontierKey.MatchString(f.NativeKey) || f.Source.Validate() != nil || !validHead(f.Before) ||
+	if (f.MessageEnd != nil && (*f.MessageEnd < 1 || *f.MessageEnd > 5000 || f.TargetSessionID == "")) || !frontierKey.MatchString(f.ID) || !frontierKey.MatchString(f.NativeKey) || f.Source.Validate() != nil || !validHead(f.Before) ||
 		(f.After != nil && !validHead(*f.After)) || (f.TargetSessionID != "" && !identifier.Valid(f.TargetSessionID)) ||
 		(f.TargetSessionID != "" && f.After == nil) || (f.Applied && (f.TargetSessionID == "" || f.Abandoned)) ||
 		(f.Reason != "" && (!boundedID(f.Reason, 240) || redact.Text(f.Reason) != f.Reason)) || (f.Abandoned && f.Reason == "") {
 		return Frontier{}, ErrInvalid
+	}
+	if f.MessageEnd != nil {
+		end := *f.MessageEnd
+		f.MessageEnd = &end
 	}
 	if f.After != nil {
 		end := *f.After
