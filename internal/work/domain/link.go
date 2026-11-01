@@ -53,14 +53,19 @@ type MRLink struct {
 
 // NewMRLink validates the provider's human URL and derives a stable non-sensitive title.
 func NewMRLink(repo, base string, project, iid int64, value string) (MRLink, error) {
-	l := MRLink{RepositoryID: repo, BaseURL: base, ProjectID: project, IID: iid, URL: value, Title: fmt.Sprintf("GitLab MR !%d", iid)}
-	if canonical, ok := endpoint.GitHubRepository(base); ok && canonical == base {
-		l.Title = fmt.Sprintf("GitHub PR #%d", iid)
-	}
+	l := MRLink{RepositoryID: repo, BaseURL: base, ProjectID: project, IID: iid, URL: value, Title: MRLinkTitle(base, iid)}
 	if l.Validate() != nil {
 		return MRLink{}, ErrInvalid
 	}
 	return l, nil
+}
+
+// MRLinkTitle derives display copy without authorizing an untrusted provider URL.
+func MRLinkTitle(base string, iid int64) string {
+	if canonical, ok := endpoint.GitHubRepository(base); ok && canonical == base {
+		return fmt.Sprintf("GitHub PR #%d", iid)
+	}
+	return fmt.Sprintf("GitLab MR !%d", iid)
 }
 
 // Validate binds a bounded credential-free link to its provider origin, base path and exact MR IID.
