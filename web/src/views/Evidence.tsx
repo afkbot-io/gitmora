@@ -16,8 +16,9 @@ export function Evidence({ client, hit }: { client: ApiClient; hit: Hit }) {
   async function load(next = 0) {
     const request = requests.begin();
     setLoading(true);
+    setOffset(next);
     setError("");
-    setExpanded(null);
+    if (!next) setExpanded(null);
     try {
       const value = await client.request<Expanded>(
         "/v1/context/expand",
@@ -32,7 +33,15 @@ export function Evidence({ client, hit }: { client: ApiClient; hit: Hit }) {
         value.content_digest !== hit.content_digest
       )
         throw new Error("Ответ не совпал с выбранным источником.");
-      setExpanded(value);
+      setExpanded((previous) =>
+        next && previous
+          ? {
+              ...value,
+              start: previous.start,
+              content: previous.content + value.content,
+            }
+          : value,
+      );
       setOffset(next);
     } catch (e) {
       if (!aborted(e) && request.current()) setError(readableError(e));
@@ -158,20 +167,13 @@ export function Evidence({ client, hit }: { client: ApiClient; hit: Hit }) {
             {expanded.content}
           </pre>
           <div className="quote-pagination flex gap-2 items-center flex-wrap mt-4 [&_button]:text-xs [&_button]:px-3 [&_button]:py-2 [&_button]:min-h-9">
-            {offset > 0 && (
-              <button
-                className={buttonStyles.secondary}
-                onClick={() => void load(0)}
-              >
-                {translate("Начало фрагмента")}
-              </button>
-            )}
             {expanded.next_offset ? (
               <button
                 className={buttonStyles.secondary}
+                disabled={loading}
                 onClick={() => void load(expanded.next_offset)}
               >
-                {translate("Следующая часть")}
+                {translate("Загрузить ещё")}
               </button>
             ) : (
               <span className="muted small text-muted text-sm">

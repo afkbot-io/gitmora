@@ -74,12 +74,20 @@ export function ContextWorkspace({
     window.addEventListener("hashchange", read);
     return () => window.removeEventListener("hashchange", read);
   }, [project.id]);
-  function open(value: Selection) {
+  function open(value: Selection, source?: Hit) {
     const q = packQuery(value);
     if (q.project_id !== project.id) return;
     const p = new URLSearchParams({ view: "context", project: project.id });
     if (q.repository_id) p.set("repository", q.repository_id);
-    if (q.session_id) p.set("session", q.session_id);
+    if (q.session_id) {
+      p.set("session", q.session_id);
+      if (source?.source.session_id === q.session_id) {
+        const match = /^messages\/(\d+)$/.exec(source.part);
+        if (match) p.set("message", match[1]!);
+        if (source.source.revision)
+          p.set("revision", String(source.source.revision));
+      }
+    }
     if (q.commit_sha) p.set("commit", q.commit_sha);
     if (q.merge_request_iid) p.set("mr", String(q.merge_request_iid));
     if (q.expected_head_sha) p.set("head", q.expected_head_sha);
@@ -317,11 +325,14 @@ export function ContextWorkspace({
                         className={buttonStyles.text}
                         onClick={() => {
                           if (hit.source.repository_id && hit.source.session_id)
-                            open({
-                              project_id: project.id,
-                              repository_id: hit.source.repository_id,
-                              session_id: hit.source.session_id,
-                            });
+                            open(
+                              {
+                                project_id: project.id,
+                                repository_id: hit.source.repository_id,
+                                session_id: hit.source.session_id,
+                              },
+                              hit,
+                            );
                           else if (
                             hit.source.repository_id &&
                             hit.source.commit_sha

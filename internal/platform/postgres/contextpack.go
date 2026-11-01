@@ -85,7 +85,7 @@ func (s *ContextStore) Read(ctx context.Context, p access.Principal, q domain.Qu
 // contextTree proves every traversed edge from an actual root, with exact parent bytes,
 // immutable source scope (including nanoseconds) and originator. Forged declarations never expand a stream.
 const contextTree = `WITH RECURSIVE scoped AS MATERIALIZED (
- SELECT s.repository_id,s.session_id,s.originator_id,s.latest_revision,x.started_at_text,x.agent_name,x.country_id,x.task_id,
+ SELECT s.repository_id,s.session_id,s.originator_id,s.latest_revision,x.started_at_text,x.agent_name,x.country_id,x.task_id,x.title,
  COALESCE(c.root_session_id,s.session_id) AS root_id,COALESCE(c.segment,1) AS segment,c.previous_session_id,c.previous_revision,c.previous_digest,c.reason
  FROM capture_sessions s JOIN repositories r ON r.id=s.repository_id JOIN capture_context_scopes x ON x.repository_id=s.repository_id AND x.session_id=s.session_id
  LEFT JOIN capture_continuations c ON c.repository_id=s.repository_id AND c.session_id=s.session_id
@@ -118,7 +118,7 @@ func readContextCaptures(ctx context.Context, tx pgx.Tx, q domain.Query, page *d
  EXISTS(SELECT 1 FROM scoped p JOIN capture_revisions pr ON pr.repository_id=p.repository_id AND pr.session_id=p.session_id AND pr.revision=s.previous_revision AND pr.digest=s.previous_digest WHERE p.repository_id=s.repository_id AND p.session_id=s.previous_session_id AND p.root_id=s.root_id AND s.segment=p.segment+1 AND p.originator_id=s.originator_id AND p.started_at_text=s.started_at_text AND p.agent_name=s.agent_name AND p.country_id IS NOT DISTINCT FROM s.country_id AND p.task_id IS NOT DISTINCT FROM s.task_id),
  EXISTS(SELECT 1 FROM tree t WHERE t.repository_id=s.repository_id AND t.session_id=s.session_id),
  ARRAY(SELECT c.sha FROM capture_revision_commits rc JOIN commits c ON c.repository_id=rc.repository_id AND c.sha=rc.sha AND c.confirmed_at IS NOT NULL WHERE rc.repository_id=s.repository_id AND rc.session_id=s.session_id AND rc.revision=s.latest_revision ORDER BY c.sha LIMIT 16),
- (SELECT count(*) FROM capture_revision_commits rc JOIN commits c ON c.repository_id=rc.repository_id AND c.sha=rc.sha AND c.confirmed_at IS NOT NULL WHERE rc.repository_id=s.repository_id AND rc.session_id=s.session_id AND rc.revision=s.latest_revision)
+ (SELECT count(*) FROM capture_revision_commits rc JOIN commits c ON c.repository_id=rc.repository_id AND c.sha=rc.sha AND c.confirmed_at IS NOT NULL WHERE rc.repository_id=s.repository_id AND rc.session_id=s.session_id AND rc.revision=s.latest_revision),s.title,s.started_at_text
  FROM wanted w JOIN scoped s ON s.repository_id=w.repository_id AND s.session_id=w.session_id JOIN capture_revisions r ON r.repository_id=s.repository_id AND r.session_id=s.session_id AND r.revision=s.latest_revision
  WHERE ($9::text='' OR (s.repository_id::text,s.segment,s.session_id::text)>($9,$10,$11)) ORDER BY s.repository_id::text,s.segment,s.session_id::text LIMIT $12`, args...)
 	if err != nil {
@@ -132,7 +132,7 @@ func readContextCaptures(ctx context.Context, tx pgx.Tx, q domain.Query, page *d
 		var parentDigest, reason string
 		c.Source.Kind = "capture"
 		c.Source.ProjectID = q.ProjectID
-		if err := rows.Scan(&c.Source.RepositoryID, &c.Source.SessionID, &c.Source.Revision, &c.Source.Digest, &c.RootSessionID, &c.Segment, &c.Agent, &parent, &parentRevision, &parentDigest, &reason, &c.ParentReferenceVerified, &c.ChainVerified, &c.ConfirmedCommits, &c.ConfirmedCount); err != nil {
+		if err := rows.Scan(&c.Source.RepositoryID, &c.Source.SessionID, &c.Source.Revision, &c.Source.Digest, &c.RootSessionID, &c.Segment, &c.Agent, &parent, &parentRevision, &parentDigest, &reason, &c.ParentReferenceVerified, &c.ChainVerified, &c.ConfirmedCommits, &c.ConfirmedCount, &c.Title, &c.StartedAt); err != nil {
 			return err
 		}
 		c.VerificationLimited = c.Segment > 256

@@ -82,6 +82,8 @@ type Capture struct {
 	RootSessionID           string                `json:"root_session_id"`
 	Segment                 int64                 `json:"segment"`
 	Agent                   string                `json:"agent"`
+	Title                   string                `json:"title,omitempty"`
+	StartedAt               string                `json:"started_at,omitempty"`
 	ParentReferenceVerified bool                  `json:"parent_reference_verified"`
 	ChainVerified           bool                  `json:"chain_verified"`
 	VerificationLimited     bool                  `json:"chain_verification_limited"`

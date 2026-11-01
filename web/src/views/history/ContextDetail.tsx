@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import { t } from "../../domain/locale.js";
 import type { Hit } from "../../domain/context.js";
 import { Evidence } from "../Evidence.js";
@@ -9,13 +9,18 @@ import type {
   CaptureCursor,
   MRCursor,
 } from "../../domain/history.js";
+import { groupConversations } from "../../domain/conversation.js";
 import { packQuery, sameSelection } from "../../domain/history.js";
 import type { ApiClient } from "../../transport/api.js";
 import { LatestRequest } from "../../application/latest.js";
 import { ErrorNotice, aborted } from "../shared.js";
 import { buttonStyles } from "../ui.js";
-import { SessionTranscript } from "./SessionTranscript.js";
 import { MRPanel } from "./MRPanel.js";
+const SessionTranscript = lazy(() =>
+  import("./SessionTranscript.js").then((module) => ({
+    default: module.SessionTranscript,
+  })),
+);
 
 export function ContextDetail({
   client,
@@ -32,7 +37,6 @@ export function ContextDetail({
   useEffect(() => {
     heading.current?.focus();
   }, []);
-  const [continuationsOpen, setContinuationsOpen] = useState(false);
   const [code, setCode] = useState<Hit | null>(null);
   const [pack, setPack] = useState<ContextPack | null>(null);
   const [error, setError] = useState("");
@@ -43,12 +47,16 @@ export function ContextDetail({
       capture_after?: CaptureCursor;
       merge_requests_after?: MRCursor;
     } = {},
+    propagateError = false,
   ) {
     const request = requests.begin();
     setLoading(true);
     setError("");
-    setPack(null);
-    setCode(null);
+    const append = !!(pages.capture_after || pages.merge_requests_after);
+    if (!append) {
+      setPack(null);
+      setCode(null);
+    }
     try {
       const result = await client.request<ContextPack>(
         "/v1/context/pack",
@@ -63,9 +71,64 @@ export function ContextDetail({
         )
       )
         throw new Error("Контекст не совпал с выбранным источником.");
-      setPack(result);
+      if (
+        append &&
+        pack?.merge_requests.items.some((old) =>
+          result.merge_requests.items.some(
+            (next) =>
+              old.repository_id === next.repository_id &&
+              old.iid === next.iid &&
+              old.observed_head_sha !== next.observed_head_sha,
+          ),
+        )
+      )
+        throw new Error("Состав MR/PR изменился. Обновите контекст.");
+      const merged =
+        append && pack
+          ? {
+              ...result,
+              captures: pages.capture_after
+                ? {
+                    ...result.captures,
+                    items: [
+                      ...pack.captures.items,
+                      ...result.captures.items.filter(
+                        (c) =>
+                          !pack.captures.items.some(
+                            (old) =>
+                              old.source.repository_id ===
+                                c.source.repository_id &&
+                              old.source.session_id === c.source.session_id,
+                          ),
+                      ),
+                    ],
+                  }
+                : pack.captures,
+              merge_requests: pages.merge_requests_after
+                ? {
+                    ...result.merge_requests,
+                    items: [
+                      ...pack.merge_requests.items,
+                      ...result.merge_requests.items.filter(
+                        (m) =>
+                          !pack.merge_requests.items.some(
+                            (old) =>
+                              old.repository_id === m.repository_id &&
+                              old.iid === m.iid,
+                          ),
+                      ),
+                    ],
+                  }
+                : pack.merge_requests,
+              evidence: pack.evidence,
+            }
+          : result;
+      setPack(merged);
+      return merged.captures.items;
     } catch (e) {
       if (!aborted(e) && request.current()) setError(readableError(e));
+      if (propagateError) throw e;
+      return pack?.captures.items ?? [];
     } finally {
       if (request.current()) setLoading(false);
     }
@@ -74,10 +137,7 @@ export function ContextDetail({
     void load();
     return () => requests.cancel();
   }, [client, selection, requests]);
-  const captures =
-    pack?.captures.items.filter(
-      (c) => c.source.session_id !== selection.session_id,
-    ) ?? [];
+  const groups = groupConversations(pack?.captures.items ?? []);
   return (
     <section className="context-detail min-w-0">
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
@@ -105,7 +165,7 @@ export function ContextDetail({
         </code>
       )}
       <ErrorNotice>{error}</ErrorNotice>
-      {loading && (
+      {loading && !pack && (
         <p role="status" className="text-sm text-muted">
           {t("Загрузка…")}
         </p>
@@ -126,100 +186,91 @@ export function ContextDetail({
             />
           ))}
           {selection.session_id && (
-            <SessionTranscript
-              client={client}
-              selection={selection}
-              onNavigate={onNavigate}
-            />
+            <Suspense
+              fallback={<p role="status">{t("Читаем запись сессии…")}</p>}
+            >
+              <SessionTranscript
+                client={client}
+                selection={selection}
+                windows={pack.captures.items}
+                moreWindows={!!pack.captures.next}
+                onMoreWindows={async () =>
+                  pack.captures.next
+                    ? ((await load(
+                        { capture_after: pack.captures.next },
+                        true,
+                      )) ?? pack.captures.items)
+                    : pack.captures.items
+                }
+                onNavigate={onNavigate}
+              />
+            </Suspense>
           )}
           {!selection.session_id && (
-            <section
-              className="rounded-lg border border-line bg-paper p-5"
-              aria-label={t("Связанные сессии")}
-            >
-              <h2 className="mb-3 text-base">{t("Связанные сессии")}</h2>
+            <section className="min-w-0" aria-label={t("Связанные сессии")}>
+              <h2 className="mb-4 text-base">
+                {t("Диалоги к этому изменению")}
+              </h2>
               {pack.captures.omitted_for_permissions ? (
-                <p className="mb-0 text-sm text-muted">
+                <p className="text-sm text-muted">
                   {t("Нет доступа к сессиям.")}
                 </p>
-              ) : !captures.length ? (
-                <p className="mb-0 text-sm text-muted">
+              ) : !groups.length ? (
+                <p className="rounded-lg border border-line bg-paper p-5 text-sm text-muted">
                   {t("Для этих коммитов ещё нет записанных сессий.")}
                 </p>
               ) : (
-                captures.map((c) => (
-                  <button
-                    key={`${c.source.repository_id}/${c.source.session_id}`}
-                    className="flex w-full justify-between gap-3 rounded-none border-b border-line px-0 py-3 text-left hover:text-accent"
-                    onClick={() =>
-                      onNavigate({
-                        project_id: selection.project_id,
-                        repository_id: c.source.repository_id!,
-                        session_id: c.source.session_id!,
-                      })
-                    }
-                  >
-                    <span className="min-w-0 truncate text-sm">
-                      {c.agent}{" "}
-                      <span className="text-muted">
-                        {t("Сегмент {0}", c.segment)}
+                <div className="grid grid-cols-2 gap-3 compact:grid-cols-1">
+                  {groups.map((group) => (
+                    <button
+                      key={group.key}
+                      className="conversation-card flex min-w-0 flex-col items-stretch justify-start gap-3 rounded-lg border border-line bg-paper p-4 text-left hover:border-accent"
+                      onClick={() =>
+                        onNavigate({
+                          project_id: selection.project_id,
+                          repository_id: group.first.source.repository_id!,
+                          session_id: group.first.source.session_id!,
+                        })
+                      }
+                    >
+                      <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-normal text-muted">
+                        <span className="font-medium text-ink">
+                          {group.first.agent}
+                        </span>
+                        {group.first.started_at && (
+                          <span>
+                            {new Date(
+                              group.first.started_at,
+                            ).toLocaleDateString()}
+                          </span>
+                        )}
+                        <span>
+                          {t("Частей загружено: {0}", group.windows.length)}
+                        </span>
                       </span>
-                    </span>
-                    <span className="shrink-0 text-xs text-muted">
-                      {t("Открыть сессию")}
-                    </span>
-                  </button>
-                ))
+                      <span className="min-w-0 text-sm leading-6 wrap-anywhere line-clamp-3">
+                        {group.first.title || t("Диалог с агентом")}
+                      </span>
+                      <span className="text-xs font-medium text-accent">
+                        {t("Читать диалог")}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               )}
               {pack.captures.next && (
                 <button
-                  className={buttonStyles.text + " mt-3"}
+                  className={buttonStyles.secondary + " mt-4"}
+                  disabled={loading}
                   onClick={() =>
                     void load({ capture_after: pack.captures.next! })
                   }
                 >
-                  {t("Следующие сессии")}
+                  {loading ? t("Загрузка…") : t("Загрузить ещё связи")}
                 </button>
               )}
             </section>
           )}
-          {selection.session_id &&
-            (captures.length > 0 || pack.captures.next) && (
-              <details
-                open={continuationsOpen}
-                onToggle={(event) =>
-                  setContinuationsOpen(event.currentTarget.open)
-                }
-                className="border-t border-line pt-3 text-sm"
-              >
-                <summary className="py-2">{t("Продолжение сессии")}</summary>
-                {captures.map((c) => (
-                  <button
-                    key={c.source.session_id}
-                    className={buttonStyles.text + " block my-2"}
-                    onClick={() =>
-                      onNavigate({
-                        project_id: selection.project_id,
-                        repository_id: c.source.repository_id!,
-                        session_id: c.source.session_id!,
-                      })
-                    }
-                  >
-                    {c.agent} · {t("Сегмент {0}", c.segment)}
-                  </button>
-                ))}
-                {pack.captures.next && (
-                  <button
-                    className={buttonStyles.text + " mt-3"}
-                    onClick={() =>
-                      void load({ capture_after: pack.captures.next! })
-                    }
-                  >
-                    {t("Следующие сессии")}
-                  </button>
-                )}
-              </details>
-            )}
           {!selection.session_id &&
             pack.evidence.some((e) => e.kind === "code") && (
               <section className="overflow-hidden rounded-lg border border-line bg-paper">
@@ -245,6 +296,7 @@ export function ContextDetail({
           {pack.merge_requests.next && (
             <button
               className={buttonStyles.text}
+              disabled={loading}
               onClick={() =>
                 void load({ merge_requests_after: pack.merge_requests.next! })
               }

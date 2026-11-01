@@ -142,10 +142,20 @@ try {
     fullPage: true,
   });
   await auditUI(page, "context-evidence");
-  await page.getByRole("button", { name: "Следующая часть" }).click();
-  await visible(page.getByRole("button", { name: "Начало фрагмента" }));
-  await page.getByRole("button", { name: "Начало фрагмента" }).click();
-  await visible(page.getByRole("button", { name: "Следующая часть" }));
+  const initialQuote = await page.locator(".source-quote").textContent();
+  await page
+    .getByRole("button", { name: "Загрузить ещё", exact: true })
+    .click();
+  await page.waitForFunction(
+    (length) =>
+      document.querySelector(".source-quote")?.textContent.length > length,
+    initialQuote.length,
+  );
+  assert(
+    (await page.locator(".source-quote").textContent()).startsWith(
+      initialQuote,
+    ),
+  );
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(
     () =>

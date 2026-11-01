@@ -7,21 +7,29 @@ for (const name of await readdir(target))
   if (name !== "README.txt")
     await rm(resolve(target, name), { recursive: true, force: true });
 await build({ configFile: "web/vite.config.ts" });
-const packages = [
-  "react",
-  "react-dom",
-  "scheduler",
-  "@fontsource/ibm-plex-sans",
-  "@fontsource/ibm-plex-mono",
-  "tailwindcss",
-];
+// Include license texts of all shipped runtime dependencies, including Markdown's
+// parser tree. Keep the build-only stylesheet compiler notice as before.
+const lock = JSON.parse(await readFile("package-lock.json", "utf8"));
+const paths = new Set(
+  Object.entries(lock.packages)
+    .filter(([path, item]) => path && !item.dev && !item.link)
+    .map(([path]) => path),
+);
+paths.add("node_modules/tailwindcss");
 const notices = await Promise.all(
-  packages.map(
-    async (name) =>
-      name +
-      "\n\n" +
-      (await readFile(resolve("node_modules", name, "LICENSE"), "utf8")),
-  ),
+  [...paths].sort().map(async (path) => {
+    const pkg = JSON.parse(
+      await readFile(resolve(path, "package.json"), "utf8"),
+    );
+    const filenames = (await readdir(resolve(path))).filter((name) =>
+      /^licen[sc]e(?:[.-].*)?$/i.test(name),
+    );
+    const texts = await Promise.all(
+      filenames.map((name) => readFile(resolve(path, name), "utf8")),
+    );
+    if (!texts.length) throw new Error(`Missing runtime license: ${pkg.name}`);
+    return pkg.name + "\n\n" + texts.join("\n");
+  }),
 );
 await writeFile(
   resolve(target, "assets/third-party-licenses.txt"),

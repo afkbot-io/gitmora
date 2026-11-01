@@ -1,4 +1,5 @@
 const paths = {
+  chevron: "m9 5 7 7-7 7",
   setup: "M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5",
   context: "m21 21-4.5-4.5M19 10.5a8.5 8.5 0 1 1-17 0 8.5 8.5 0 0 1 17 0",
   repositories:

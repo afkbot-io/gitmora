@@ -17,15 +17,15 @@ Compose задаёт отдельные лимиты API/worker/БД и вход
 ```sh
 git clone https://github.com/afkbot-io/gitmora.git /opt/gitmora
 cd /opt/gitmora
-git checkout v0.5.1
+git checkout v0.5.2
 npm ci
 make build build-image build-identity-image \
-  RELEASE_VERSION=0.5.1 RELEASE_REVISION="$(git rev-parse HEAD)"
-docker tag gitmora:local gitmora:0.5.1
-docker tag gitmora-identity:26.8.1-auth gitmora-identity:0.5.1-auth
+  RELEASE_VERSION=0.5.2 RELEASE_REVISION="$(git rev-parse HEAD)"
+docker tag gitmora:local gitmora:0.5.2
+docker tag gitmora-identity:26.8.1-auth gitmora-identity:0.5.2-auth
 ```
 
-Получаются host-команды `bin/gitmorad`/`bin/gitmora`, API/gateway-образ `gitmora:0.5.1`, оптимизированный `/auth`-образ входа и `gitmora-postgres:18.6-security1`. Образы собираются для архитектуры сервера. Не заменяйте тег уже работающей версии другими байтами. `make build-image` готовит PostgreSQL автоматически. В runtime нет Node/npm/CDN. [Сборка и проверки](development.md).
+Получаются host-команды `bin/gitmorad`/`bin/gitmora`, API/gateway-образ `gitmora:0.5.2`, оптимизированный `/auth`-образ входа и `gitmora-postgres:18.6-security1`. Образы собираются для архитектуры сервера. Не заменяйте тег уже работающей версии другими байтами. `make build-image` готовит PostgreSQL автоматически. В runtime нет Node/npm/CDN. [Сборка и проверки](development.md).
 
 ## 3. Создать приватную конфигурацию
 
@@ -38,7 +38,7 @@ bin/gitmorad deployment init \
   --overlay /opt/gitmora/deploy/compose.identity-auth.yaml \
   --overlay /opt/gitmora/deploy/compose.github-com.yaml \
   --overlay /opt/gitmora/deploy/compose.gitlab-com.yaml \
-  --image gitmora:0.5.1 --port 8080
+  --image gitmora:0.5.2 --port 8080
 install -m 0600 .env.example /srv/gitmora/state/compose.env
 install -m 0600 deploy/gitmora.runtime.env.example /srv/gitmora/state/runtime.env
 ```
@@ -95,8 +95,8 @@ bin/gitmorad identity-server init \
   --public-url "https://$GITMORA_PUBLIC_HOST/auth" \
   --application-url "https://$GITMORA_PUBLIC_HOST" \
   --realm "$GITMORA_REALM" --client-id "$GITMORA_CLIENT_ID" \
-  --identity-image gitmora-identity:0.5.1-auth \
-  --gateway-image gitmora:0.5.1 --port 18081
+  --identity-image gitmora-identity:0.5.2-auth \
+  --gateway-image gitmora:0.5.2 --port 18081
 bin/gitmorad identity-server up --directory /srv/gitmora/identity
 bin/gitmorad identity-server finalize --directory /srv/gitmora/identity
 install -m 0444 /srv/gitmora/identity/secrets/oidc_client_secret /srv/gitmora/state/secrets/oidc_client_secret
@@ -142,20 +142,20 @@ bin/gitmorad deployment up --directory /srv/gitmora/state
 
 ## 7. Раздать CLI и подключить агенты к своему адресу
 
-`/install.sh` устанавливает **клиент**, не сервер. Он скачивает файлы с указанного `--server`; скрытого fallback на чужую Gitmora нет. До выдачи команды пользователям разместите на своём домене проверенные файлы CLI 0.5.1:
+`/install.sh` устанавливает **клиент**, не сервер. Он скачивает файлы с указанного `--server`; скрытого fallback на чужую Gitmora нет. До выдачи команды пользователям разместите на своём домене проверенные файлы CLI 0.5.2:
 
 ```sh
 gitmora_cli_download=$(mktemp -d)
 for gitmora_asset in gitmora_darwin_arm64 gitmora_darwin_amd64 gitmora_linux_arm64 gitmora_linux_amd64 release.json SHA256SUMS; do
   curl --proto '=https' --proto-redir '=https' --tlsv1.2 --fail --location --show-error \
     --output "$gitmora_cli_download/$gitmora_asset" \
-    "https://github.com/afkbot-io/gitmora/releases/download/v0.5.1/$gitmora_asset" || exit 1
+    "https://github.com/afkbot-io/gitmora/releases/download/v0.5.2/$gitmora_asset" || exit 1
 done
 python3 scripts/publish-cli.py --release "$gitmora_cli_download" \
-  --public-root /srv/gitmora-public --version 0.5.1
+  --public-root /srv/gitmora-public --version 0.5.2
 ```
 
-Публикация проверяет точный состав, размер и SHA-256 каждого artifact, manifest и отсутствие лишних файлов/симлинков; затем атомарно создаёт `downloads/cli/0.5.1/`. Повтор с теми же байтами безопасен, существующая другая версия файла не перезаписывается. Скрипт ничего не исполняет и не читает приватный state. В изолированной сети заранее доставьте эти шесть файлов с доверенного build/download-хоста и выполните ту же проверку. Контрольные суммы с того же HTTPS-источника не являются независимой подписью издателя. [Сборка своих проверенных бинарников](native-installation.md#build-and-verification).
+Публикация проверяет точный состав, размер и SHA-256 каждого artifact, manifest и отсутствие лишних файлов/симлинков; затем атомарно создаёт `downloads/cli/0.5.2/`. Повтор с теми же байтами безопасен, существующая другая версия файла не перезаписывается. Скрипт ничего не исполняет и не читает приватный state. В изолированной сети заранее доставьте эти шесть файлов с доверенного build/download-хоста и выполните ту же проверку. Контрольные суммы с того же HTTPS-источника не являются независимой подписью издателя. [Сборка своих проверенных бинарников](native-installation.md#build-and-verification).
 
 В public root не кладите state, ключи, базы или backups. После этой подготовки установка клиента и работа Gitmora на вашем домене не требуют обращения к `gitmora.tasktopia.online`.
 
@@ -201,7 +201,7 @@ gitmora api get /v1/projects --server "https://$GITMORA_PUBLIC_HOST"
 | 502 после HTTPS | Запущены ли gateway/API/identity, совпадают ли loopback-порты |
 | Вход не открывается | Одинаковый домен у `compose.env`, API config, provider profile и сертификата; issuer discovery из private API-сети |
 | Readiness 503 | БД/миграция, matching image/config; статус обоих Compose-проектов |
-| CLI installer 404 | Шесть файлов CLI лежат в нужном `downloads/cli/0.5.1/`; это не установка сервера |
+| CLI installer 404 | Шесть файлов CLI лежат в нужном `downloads/cli/0.5.2/`; это не установка сервера |
 | Новый источник не разрешён | Allowlist, выбранный fixed relay, authority/порт/prefix, DNS/CA, `compose.env` |
 | CLI/MCP 401/403 | Вход на тот же `--server`, membership/scopes, истечение/отзыв; [диагностика](custom-server.md) |
 

@@ -1,5 +1,13 @@
 # Changes
 
+## 0.5.2
+
+- Read agent history as a conversation: safe Markdown, user/agent roles, compact tool groups, supplied command/output details and collapsible long messages. Technical revision/source controls stay under details.
+- Append message batches, exact source excerpts and linked-context pages without replacing earlier content. Continue verified conversation windows inline and preserve reading position.
+- Group verified related windows into one conversation card, showing the request, agent and date. Search links open the exact message and revision. Add conversation-only and loaded-part text filters.
+- Use GIN lexical candidate matching before authorization joins, retaining current membership/provider checks before ranking and LIMIT. No model or schema changes.
+- Lazy-load the Markdown reader and include all shipped runtime license notices. Verify desktop/mobile, both themes, Markdown safety, continuation identity, pagination and real PostgreSQL/API/MCP search.
+
 ## 0.5.1
 
 - Add continuation pagination to session detail and keep the continuation panel open while switching pages.

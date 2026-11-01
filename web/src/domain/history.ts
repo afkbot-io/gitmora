@@ -52,6 +52,8 @@ export interface CaptureWindow {
   root_session_id: string;
   segment: number;
   agent: string;
+  title?: string;
+  started_at?: string;
   parent_reference_verified: boolean;
   chain_verified: boolean;
   chain_verification_limited: boolean;
@@ -182,6 +184,7 @@ export interface SessionRevision {
       tool_name?: string;
       kind?: string;
     }[];
+    continuation?: { segment: number };
     files: string[];
     commits: string[];
     origin?: ImportOrigin;

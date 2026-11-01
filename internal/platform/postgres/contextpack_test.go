@@ -104,6 +104,9 @@ func TestContextPackExpandsOnlyFullyVerifiedNativeStreamsAndPaginates(t *testing
 	if err != nil || len(first.Captures.Items) != 1 || first.Captures.Next == nil || !first.Captures.Items[0].ChainVerified {
 		t.Fatalf("%+v %v", first, err)
 	}
+	if first.Captures.Items[0].Title != "Root report" || first.Captures.Items[0].StartedAt != root.StartedAt.Format(time.RFC3339Nano) {
+		t.Fatal("capture reading metadata lost", first.Captures.Items[0])
+	}
 	query.After = first.Captures.Next
 	second, err := store.Read(ctx, contextPrincipal(access.ReadCapture), query)
 	if err != nil || len(second.Captures.Items) != 1 || second.Captures.Items[0].Source.SessionID != child.SessionID || !second.Captures.Items[0].ParentReferenceVerified || !second.Captures.Items[0].ChainVerified || second.Captures.Items[0].ConfirmedCount != 0 || second.Captures.Next != nil {
