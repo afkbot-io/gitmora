@@ -67,11 +67,11 @@ func main() {
 		case errors.Is(err, domain.ErrConflict):
 			message = "Collector identity/configuration conflict; existing state was preserved"
 		case errors.Is(err, domain.ErrNotInitialized):
-			message = "Run workgraph init in this repository first"
+			message = "Run gitmora init in this repository first"
 		case errors.Is(err, native.ErrInvalid):
 			message = "Invalid authentication input or saved credential"
 		case errors.Is(err, native.ErrNotFound):
-			message = "No saved credential; run workgraph auth login --server <URL>"
+			message = "No saved credential; run gitmora auth login --server <URL>"
 		case errors.Is(err, native.ErrVault):
 			message = "System secret store unavailable; unlock Keychain or start Linux Secret Service"
 		case errors.Is(err, native.ErrBusy):
@@ -168,8 +168,8 @@ func run(parent context.Context, args []string, input io.Reader, output, diagnos
 	}
 	switch command {
 	case "init":
-		flags.StringVar(&server, "server", "", "Workgraph API base URL")
-		flags.StringVar(&repositoryID, "repository-id", "", "Workgraph repository UUID")
+		flags.StringVar(&server, "server", "", "Gitmora API base URL")
+		flags.StringVar(&repositoryID, "repository-id", "", "Gitmora repository UUID")
 		flags.StringVar(&remote, "remote", "origin", "Named Git push remote")
 		flags.StringVar(&tokenEnv, "token-env", "WORKGRAPH_TOKEN", "Environment variable containing the scoped token")
 	case "bind":
@@ -585,7 +585,7 @@ func dispatchHook(parent context.Context, args []string, input io.Reader, output
 	}
 	if *name == "post-commit" {
 		if err := collectHook(parent, *name, flags.Args(), nil); err != nil {
-			_, _ = fmt.Fprintln(diagnostic, "Workgraph context capture needs attention; Git commit is preserved")
+			_, _ = fmt.Fprintln(diagnostic, "Gitmora context capture needs attention; Git commit is preserved")
 		}
 		return gitrepo.RunOriginal(parent, installation, directory, *name, flags.Args(), input, output, diagnostic)
 	}
@@ -595,7 +595,7 @@ func dispatchHook(parent context.Context, args []string, input io.Reader, output
 		if err := gitrepo.RunOriginal(parent, installation, directory, *name, flags.Args(), io.MultiReader(bytes.NewReader(raw), input), output, diagnostic); err != nil {
 			return err
 		}
-		_, _ = fmt.Fprintln(diagnostic, "Workgraph skipped oversized hook input; use manual synchronization")
+		_, _ = fmt.Fprintln(diagnostic, "Gitmora skipped oversized hook input; use manual synchronization")
 		return nil
 	}
 	if *name == "pre-push" {
@@ -603,12 +603,12 @@ func dispatchHook(parent context.Context, args []string, input io.Reader, output
 			return err
 		}
 		if err := collectHook(parent, *name, flags.Args(), raw); err != nil {
-			_, _ = fmt.Fprintln(diagnostic, "Workgraph context remains local; code push can continue")
+			_, _ = fmt.Fprintln(diagnostic, "Gitmora context remains local; code push can continue")
 		}
 		return nil
 	}
 	if err := collectHook(parent, *name, flags.Args(), raw); err != nil {
-		_, _ = fmt.Fprintln(diagnostic, "Workgraph rewrite context needs attention; Git history is preserved")
+		_, _ = fmt.Fprintln(diagnostic, "Gitmora rewrite context needs attention; Git history is preserved")
 	}
 	return gitrepo.RunOriginal(parent, installation, directory, *name, flags.Args(), bytes.NewReader(raw), output, diagnostic)
 }

@@ -35,7 +35,7 @@ func configureAuth(parent context.Context, args []string, output, diagnostic io.
 		flags.PrintDefaults()
 		flags.SetOutput(io.Discard)
 	}
-	server := flags.String("server", "", "Exact Workgraph server URL; credentials are scoped to this destination")
+	server := flags.String("server", "", "Exact Gitmora server URL; credentials are scoped to this destination")
 	var options native.LoginOptions
 	var scopes string
 	var noBrowser, localOnly bool

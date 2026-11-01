@@ -1,6 +1,6 @@
 # Supported core scope
 
-The current product is development context, described by [requirements C01–C18](requirements.md) and the [architecture](system-analysis.md). Server/UI version is 0.3.0; the existing standalone client release is 0.2.0.
+The current product is development context, described by [requirements C01–C18](requirements.md) and the [architecture](system-analysis.md). Server/UI version is 0.3.0; the standalone client is 0.3.0 (0.2.0 remains compatible).
 
 | Area | Delivered behavior |
 | --- | --- |
