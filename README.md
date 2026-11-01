@@ -56,3 +56,7 @@ make integration
 - Phone checks use browser emulation. SMTP recovery, automatic external ACL synchronization, unattended upgrades and a production capacity guarantee are not included.
 
 Server/UI is 0.2.1; the existing standalone client release is 0.2.0. See [changes](CHANGELOG.md). Legacy `workgraph` executable aliases, `WORKGRAPH_*` variables and protocols remain compatible. Dependency and copied-template terms are listed in [third-party notices](THIRD_PARTY_NOTICES.md).
+
+## License
+
+Gitmora's original code is available under the [MIT License](LICENSE). Separately licensed dependencies and adapted templates retain the terms listed in [third-party notices](THIRD_PARTY_NOTICES.md).
