@@ -1,2 +1,2 @@
-Generated application assets are placed here by npm run build:web and embedded in workgraphd.
-Build the frontend before compiling a runnable server. Clean Go test checkouts need no generated assets.
+Сборка npm run build:web помещает сюда ресурсы приложения, которые затем встраиваются в серверный бинарный файл.
+Перед компиляцией рабочего сервера соберите клиентскую часть. Тестам Go сгенерированные ресурсы не нужны.
