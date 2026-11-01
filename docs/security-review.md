@@ -1,4 +1,4 @@
-# Release security review — 0.7.0
+# Release security review — 0.7.x
 
 Reviewed on 2 November 2026. The audit fixed collector consistency and consent defects and checked the Go/React application, native adapters, source rendering, deployment boundaries and dependencies. This is bounded release evidence, not a penetration-test certificate or a guarantee that no vulnerabilities remain.
 
@@ -11,6 +11,7 @@ Reviewed on 2 November 2026. The audit fixed collector consistency and consent d
 | C03 | Medium | `internal/collector/application/recover_ranges.go:63`, `recordedCommitOutput` | Recovery could bridge an unresolved intermediate commit into a later known one. Successful unresolved/quiet commit attempts now stop that interval; missing objects and the first endpoint do not establish whole-history ownership. Existing immutable revisions are retained. |
 | C04 | Medium | `internal/collector/application/frontier.go:263`, `ApplyFrontier` | Applying a pending checkpoint by ID did not recheck named-agent consent. The transaction now checks current repository/agent policy; a disable/re-enable regression covers this path. |
 | C05 | Medium | `internal/collector/gitrepo/repository.go:213`, `Reachable`; `repository.go:323`, `gitOutput.Write` | Unbounded Git stdout could exhaust local memory, and a global negative revision set could erase another pushed ref's new context. Queries now cancel above 16 MiB and ref intervals are unioned independently. An actual oversized child-process regression rejects partial output. |
+| C06 | Medium | `scripts/build-identity-theme.mjs`, `publicPermissions` | A source archive extracted with umask 077 retained root-only theme directories, making login/registration fail as runtime UID 1000. Release 0.7.1 normalizes only public theme output to directories 0755/files 0644. The new private-archive gate exercises the actual nonroot image and registration; secret permissions remain private. |
 
 No new HTTP authorization bypass was confirmed. Negative tests cover cookie/CSRF behavior, role checks, membership/credential revocation, redirects, source HTML, provider authority and TLS hostname rejection. Passing these scenarios does not certify every route or deployment.
 

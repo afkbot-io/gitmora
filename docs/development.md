@@ -43,6 +43,7 @@ python3 -m unittest discover -s scripts/tests -p test_release_cli.py
 | `make smoke-browser-compat` | Chromium/Android, WebKit/iPhone and Firefox layouts, both themes, RU/EN, keyboard, history and accessibility. |
 | `make smoke-keycloak`, `make smoke-keycloak-native`, `make smoke-registration` | Real optimized provider, separate database, bootstrap retirement, signup policy and native account consent. |
 | `make smoke-identity-proxy` | Actual nginx/TLS routes, wrong CA/hostname and private admin denial. |
+| `make smoke-identity-permissions` | An image built from a committed private archive extracted with umask 077; actual UID-1000 template reads and registration. |
 | `make smoke-deployment`, `make smoke-recovery`, `make smoke-egress` | Isolated persistent installations, file secrets, outage/reconnect, actual dump/restore and route isolation. |
 | `make smoke-onboarding`, `make smoke-cli-release`, `make smoke-cli-downloads` | Executed checksum-checked installer, exact-byte update, queue/push/restart and public download routes. |
 | `make verify-linux` | Linux runtime/process checks and unprivileged collector/Git/SQLite behavior. |

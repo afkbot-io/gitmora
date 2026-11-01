@@ -3,6 +3,7 @@ import { build } from "vite";
 import tailwindcss from "@tailwindcss/vite";
 import {
   copyFile,
+  chmod,
   cp,
   mkdir,
   readFile,
@@ -91,6 +92,18 @@ await copyFile(
   resolve("node_modules/tailwindcss/LICENSE"),
   resolve(target, "tailwind-LICENSE.txt"),
 );
+// A private source archive can contain 0700 directories. Theme resources are
+// public output and must remain readable by the provider's nonroot runtime.
+async function publicPermissions(directory) {
+  await chmod(directory, 0o755);
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const path = resolve(directory, entry.name);
+    if (entry.isDirectory()) await publicPermissions(path);
+    else if (entry.isFile()) await chmod(path, 0o644);
+    else throw new Error("Unexpected identity theme output type");
+  }
+}
+await publicPermissions(bundle);
 console.log(
   JSON.stringify({
     theme: basename(bundle),

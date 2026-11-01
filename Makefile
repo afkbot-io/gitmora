@@ -213,7 +213,11 @@ smoke-design: build test-web build-postgres-image
 verify-ui:
 	GITMORA_UI_AUDIT=1 $(MAKE) smoke-design smoke-web smoke-history smoke-settings smoke-credentials smoke-cli-consent smoke-registration
 
-verify-release: smoke-self-host-config smoke-custom-server smoke-github-profile smoke-github smoke-github-ui verify verify-linux smoke-cli-auth test-native-secret-store-linux smoke-forge-subpath smoke-gitlab-profile smoke-onboarding smoke-design smoke-browser-compat
+verify-release: smoke-self-host-config smoke-custom-server smoke-github-profile smoke-github smoke-github-ui verify verify-linux smoke-cli-auth test-native-secret-store-linux smoke-forge-subpath smoke-gitlab-profile smoke-onboarding smoke-design smoke-browser-compat smoke-identity-permissions
+
+.PHONY: smoke-identity-permissions
+smoke-identity-permissions: build build-image
+	python3 scripts/smoke-identity-permissions.py
 
 smoke-browser-compat: build test-web build-postgres-image
 	mkdir -p bin/verification

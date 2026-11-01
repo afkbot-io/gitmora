@@ -1,5 +1,10 @@
 # Changes
 
+## 0.7.1
+
+- Normalize public account-theme directories/files to 0755/0644 independently of source checkout permissions. A private archive extracted with umask 077 no longer creates unreadable templates in the nonroot provider.
+- Verify an image built from restrictive source permissions as UID 1000 and exercise real registration using that image. No database or local-ledger schema changes.
+
 ## 0.7.0
 
 - Bind normalized tool positions atomically for Codex and OpenCode; recover pending checkpoints in source order and reject out-of-order application. Missing tool results remain unresolved and block automatic interval consumption from the same source.
