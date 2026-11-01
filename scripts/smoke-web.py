@@ -88,13 +88,18 @@ def main():
         assert call("/v1/captures", capture)[0] == 201
         if args.history:
             digest = call(f'/v1/repositories/{identity["repository_id"]}/sessions/{session}')[1]["digest"]
+            previous_session = session
+            previous_revision = 2
             for index in range(1, 22):
                 extra = {**capture, "revision": 1, "session_id": f"eeeeeeee-eeee-4eee-8eee-{index:012x}", "messages": [dict(role="assistant", text=f"Archive marker {index}")]}
-                if index == 1:
-                    extra["continuation"] = dict(root_session_id=session, previous_session_id=session, previous_revision=2, previous_digest=digest, segment=2, reason="window")
+                if index <= 10:
+                    extra["continuation"] = dict(root_session_id=session, previous_session_id=previous_session, previous_revision=previous_revision, previous_digest=digest, segment=index+1, reason="window")
                 else:
                     extra["agent"] = dict(name=f"Archive window {index}", model="synthetic-local")
-                assert call("/v1/captures", extra)[0] == 201
+                status, accepted = call("/v1/captures", extra)
+                assert status == 201
+                if index <= 10:
+                    previous_session, previous_revision, digest = extra["session_id"], 1, accepted["digest"]
         for _ in range(30):
             indexed = api.command(["worker", "--once"], environment)
             assert indexed.returncode == 0, "Synthetic index worker failed"

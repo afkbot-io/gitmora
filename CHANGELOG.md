@@ -2,6 +2,8 @@
 
 ## 0.5.1
 
+- Add continuation pagination to session detail and keep the continuation panel open while switching pages.
+
 - Recover long Codex conversations up to 50,000 items while retaining independent 64 MiB protocol/text budgets and per-item limits.
 - Retry a changing metadata snapshot up to three times within the shared read deadline. Manual capture has a 60-second recovery budget; hook execution remains bounded.
 - Mask explicit Russian/English and Markdown password declarations before native message fragmentation. Historical canonical Text/Lines policies and stored digests remain unchanged.
