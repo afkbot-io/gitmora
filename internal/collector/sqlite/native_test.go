@@ -69,7 +69,7 @@ func TestVersionTwoNativePinContinuesWithOriginalTaskAndConsent(t *testing.T) {
 	if err := bindLegacyFixture(ctx, store, "tree", task); err != nil {
 		t.Fatal(err)
 	}
-	root, err := service.RecordNative(ctx, "tree", observation())
+	root, err := seedLegacyNativeRecording(ctx, store, "tree", observation(), task)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +171,7 @@ func TestNativeWindowsSurviveRestartCompactionAndKeepConsentTaskAndFileDedup(t *
 	}
 	for _, q := range queue {
 		snap := q.Session.Snapshot()
-		if snap.Task == nil || *snap.Task != *task {
+		if snap.Task != nil {
 			t.Fatal("task retargeted")
 		}
 		if snap.SessionID == child {

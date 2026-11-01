@@ -131,7 +131,7 @@ func TestBindingWorktreesAndNativeReplayConflictsAreIsolated(t *testing.T) {
 		t.Fatal(err)
 	}
 	third, err := service.Record(ctx, "tree-a", observation())
-	if err != nil || third == first {
+	if err != nil || third != first {
 		t.Fatal("new task retargeted an existing recording")
 	}
 	changed := observation()
@@ -146,7 +146,7 @@ func TestBindingWorktreesAndNativeReplayConflictsAreIsolated(t *testing.T) {
 		t.Fatal(err)
 	}
 	queue, err := store.Pending(ctx, time.Now(), 16)
-	if err != nil || len(queue) != 2 {
+	if err != nil || len(queue) != 1 {
 		t.Fatal("commit associated another worktree")
 	}
 	for _, entry := range queue {
@@ -289,7 +289,7 @@ func TestNativeConversationKeepsItsTaskBindingAcrossRestart(t *testing.T) {
 	if err := bindLegacyFixture(ctx, store, "tree", firstTask); err != nil {
 		t.Fatal(err)
 	}
-	first, err := service.RecordNative(ctx, "tree", observation())
+	first, err := seedLegacyNativeRecording(ctx, store, "tree", observation(), firstTask)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -490,4 +490,31 @@ func bindLegacyFixture(ctx context.Context, store *sqlite.Store, worktree string
 			SeedLegacyBinding(string, *capture.TaskRef) error
 		}).SeedLegacyBinding(worktree, task)
 	})
+}
+
+func seedLegacyNativeRecording(ctx context.Context, store *sqlite.Store, tree string, input domain.Observation, task *capture.TaskRef) (string, error) {
+	id := "fefefefe-fefe-4efe-8efe-fefefefefefe"
+	err := store.Within(ctx, func(tx application.Transaction) error {
+		cfg, e := tx.Config()
+		if e != nil {
+			return e
+		}
+		o, e := domain.Normalize(input)
+		if e != nil {
+			return e
+		}
+		r, e := domain.NewRecording(cfg.RepositoryID, id, tree, task, o, time.Now())
+		if e != nil {
+			return e
+		}
+		key := domain.SessionKey(cfg.RepositoryID, tree, task, o)
+		if e = tx.Save(key, r); e != nil {
+			return e
+		}
+		if e = tx.PinNative(domain.SessionKey(cfg.RepositoryID, tree, nil, o), key); e != nil {
+			return e
+		}
+		return tx.RememberEvent(id, o.EventKey(), o.Digest())
+	})
+	return id, err
 }

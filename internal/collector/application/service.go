@@ -106,7 +106,7 @@ func (s *Service) Record(ctx context.Context, worktree string, input domain.Obse
 	return s.record(ctx, worktree, input, false)
 }
 
-// RecordNative pins a native conversation's initial task scope across later bindings and restarts.
+// RecordNative pins a native conversation's immutable source scope across restarts.
 func (s *Service) RecordNative(ctx context.Context, worktree string, input domain.Observation) (string, error) {
 	if input.History != nil {
 		return s.recordNativePage(ctx, worktree, input, nil)
@@ -128,11 +128,7 @@ func (s *Service) record(ctx context.Context, worktree string, input domain.Obse
 		if !config.AllowsAgent(observation.Value().Agent.Name) {
 			return domain.ErrDisabled
 		}
-		task, err := tx.Binding(worktree)
-		if err != nil {
-			return err
-		}
-		key := domain.SessionKey(config.RepositoryID, worktree, task, observation)
+		key := domain.SessionKey(config.RepositoryID, worktree, nil, observation)
 		nativeKey := ""
 		if pinNative {
 			nativeKey = domain.SessionKey(config.RepositoryID, worktree, nil, observation)
@@ -147,6 +143,23 @@ func (s *Service) record(ctx context.Context, worktree string, input domain.Obse
 		recording, found, err := tx.Find(key)
 		if err != nil {
 			return err
+		}
+		// Retired bindings may locate an existing immutable recording, never scope a new one.
+		if !found {
+			legacy, e := tx.Binding(worktree)
+			if e != nil {
+				return e
+			}
+			if legacy != nil {
+				legacyKey := domain.SessionKey(config.RepositoryID, worktree, legacy, observation)
+				old, exists, e := tx.Find(legacyKey)
+				if e != nil {
+					return e
+				}
+				if exists {
+					recording, found, key = old, true, legacyKey
+				}
+			}
 		}
 		duplicate := false
 		if found {
@@ -190,7 +203,7 @@ func (s *Service) record(ctx context.Context, worktree string, input domain.Obse
 					return err
 				}
 			} else {
-				recording, err = domain.NewRecording(config.RepositoryID, sessionID, worktree, task, effective, s.now())
+				recording, err = domain.NewRecording(config.RepositoryID, sessionID, worktree, nil, effective, s.now())
 				if err != nil {
 					return err
 				}

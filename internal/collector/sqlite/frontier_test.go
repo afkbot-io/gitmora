@@ -91,7 +91,7 @@ func TestFrontierRestartPinsTaskEndAndExactReplayTarget(t *testing.T) {
 		t.Fatal("authorized snapshot missing", err)
 	}
 	snapshot := queue[0].Session.Snapshot()
-	if snapshot.Task == nil || *snapshot.Task != *task || len(snapshot.Commits) != 1 || snapshot.Commits[0] != b {
+	if snapshot.Task != nil || len(snapshot.Commits) != 1 || snapshot.Commits[0] != b {
 		t.Fatalf("wrong original scope/boundary: %+v", snapshot)
 	}
 }

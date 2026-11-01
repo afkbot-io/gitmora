@@ -55,8 +55,8 @@ func TestImportedPathsRemainHistoricalAndReplayKeepsOriginalTask(t *testing.T) {
 	if err := bindLegacyFixture(ctx, store, "tree", nil); err != nil {
 		t.Fatal(err)
 	}
-	if pending[0].Session.Snapshot().Task == nil || *pending[0].Session.Snapshot().Task != *task {
-		t.Fatal("original task lost")
+	if pending[0].Session.Snapshot().Task != nil {
+		t.Fatal("retired binding applied to a new import")
 	}
 	if replay, err := service.RecordNative(ctx, "tree", windows[0]); err != nil || replay != id {
 		t.Fatal("import duplicated on replay", err)

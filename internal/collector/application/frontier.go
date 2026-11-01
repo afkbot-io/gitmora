@@ -7,7 +7,7 @@ import (
 	"workgraph.local/platform/internal/collector/domain"
 )
 
-// BeginFrontier durably pins the initial task and HEAD before native source reads.
+// BeginFrontier durably pins the initial source scope and HEAD before native source reads.
 func (s *Service) BeginFrontier(ctx context.Context, source domain.NativeSource, call, before string) (domain.Frontier, error) {
 	var result domain.Frontier
 	if source.Validate() != nil {
@@ -44,10 +44,7 @@ func (s *Service) BeginFrontier(ctx context.Context, source domain.NativeSource,
 				}
 				source.Task = recording.State().Snapshot.Task
 			} else {
-				source.Task, err = tx.Binding(source.Worktree)
-				if err != nil {
-					return err
-				}
+				source.Task = nil
 			}
 			if err := tx.SaveFrontierSource(key, source); err != nil {
 				return err
