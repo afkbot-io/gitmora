@@ -300,7 +300,9 @@ func (a *localAdministrator) Finalize(parent context.Context, i Installation) (P
 		return Proof{}, ErrConflict
 	}
 	var user providerUser
-	if status, e := remote.request(ctx, "GET", prefix+"/users/"+i.UserID, token, "", nil, &user); e != nil || status != 200 || user.ID != i.UserID || user.Username != "gitmora.admin" || !user.Enabled {
+	// The initial import has a fixed name; active owners may rename their account.
+	// The pinned provider subject remains the authority for subsequent checks.
+	if status, e := remote.request(ctx, "GET", prefix+"/users/"+i.UserID, token, "", nil, &user); e != nil || status != 200 || user.ID != i.UserID || i.Phase == "bootstrap" && user.Username != "gitmora.admin" || !user.Enabled {
 		return Proof{}, ErrConflict
 	}
 	bootstrap, err := remote.clients(ctx, "master", "gitmora-bootstrap", token)
