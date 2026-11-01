@@ -17,7 +17,6 @@ import {
 } from "./SettingsShared.js";
 import { Empty, ErrorNotice, aborted } from "./shared.js";
 import { Connections } from "./connections/Connections.js";
-
 export function ProjectSettings({
   client,
   me,
@@ -34,6 +33,22 @@ export function ProjectSettings({
   const rights = capabilities(me, project);
   const [deleting, setDeleting] = useState(false);
   const action = useMutation(client);
+  const [tab, setTab] = useState(() =>
+    new URLSearchParams(location.hash.slice(1)).get("tab") === "integrations"
+      ? "integrations"
+      : "general",
+  );
+  useEffect(() => {
+    const read = () =>
+      setTab(
+        new URLSearchParams(location.hash.slice(1)).get("tab") ===
+          "integrations"
+          ? "integrations"
+          : "general",
+      );
+    window.addEventListener("hashchange", read);
+    return () => window.removeEventListener("hashchange", read);
+  }, []);
   async function remove() {
     if (
       await action.run(
@@ -48,44 +63,69 @@ export function ProjectSettings({
     }
   }
   return (
-    <section className="settings-view px-0 pb-8">
-      <div className={sharedStyles.heading}>
-        <h1>{translate("Настройки проекта")}</h1>
-        <button
-          className={buttonStyles.secondary}
-          onClick={() => void refreshProject()}
-        >
-          {translate("Обновить проект")}
-        </button>
-      </div>
-      <section className="settings-section border-t border-line px-0 py-7 mt-6 [&_h2]:text-2xl [&_h3]:text-base [&_h3]:font-medium [&_h3]:mt-0">
-        <h2>{translate("Проект")}</h2>
-        <p className="mono muted text-muted font-mono text-xs wrap-anywhere">
-          {project.id}
-        </p>
-        {rights.catalog ? (
-          <Rename
-            key={project.version}
-            client={client}
-            path={`/v1/projects/${project.id}`}
-            name={project.name}
-            version={project.version}
-            onSaved={() => refreshProject()}
-            label={translate("Название проекта")}
-          />
-        ) : (
-          <p className="wrap-anywhere">{project.name}</p>
-        )}
-      </section>
-      {rights.members && (
-        <Members
-          client={client}
-          project={project}
-          canEdit={rights.catalog}
-          refreshProject={() => refreshProject()}
-        />
-      )}
-      {rights.integrationRead || rights.integrations ? (
+    <section className="settings-view">
+      <h1>{translate("Настройки проекта")}</h1>
+      <nav
+        aria-label={translate("Настройки проекта")}
+        className="flex gap-6 border-b border-line mb-6"
+      >
+        {[
+          ["general", "Основное"],
+          ["integrations", "Интеграции"],
+        ].map(([key, label]) => (
+          <a
+            key={key}
+            href={`#view=settings&project=${project.id}&tab=${key}`}
+            aria-current={tab === key ? "page" : undefined}
+            className={`py-3 text-sm no-underline border-b-2 ${tab === key ? "border-accent font-medium text-accent" : "border-transparent text-muted"}`}
+            onClick={() => setTab(key!)}
+          >
+            {translate(label!)}
+          </a>
+        ))}
+      </nav>
+      {tab === "general" ? (
+        <>
+          <section className="settings-section grid grid-cols-[220px_minmax(0,1fr)] gap-6 border-b border-line pb-8 mobile:grid-cols-1">
+            <h2 className="text-base">{translate("Проект")}</h2>
+            <div>
+              {rights.catalog ? (
+                <Rename
+                  key={project.version}
+                  client={client}
+                  path={`/v1/projects/${project.id}`}
+                  name={project.name}
+                  version={project.version}
+                  onSaved={() => refreshProject()}
+                  label={translate("Название проекта")}
+                />
+              ) : (
+                <p>{project.name}</p>
+              )}
+              <details className="mt-5 text-xs text-muted">
+                <summary>{translate("Идентификатор проекта")}</summary>
+                <code className="block mt-3 break-all">{project.id}</code>
+              </details>
+            </div>
+          </section>
+          {rights.catalog && (
+            <section className="settings-section grid grid-cols-[220px_minmax(0,1fr)] gap-6 py-8 mobile:grid-cols-1">
+              <h2 className="text-base">{translate("Удаление проекта")}</h2>
+              <div>
+                <p className="text-sm text-muted">
+                  {translate("Удаляет историю и настройки проекта в Gitmora.")}
+                </p>
+                <button
+                  className={buttonStyles.dangerOutline}
+                  onClick={() => setDeleting(true)}
+                >
+                  {translate("Удалить проект")}
+                </button>
+              </div>
+            </section>
+          )}
+        </>
+      ) : (
         <Connections
           client={client}
           project={project}
@@ -93,37 +133,8 @@ export function ProjectSettings({
           canRead={rights.integrationRead}
           canManage={rights.integrations}
         />
-      ) : (
-        <section className="settings-section border-t border-line px-0 py-7 mt-6 [&_h2]:text-2xl [&_h3]:text-base [&_h3]:font-medium [&_h3]:mt-0">
-          <h2>{translate("Интеграции")}</h2>
-          <p className="muted text-muted">
-            {translate("Интеграции настраивает администратор проекта.")}
-          </p>
-        </section>
       )}
-      {rights.catalog && (
-        <section
-          className={`
-          settings-section danger-zone border-t border-line px-0 py-7 mt-6 [&_h2]:text-2xl
-          [&_h3]:text-base [&_h3]:font-medium [&_h3]:mt-0 max-w-220 [&_p]:text-muted [&_p]:max-w-[65ch]
-          [&_p]:text-sm
-        `}
-        >
-          <h2>{translate("Удаление проекта")}</h2>
-          <p>
-            {translate(
-              "Удаляет связанные данные Gitmora. Репозитории и задачи во внешних сервисах сохраняются.",
-            )}
-          </p>
-          <button
-            className={buttonStyles.dangerOutline}
-            onClick={() => setDeleting(true)}
-          >
-            {translate("Удалить проект")}
-          </button>
-        </section>
-      )}
-      {rights.catalog && deleting && (
+      {deleting && (
         <ConfirmAction
           title={translate("Удалить проект {0}?", project.name)}
           pending={action.pending}
@@ -134,7 +145,7 @@ export function ProjectSettings({
         >
           <p>
             {translate(
-              "Будут удалены локальные репозитории, сессии, индексы, соединения и результаты проекта. Для повторной регистрации потребуется новый идентификатор.",
+              "История Gitmora будет удалена. Исходный код и задачи во внешних сервисах сохранятся.",
             )}
           </p>
         </ConfirmAction>
@@ -142,7 +153,7 @@ export function ProjectSettings({
     </section>
   );
 }
-function Members({
+export function Members({
   client,
   project,
   canEdit,
@@ -190,10 +201,25 @@ function Members({
   }, [client, project.id, requests]);
   async function add(event: FormEvent) {
     event.preventDefault();
+    let candidate: { id: string };
+    try {
+      candidate = await client.request<{ id: string }>(
+        `/v1/projects/${project.id}/members/resolve`,
+        { identifier: user.trim() },
+      );
+    } catch (e) {
+      setError(readableError(e));
+      return;
+    }
+    if (items.some((m) => m.user_id === candidate.id)) {
+      setError(translate("Этот пользователь уже в проекте."));
+      return;
+    }
+    setError("");
     if (
       await action.run(
         "PUT",
-        `/v1/projects/${project.id}/members/${user.trim()}`,
+        `/v1/projects/${project.id}/members/${candidate.id}`,
         { expected_version: 0, role },
         true,
       )
@@ -205,9 +231,9 @@ function Members({
     }
   }
   return (
-    <section className="settings-section border-t border-line px-0 py-7 mt-6 [&_h2]:text-2xl [&_h3]:text-base [&_h3]:font-medium [&_h3]:mt-0">
+    <section className="members-view">
       <div className={sharedStyles.heading}>
-        <h2>{translate("Участники")}</h2>
+        <h1>{translate("Участники")}</h1>
         <button
           className={buttonStyles.secondary}
           disabled={loading}
@@ -243,7 +269,7 @@ function Members({
       )}
       {!items.length && !loading && !error && (
         <Empty title={translate("Участников нет")}>
-          {translate("Добавьте существующую учётную запись по её UUID.")}
+          {translate("Добавьте коллегу по нику или UUID.")}
         </Empty>
       )}
       {canEdit && (
@@ -252,28 +278,33 @@ function Members({
           onSubmit={(event) => void add(event)}
           className={sharedStyles.setup}
         >
-          <h3>{translate("Добавить участника")}</h3>
+          <h2 className="text-lg">{translate("Добавить участника")}</h2>
           <div className={sharedStyles.formGrid}>
             <label>
-              {translate("UUID учётной записи")}
+              {translate("Ник или UUID пользователя")}
               <input
                 required
-                pattern="[0-9a-fA-F-]{36}"
+                maxLength={80}
+                spellCheck={false}
                 value={user}
                 onChange={(e) => setUser(e.target.value)}
                 autoComplete="off"
-                placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                placeholder={translate("Например, alex…")}
               />
             </label>
             <label>
               {translate("Роль нового участника")}
-              <select value={role} onChange={(e) => setRole(e.target.value)}>
+              <select
+                aria-label={translate("Роль нового участника")}
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+              >
                 <RoleOptions />
               </select>
             </label>
           </div>
           <p className="field-help text-sm text-muted mx-0 mt-2 mb-5 leading-[1.5]">
-            {translate("Добавьте существующего пользователя Gitmora.")}
+            {translate("Участнику нужна учётная запись Gitmora.")}
           </p>
           <MutationNotice action={action} />
           <button className={buttonStyles.primary} disabled={action.pending}>
@@ -351,7 +382,7 @@ function MemberRow({
           </span>
         )}
         <p className="mono muted text-muted font-mono text-xs wrap-anywhere">
-          {member.user_id}
+          {member.username ? "@" + member.username : member.user_id}
         </p>
       </div>
       {canEdit ? (
@@ -366,7 +397,11 @@ function MemberRow({
         >
           <label>
             {translate("Роль")} {member.display_name}
-            <select value={role} onChange={(e) => setRole(e.target.value)}>
+            <select
+              aria-label={translate("Роль нового участника")}
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+            >
               <RoleOptions />
             </select>
           </label>

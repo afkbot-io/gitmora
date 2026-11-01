@@ -24,12 +24,17 @@ const pageSize = 50
 
 // Client has a fixed API authority; repository/source URLs never select an HTTP destination.
 type Client struct {
-	base string
-	http *http.Client
+	base    string
+	webBase string
+	http    *http.Client
 }
 
 // New accepts the public API or an explicit loopback development API. Proxy DNS/dial remains private.
 func New(base, proxy string) (*Client, error) {
+	return newClient(base, proxy, "https://github.com", false)
+}
+
+func newClient(base, proxy, webBase string, private bool) (*Client, error) {
 	normalized, ok := endpoint.GitLabBase(base)
 	if !ok {
 		return nil, domain.ErrInvalid
@@ -39,7 +44,7 @@ func New(base, proxy string) (*Client, error) {
 	if ip := net.ParseIP(api.Hostname()); ip != nil && ip.IsLoopback() {
 		loopback = true
 	}
-	if normalized != "https://api.github.com" && (!loopback || api.Path != "") {
+	if webBase == "https://github.com" && normalized != "https://api.github.com" && (!loopback || api.Path != "") {
 		return nil, domain.ErrInvalid
 	}
 	transport := http.DefaultTransport.(*http.Transport).Clone()
@@ -53,7 +58,7 @@ func New(base, proxy string) (*Client, error) {
 		}
 	}
 	visibility := netroute.PublicIPv4
-	if loopback {
+	if loopback || private {
 		visibility = netroute.Private
 	}
 	if proxy != "" {
@@ -74,7 +79,7 @@ func New(base, proxy string) (*Client, error) {
 		return nil, domain.ErrInvalid
 	}
 	transport.DialContext = dial.DialContext
-	return &Client{base: normalized, http: &http.Client{Transport: transport, Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}, nil
+	return &Client{base: normalized, webBase: webBase, http: &http.Client{Transport: transport, Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}, nil
 }
 
 func invalid() error {
@@ -152,12 +157,12 @@ func repositoryItemURL(value, base, suffix string) (string, bool) {
 	return canonical + suffix, true
 }
 
-func repoPath(repo domain.Repository) (string, error) {
+func (c *Client) repoPath(repo domain.Repository) (string, error) {
 	canonical, ok := endpoint.GitHubRepository(repo.BaseURL)
-	if !ok || canonical != repo.BaseURL || repo.Provider != "github" || repo.ProjectID < 1 {
+	if !ok || canonical != repo.BaseURL || repo.Provider != "github" || repo.ProjectID < 1 || !strings.HasPrefix(canonical, c.webBase+"/") {
 		return "", domain.ErrInvalid
 	}
-	return "/repos/" + strings.TrimPrefix(canonical, "https://github.com/"), nil
+	return "/repos/" + strings.TrimPrefix(canonical, c.webBase+"/"), nil
 }
 
 type repositoryMetadata struct {
@@ -192,13 +197,16 @@ func (c *Client) repository(ctx context.Context, token, path string) (repository
 
 // LookupRepository resolves only public GitHub identities after directory preauthorization.
 func (c *Client) LookupRepository(ctx context.Context, input string) (directory.ResolvedRepository, error) {
+	return c.LookupRepositoryWithToken(ctx, input, "")
+}
+func (c *Client) LookupRepositoryWithToken(ctx context.Context, input, token string) (directory.ResolvedRepository, error) {
 	canonical, ok := endpoint.GitHubRepository(input)
-	if !ok {
+	if !ok || !strings.HasPrefix(canonical, c.webBase+"/") {
 		return directory.ResolvedRepository{}, domain.ErrInvalid
 	}
-	value, err := c.repository(ctx, "", "/repos/"+strings.TrimPrefix(canonical, "https://github.com/"))
+	value, err := c.repository(ctx, token, "/repos/"+strings.TrimPrefix(canonical, c.webBase+"/"))
 	if err != nil {
-		return directory.ResolvedRepository{}, directory.ErrProviderUnavailable
+		return directory.ResolvedRepository{}, err
 	}
 	if value.URL != canonical {
 		return directory.ResolvedRepository{}, directory.ErrInvalid
@@ -208,7 +216,7 @@ func (c *Client) LookupRepository(ctx context.Context, input string) (directory.
 
 // VerifyProject checks immutable numeric identity and current URL before credentials/source acquisition.
 func (c *Client) VerifyProject(ctx context.Context, repo domain.Repository, token string) error {
-	if _, err := repoPath(repo); err != nil {
+	if _, err := c.repoPath(repo); err != nil {
 		return err
 	}
 	value, err := c.repository(ctx, token, "/repositories/"+strconv.FormatInt(repo.ProjectID, 10))
@@ -223,7 +231,7 @@ func (c *Client) VerifyProject(ctx context.Context, repo domain.Repository, toke
 
 // ConfirmCommit checks an exact SHA rather than trusting an agent or webhook assertion.
 func (c *Client) ConfirmCommit(ctx context.Context, repo domain.Repository, token, sha string) (bool, error) {
-	root, err := repoPath(repo)
+	root, err := c.repoPath(repo)
 	if err != nil || !identifier.ValidCommit(sha) {
 		return false, domain.ErrInvalid
 	}
@@ -242,7 +250,7 @@ func (c *Client) ConfirmCommit(ctx context.Context, repo domain.Repository, toke
 
 // nextPage never follows provider links; it validates their next ordinal and reconstructs requests locally.
 func (c *Client) nextPage(header http.Header, path string, page int, repo domain.Repository) (int, error) {
-	root, err := repoPath(repo)
+	root, err := c.repoPath(repo)
 	if err != nil {
 		return 0, err
 	}
@@ -275,8 +283,10 @@ func (c *Client) nextPage(header http.Header, path string, page int, repo domain
 		expected, _ := url.Parse(c.base + path)
 		// GitHub emits equivalent /repositories/{numeric-id} pagination links for /repos/{owner}/{name}.
 		// Only this catalog's immutable ID is accepted, and the next request is still reconstructed locally.
-		canonicalPath := "/repositories/" + strconv.FormatInt(repo.ProjectID, 10) + strings.TrimPrefix(expected.Path, root)
-		if !strings.HasPrefix(expected.Path, root+"/") || err != nil || u.Scheme != expected.Scheme || u.Host != expected.Host || (u.Path != expected.Path && u.Path != canonicalPath) || u.User != nil || u.Fragment != "" || u.RawPath != "" {
+		apiBase, _ := url.Parse(c.base)
+		fullRoot := apiBase.Path + root
+		canonicalPath := apiBase.Path + "/repositories/" + strconv.FormatInt(repo.ProjectID, 10) + strings.TrimPrefix(expected.Path, fullRoot)
+		if !strings.HasPrefix(expected.Path, fullRoot+"/") || err != nil || u.Scheme != expected.Scheme || u.Host != expected.Host || (u.Path != expected.Path && u.Path != canonicalPath) || u.User != nil || u.Fragment != "" || u.RawPath != "" {
 			return 0, invalid()
 		}
 		q, err := url.ParseQuery(u.RawQuery)

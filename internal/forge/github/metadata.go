@@ -15,7 +15,7 @@ import (
 
 // Changes supports pull requests and Actions runs. GitLab-specific lanes are not advertised for GitHub.
 func (c *Client) Changes(ctx context.Context, repo domain.Repository, token string, cursor domain.Cursor) (domain.ChangePage, error) {
-	root, err := repoPath(repo)
+	root, err := c.repoPath(repo)
 	if err != nil || cursor.Page < 1 || cursor.Page > 1000000 || cursor.After.IsZero() || cursor.Before.Before(cursor.After) {
 		return domain.ChangePage{}, domain.ErrInvalid
 	}
@@ -133,7 +133,7 @@ type pullRequest struct {
 }
 
 func (c *Client) readMR(ctx context.Context, repo domain.Repository, token string, iid int64) (domain.MergeRequest, int, bool, error) {
-	root, err := repoPath(repo)
+	root, err := c.repoPath(repo)
 	if err != nil || iid < 1 {
 		return domain.MergeRequest{}, 0, false, domain.ErrInvalid
 	}
@@ -193,7 +193,7 @@ func (c *Client) MR(ctx context.Context, repo domain.Repository, token string, i
 
 // MRCommits fences both sides of each page by exact diff identity. GitHub caps this endpoint at 250 commits.
 func (c *Client) MRCommits(ctx context.Context, repo domain.Repository, token string, expected domain.MergeRequest, page int) (domain.MRCommitPage, error) {
-	root, err := repoPath(repo)
+	root, err := c.repoPath(repo)
 	if err != nil || page < 1 || page > 5 || !expected.CodeReady() {
 		return domain.MRCommitPage{}, domain.ErrInvalid
 	}

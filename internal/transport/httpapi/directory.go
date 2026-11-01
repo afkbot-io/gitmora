@@ -9,12 +9,14 @@ import (
 
 	"workgraph.local/platform/internal/access"
 	"workgraph.local/platform/internal/directory/domain"
+	forgeapp "workgraph.local/platform/internal/forge/application"
 	"workgraph.local/platform/internal/jsonwire"
 )
 
 // DirectoryService exposes catalog/account metadata; content operations retain their own authorities.
 type DirectoryService interface {
 	LookupRepository(context.Context, access.Principal, string, string) (domain.ResolvedRepository, error)
+	LookupRepositoryWithToken(context.Context, access.Principal, string, string, string, string) (domain.ResolvedRepository, error)
 	Apply(context.Context, access.Principal, domain.Command) (domain.Receipt, bool, error)
 	Me(context.Context, access.Principal) (domain.Me, error)
 	Projects(context.Context, access.Principal, domain.Cursor) (domain.Page[domain.Project], error)
@@ -22,6 +24,7 @@ type DirectoryService interface {
 	Repositories(context.Context, access.Principal, string, domain.Cursor) (domain.Page[domain.Repository], error)
 	Repository(context.Context, access.Principal, string) (domain.Repository, error)
 	Members(context.Context, access.Principal, string, domain.Cursor) (domain.Page[domain.Member], error)
+	ResolveMember(context.Context, access.Principal, string, string) (domain.MemberCandidate, error)
 	Users(context.Context, access.Principal, domain.Cursor) (domain.Page[domain.User], error)
 	User(context.Context, access.Principal, string) (domain.User, error)
 	Events(context.Context, access.Principal, domain.EventQuery) (domain.EventPage, error)
@@ -145,6 +148,55 @@ func directoryCursor(r *http.Request) (domain.Cursor, error) {
 }
 
 func registerDirectory(mux *http.ServeMux, c Config) {
+	mux.HandleFunc("PUT /v1/me/profile", directoryAuthorized(c, func(w http.ResponseWriter, r *http.Request, p access.Principal) {
+		if r.URL.RawQuery != "" {
+			directoryError(w, domain.ErrInvalid)
+			return
+		}
+		raw, ok := forgeBody(w, r, 2048)
+		if !ok {
+			return
+		}
+		var in struct {
+			directoryVersioned
+			Username string `json:"username"`
+		}
+		if jsonwire.DecodeObject(raw, &in) != nil {
+			writeError(w, 400, "invalid_request", "Invalid profile")
+			return
+		}
+		receipt, _, e := c.Directory.Apply(r.Context(), p, domain.Command{RequestID: in.RequestID, Action: domain.SetUsername, EntityID: p.UserID, ExpectedVersion: in.ExpectedVersion, Username: in.Username})
+		if e != nil {
+			directoryError(w, e)
+			return
+		}
+		writeJSON(w, 200, receipt)
+	}))
+
+	mux.HandleFunc("POST /v1/projects/{project}/members/resolve", directoryAuthorized(c, func(w http.ResponseWriter, r *http.Request, p access.Principal) {
+		var in struct {
+			Identifier string `json:"identifier"`
+		}
+		if r.URL.RawQuery != "" {
+			directoryError(w, domain.ErrInvalid)
+			return
+		}
+		raw, ok := forgeBody(w, r, 1024)
+		if !ok {
+			return
+		}
+		if jsonwire.DecodeObject(raw, &in) != nil {
+			writeError(w, 400, "invalid_request", "Invalid member lookup")
+			return
+		}
+		value, e := c.Directory.ResolveMember(r.Context(), p, r.PathValue("project"), in.Identifier)
+		if e != nil {
+			directoryError(w, e)
+			return
+		}
+		writeJSON(w, 200, value)
+	}))
+
 	mux.HandleFunc("GET /v1/me", directoryView(c, false, func(ctx context.Context, p access.Principal, _ *http.Request) (domain.Me, error) {
 		return c.Directory.Me(ctx, p)
 	}))
@@ -235,20 +287,33 @@ func registerDirectory(mux *http.ServeMux, c Config) {
 			directoryError(w, domain.ErrInvalid)
 			return
 		}
-		raw, ok := forgeBody(w, r, 4096)
+		raw, ok := forgeBody(w, r, 8192)
 		if !ok {
 			return
 		}
 		var input struct {
-			URL string `json:"url"`
+			URL      string `json:"url"`
+			Provider string `json:"provider"`
+			Token    string `json:"api_token"`
 		}
 		if jsonwire.DecodeObject(raw, &input) != nil {
 			directoryError(w, domain.ErrInvalid)
 			return
 		}
-		result, err := c.Directory.LookupRepository(r.Context(), p, r.PathValue("project"), input.URL)
+		var result domain.ResolvedRepository
+		var err error
+		if input.Provider != "" {
+			result, err = c.Directory.LookupRepositoryWithToken(r.Context(), p, r.PathValue("project"), input.URL, input.Provider, input.Token)
+		} else {
+			result, err = c.Directory.LookupRepository(r.Context(), p, r.PathValue("project"), input.URL)
+		}
 		if err != nil {
-			directoryError(w, err)
+			var provider *forgeapp.ProviderError
+			if errors.As(err, &provider) {
+				forgeError(w, err)
+			} else {
+				directoryError(w, err)
+			}
 			return
 		}
 		writeJSON(w, 200, result)
@@ -319,6 +384,8 @@ func directoryError(w http.ResponseWriter, e error) {
 		writeError(w, 404, "directory_entry_unavailable", "Directory entry unavailable")
 	case errors.Is(e, domain.ErrRetired):
 		writeError(w, 410, "directory_identity_retired", "Deleted identifiers cannot be reused")
+	case errors.Is(e, domain.ErrUsernameTaken):
+		writeError(w, 409, "username_taken", "Username already taken")
 	case errors.Is(e, domain.ErrConflict):
 		writeError(w, 409, "directory_conflict", "Version, request identity or catalog identity conflicts")
 	case errors.Is(e, domain.ErrLastAdmin):

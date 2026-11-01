@@ -10,13 +10,19 @@ For a native development server, set `WORKGRAPH_GITHUB_ENABLED=true`. The normal
 
 ## Register and connect
 
-1. Sign in to Gitmora, select your project and open **Repositories → Add repository**.
-2. Choose **GitHub** and enter the public repository URL, such as `https://github.com/your-team/your-project`. Gitmora resolves the numeric repository ID and proposes a name. Only an authorized project administrator/operator can register a repository.
-3. In **Project settings**, select that repository and choose **Configure GitHub**.
-4. Leave **Read the public repository without a token** enabled for an initial public test, or disable it and enter a dedicated token. Choose **Verify and save GitHub**.
-5. Open **Connect**, sign in through the standalone CLI and copy the generated `gitmora init` command. Enable the Codex/OpenCode adapter explicitly. Commit and push normally, then inspect the session, confirmed commit and source search.
+1. Sign in or register and create your project.
+2. Open **Repositories**, choose **GitHub**, and enter the full repository URL and a dedicated read token. Both public and private repositories are resolved before registration; the immutable numeric ID is detected automatically.
+3. Choose **Connect repository**. Public repositories can explicitly use anonymous access for a small initial test.
+4. Use **Project settings → Integrations** to replace the token, inspect synchronization or disconnect. Failed verification never replaces an existing connection.
+5. Open **CLI and MCP**, install the client, sign in and copy the repository-specific `gitmora init` command. Enable the chosen local agent and commit/push normally.
 
-Browser registration currently resolves public GitHub.com URLs. For a private repository, an administrator can register its exact numeric ID through the catalog API, then configure the read token in project settings. GitHub Enterprise hosts are not supported by this adapter; custom GitLab hosts use [their own profile](gitlab-self-managed.md).
+### GitHub Enterprise
+
+A repository URL can use an operator-approved Enterprise base, including an installation prefix and nondefault HTTPS port. Set `WORKGRAPH_GITHUB_ALLOWLIST` to the comma-separated canonical web bases; their REST API is fixed to `<base>/api/v3`. The GitHub.com API remains independently fixed to `api.github.com`. An unapproved URL never receives the entered token. URL redirects and alternate provider-returned destinations are rejected.
+
+Native deployments use public IPv4 routing by default. `WORKGRAPH_GITHUB_PRIVATE=true` deliberately selects private destinations for the Enterprise routes only. Configure the internal CA in the selected container trust store; TLS verification is not disabled. An explicit `WORKGRAPH_GITHUB_ENTERPRISE_PROXY_URL` selects a private CONNECT proxy independently of the GitHub.com proxy.
+
+For Docker, copy `deploy/compose.github-enterprise.example.yaml` into the installation's private policy folder, replace its example web bases and exact TLS target, inspect it, and append it to the existing ordered overlays. Keep the GitHub.com overlay when both are used. Choose `--visibility private` on the Enterprise relay only for an intentionally private service. Each fixed relay accepts only its approved authority; additional hosts need corresponding trusted proxy policy. The normal UI accepts custom URLs but never opens private network access by itself.
 
 ## Dedicated read token
 
@@ -30,7 +36,7 @@ The catalog representation uses `provider: "github"`, `provider_url: "https://gi
 
 | Operation | Path/body |
 | --- | --- |
-| Resolve public URL | `POST /v1/projects/{project}/repositories/lookup` with `{"url":"https://github.com/owner/repository"}` |
+| Resolve URL with provider and optional token | `POST /v1/projects/{project}/repositories/lookup` with `{"provider":"github","url":"https://github.com/owner/repository","api_token":"<read token>"}`; omit `api_token` for public mode |
 | Register | `POST /v1/projects/{project}/repositories` with a fresh `request_id`, repository UUID `id`, `name` and the three provider fields above |
 | Configure public | `PUT /v1/repositories/{id}/forge` with `{"anonymous":true,"webhook_mode":"disabled"}` |
 | Configure read token | Same path with `api_token` and `webhook_mode: "disabled"`; omit `anonymous` |

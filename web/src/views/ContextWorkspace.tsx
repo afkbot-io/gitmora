@@ -65,8 +65,8 @@ export function ContextWorkspace({
   return (
     <section className="context-view pb-8">
       <div className="page-intro [&_h1]:mb-2 [&_p]:text-muted [&_p]:text-base mobile:[&_h1]:text-2xl mobile:[&_p]:text-sm">
-        <h1>{translate("Поиск по истории разработки")}</h1>
-        <p>{translate("Сессии, задачи и код ваших проектов.")}</p>
+        <h1>{translate("Поиск")}</h1>
+        <p>{translate("Сессии, задачи и код выбранного проекта.")}</p>
       </div>
       <form
         className="search-form mx-0 mt-7 mb-5"
@@ -98,7 +98,7 @@ export function ContextWorkspace({
             className={buttonStyles.primary}
             disabled={loading || !text.trim()}
           >
-            {loading ? translate("Ищем…") : translate("Найти контекст")}
+            {loading ? translate("Ищем…") : translate("Найти")}
           </button>
         </div>
         <div
@@ -164,7 +164,7 @@ export function ContextWorkspace({
       <ErrorNotice>{error}</ErrorNotice>
       {loading && (
         <p className="notice px-4 py-4 mx-0 my-3 text-muted" role="status">
-          {translate("Проверяем доступ и ищем источники…")}
+          {translate("Поиск…")}
         </p>
       )}
       {result ? (
@@ -252,7 +252,7 @@ export function ContextWorkspace({
                             ? translate("Запись агента")
                             : hit.source.kind === "code"
                               ? translate("Проверен Git blob")
-                              : translate("Наблюдение Tasktopia")}
+                              : translate("Данные Tasktopia")}
                       </span>
                     </span>
                   </button>
@@ -282,10 +282,8 @@ export function ContextWorkspace({
       ) : (
         !loading &&
         !error && (
-          <p className="search-empty mt-6 border-t border-line pt-6 text-sm text-muted max-w-prose">
-            {translate(
-              "Откройте результат поиска, чтобы увидеть точную версию источника, связанные коммиты и задачи.",
-            )}
+          <p className="search-empty mt-6 text-sm text-muted">
+            {translate("Найдите сессию, задачу или коммит по ключевым словам.")}
           </p>
         )
       )}

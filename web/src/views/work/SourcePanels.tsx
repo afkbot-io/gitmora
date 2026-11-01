@@ -72,7 +72,7 @@ export function TaskPanel({
         {t.status} {translate("· Выполнение по Tasktopia:")} {t.progress}%
       </p>
       <p className="small muted text-muted text-sm">
-        {translate("Наблюдение")} {date(t.observed_at)}.{" "}
+        {translate("Синхронизировано")} {date(t.observed_at)}.{" "}
         <SourceLink url={t.url}>{translate("Открыть в Tasktopia")}</SourceLink>
       </p>
       <dl className={sharedStyles.sourceDetails}>
@@ -239,15 +239,15 @@ export function MRPanel({
       </h3>
       <p>
         {m.state} ·{" "}
-        <SourceLink url={m.url}>{translate("Открыть у провайдера")}</SourceLink>
+        <SourceLink url={m.url}>{translate("Открыть источник")}</SourceLink>
       </p>
       <p className="small text-sm">
         {translate("Основание связи:")}{" "}
-        {translate(bases[m.association_basis] ?? "Наблюдение провайдера")}.
+        {translate(bases[m.association_basis] ?? "Данные сервиса")}.
       </p>
       <p className="small muted text-muted text-sm">
-        {translate("Наблюдение")} {date(m.observed_at)}
-        {translate(". Обновлено у провайдера")} {date(m.provider_updated_at)}.
+        {translate("Синхронизировано")} {date(m.observed_at)}
+        {translate(" · Изменено в источнике")} {date(m.provider_updated_at)}.
       </p>
       {m.expected_head_matches === false && (
         <p
@@ -266,7 +266,7 @@ export function MRPanel({
         </dd>
         <dt>{translate("ID репозитория источника")}</dt>
         <dd>{observedNumber(m.source_project_id)}</dd>
-        <dt>{translate("Наблюдение")}</dt>
+        <dt>{translate("Синхронизировано")}</dt>
         <dd className="mono font-mono text-xs wrap-anywhere">
           {m.observation}
         </dd>
@@ -284,9 +284,7 @@ export function MRPanel({
       <h4>{translate("CI для наблюдаемого head")}</h4>
       {!m.pipelines_for_observed_head.length && (
         <p className="muted small text-muted text-sm">
-          {translate(
-            "Подходящих наблюдений CI нет. Успешная проверка не предполагается.",
-          )}
+          {translate("Проверок CI пока нет.")}
         </p>
       )}
       {m.pipelines_for_observed_head.map((p) => (
@@ -313,10 +311,12 @@ export function MRPanel({
       ))}
       {m.pipelines_have_more && (
         <p className="notice px-4 py-4 mx-0 my-3 text-muted">
-          {translate("Показана часть CI. Полный список доступен у провайдера.")}
+          {translate(
+            "Показана часть проверок CI. Откройте источник, чтобы увидеть все.",
+          )}
         </p>
       )}
-      <h4>{translate("Наблюдения deployment")}</h4>
+      <h4>{translate("Развёртывания")}</h4>
       {m.deployments_for_result_or_head.map((d) => (
         <p className="small deployment-observation text-sm" key={d.id}>
           {d.environment}: {d.status}
@@ -328,7 +328,7 @@ export function MRPanel({
       ))}
       {!m.deployments_for_result_or_head.length && (
         <p className="muted small text-muted text-sm">
-          {translate("Подходящих наблюдений deployment нет.")}
+          {translate("Развёртываний пока нет.")}
         </p>
       )}
       {m.deployments_have_more && (

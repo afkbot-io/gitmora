@@ -1,5 +1,14 @@
 # Changes
 
+## 0.4.0
+
+- Full-width project workspace, simpler connections, consistent light/dark themes and Russian/English interface copy.
+- Self-service projects and exact member invitations by nickname or UUID; global account and identity-binding maintenance stays in operator APIs/CLI.
+- Repository URL and read-token onboarding with automatic provider ID lookup. Custom GitLab, GitHub Enterprise and Tasktopia instances use explicit operator network policy.
+- Project-scoped upstream identities and provider-instance-scoped commit/PR associations prevent cross-company or cross-server evidence sharing.
+- Checked macOS/Linux installer at `/install.sh`; project-specific CLI and MCP setup.
+- Schema migration 24 adds invitation handles and scopes repository uniqueness to each project.
+
 ## 0.3.0
 
 - Standalone CLI 0.3.0 with corrected Gitmora command hints and four platform builds.

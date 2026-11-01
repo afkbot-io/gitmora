@@ -1,5 +1,6 @@
 /** Read models mirror the versioned API; source text remains untrusted plain text. */
 export interface User {
+  username?: string;
   id: string;
   display_name: string;
   enabled: boolean;
@@ -38,7 +39,7 @@ export type Repository = RepositoryMetadata &
       }
   );
 export interface ResolvedRepository {
-  provider: "github";
+  provider: "github" | "";
   provider_url: string;
   provider_repository_id: number;
   name: string;
@@ -47,11 +48,6 @@ export function repositoryURL(repository: Repository): string {
   return repository.provider === "github"
     ? repository.provider_url
     : repository.gitlab_url;
-}
-export function repositoryProviderID(repository: Repository): number {
-  return repository.provider === "github"
-    ? repository.provider_repository_id
-    : repository.gitlab_project_id;
 }
 
 export interface Page<T> {

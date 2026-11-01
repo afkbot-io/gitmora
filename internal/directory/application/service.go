@@ -3,6 +3,7 @@ package application
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"workgraph.local/platform/internal/access"
@@ -20,6 +21,7 @@ type Store interface {
 	Repositories(context.Context, access.Principal, string, domain.Cursor) (domain.Page[domain.Repository], error)
 	Repository(context.Context, access.Principal, string) (domain.Repository, error)
 	Members(context.Context, access.Principal, string, domain.Cursor) (domain.Page[domain.Member], error)
+	ResolveMember(context.Context, access.Principal, string, string) (domain.MemberCandidate, error)
 	Users(context.Context, access.Principal, domain.Cursor) (domain.Page[domain.User], error)
 	User(context.Context, access.Principal, string) (domain.User, error)
 	Events(context.Context, access.Principal, domain.EventQuery) (domain.EventPage, error)
@@ -51,7 +53,7 @@ func (s *Service) WithRepositoryResolver(resolver RepositoryResolver) *Service {
 // Its resolved ID is included in the later immutable command, so uncertain retries never re-resolve it.
 func (s *Service) LookupRepository(ctx context.Context, p access.Principal, project, raw string) (domain.ResolvedRepository, error) {
 	url, ok := endpoint.GitHubRepository(raw)
-	if !ok {
+	if !ok || !strings.HasPrefix(url, "https://github.com/") {
 		return domain.ResolvedRepository{}, domain.ErrInvalid
 	}
 	if err := s.store.AuthorizeRepositoryCreate(ctx, p, project); err != nil {
@@ -122,4 +124,27 @@ func (s *Service) IssueToken(ctx context.Context, p access.Principal, input doma
 		out.Secret = issued.Secret
 	}
 	return out, nil
+}
+
+func (s *Service) ResolveMember(ctx context.Context, p access.Principal, project, input string) (domain.MemberCandidate, error) {
+	return s.store.ResolveMember(ctx, p, project, input)
+}
+
+// CredentialRepositoryResolver never persists lookup credentials; connection setup seals them separately.
+type CredentialRepositoryResolver interface {
+	LookupRepositoryWithToken(context.Context, string, string, string) (domain.ResolvedRepository, error)
+}
+
+func (s *Service) LookupRepositoryWithToken(ctx context.Context, p access.Principal, project, raw, provider, token string) (domain.ResolvedRepository, error) {
+	if provider != "github" && provider != "gitlab" {
+		return domain.ResolvedRepository{}, domain.ErrInvalid
+	}
+	if err := s.store.AuthorizeRepositoryCreate(ctx, p, project); err != nil {
+		return domain.ResolvedRepository{}, err
+	}
+	resolver, ok := s.resolver.(CredentialRepositoryResolver)
+	if !ok {
+		return domain.ResolvedRepository{}, domain.ErrProviderUnavailable
+	}
+	return resolver.LookupRepositoryWithToken(ctx, raw, provider, token)
 }

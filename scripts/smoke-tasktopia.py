@@ -174,7 +174,7 @@ def main() -> None:
             assert reader_key.returncode == 0
             payload = dict(url="http://" + address, issuer=issuer, oidc=False, admin=identity["token"], admin_user=identity["user_id"], reader=reader, reader_token=json.loads(reader_key.stdout)["token"], project=identity["project_id"], repository=identity["repository_id"], gitlab=gitlab_origin,
                            tasktopia=dict(endpoint=origin + "/mcp", country_id=task_identity["country_id"], task_id=task_identity["task_id"], token=task_identity["token"]))
-            checked = subprocess.run([str(node), "scripts/smoke-settings.mjs"], input=json.dumps(payload), text=True, cwd=ROOT, env=environment, timeout=600 if os.environ.get("GITMORA_UI_AUDIT") == "1" else 180)
+            checked = subprocess.run([str(node), "scripts/smoke-tasktopia-settings.mjs"], input=json.dumps(payload), text=True, cwd=ROOT, env=environment, timeout=600 if os.environ.get("GITMORA_UI_AUDIT") == "1" else 180)
             assert checked.returncode == 0, "Actual Tasktopia browser setup failed"
             return
 

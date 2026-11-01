@@ -18,7 +18,7 @@ export const sharedStyles = {
   formGrid:
     "form-grid grid grid-cols-[repeat(2,_minmax(0,_1fr))] gap-x-5 gap-y-1 mobile:grid-cols-[1fr]",
   setup:
-    "setup-form [&_h3]:text-base [&_h3]:font-medium [&_h3]:mt-0 mx-0 mt-5 mb-6 bg-paper border border-line p-6 rounded-lg max-w-220 [&_label]:flex [&_label]:flex-col [&_label]:gap-2 [&_label]:mb-4 [&_label.checkbox]:flex-row [&_label.checkbox]:font-normal [&_label.checkbox]:items-center [&_label.checkbox]:mx-0 [&_label.checkbox]:my-4 [&_input]:w-full [&_select]:w-full [&_input[type=checkbox]]:w-[17px] [&_input[type=checkbox]]:shrink-0 [&_input[readonly]]:bg-canvas [&_input[readonly]]:text-muted mobile:p-4 [&_.scope-options_label.checkbox]:items-start [&_.scope-options_label.checkbox]:m-0 [&_.scope-options_label.checkbox]:gap-3",
+    "setup-form [&_h3]:text-base [&_h3]:font-medium [&_h3]:mt-0 mx-0 mt-5 mb-6 bg-paper border border-line p-6 rounded-lg w-full [&_label]:flex [&_label]:flex-col [&_label]:gap-2 [&_label]:mb-4 [&_label.checkbox]:flex-row [&_label.checkbox]:font-normal [&_label.checkbox]:items-center [&_label.checkbox]:mx-0 [&_label.checkbox]:my-4 [&_input]:w-full [&_select]:w-full [&_input[type=checkbox]]:w-[17px] [&_input[type=checkbox]]:shrink-0 [&_input[readonly]]:bg-canvas [&_input[readonly]]:text-muted mobile:p-4 [&_.scope-options_label.checkbox]:items-start [&_.scope-options_label.checkbox]:m-0 [&_.scope-options_label.checkbox]:gap-3",
   connectionScope:
     "connection-scope grid grid-cols-[155px_minmax(0,_1fr)] gap-x-4 gap-y-2 text-sm mx-0 mt-3 mb-6 [&_dt]:text-muted [&_dd]:wrap-anywhere mobile:grid-cols-[110px_minmax(0,_1fr)] mobile:text-xs mobile:gap-3",
   destructiveText:

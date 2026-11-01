@@ -8,7 +8,9 @@ import type { ApiClient } from "../transport/api.js";
 import { ErrorNotice, Empty, aborted } from "./shared.js";
 import { ContextWorkspace } from "./ContextWorkspace.js";
 import { RepositoryCatalog } from "./Catalog.js";
-import { ProjectSettings } from "./ProjectSettings.js";
+import { Members, ProjectSettings } from "./ProjectSettings.js";
+import { SetupGuide } from "./AgentSetup.js";
+import { capabilities } from "../domain/settings.js";
 import { WorkWorkspace } from "./work/WorkWorkspace.js";
 
 export function ProjectWorkspace({
@@ -22,15 +24,18 @@ export function ProjectWorkspace({
   client: ApiClient;
   project: Project;
   me: Me;
-  view: "context" | "repositories" | "settings" | "work";
+  view: "context" | "repositories" | "settings" | "members" | "setup" | "work";
   refreshProject: (deleted?: boolean) => Promise<void>;
   refreshing: boolean;
 }) {
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [next, setNext] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [requests] = useState(() => new LatestRequest());
+  const [setupRepository, setSetupRepository] = useState("");
+  const chosenRepository =
+    repositories.find((r) => r.id === setupRepository) ?? repositories[0];
   async function load(after = "") {
     const request = requests.begin();
     setLoading(true);
@@ -71,7 +76,49 @@ export function ProjectWorkspace({
           {translate("Повторить загрузку репозиториев")}
         </button>
       )}
-      {view === "repositories" ? (
+      {view === "members" ? (
+        <Members
+          client={client}
+          project={project}
+          canEdit={capabilities(me, project).catalog}
+          refreshProject={() => refreshProject()}
+        />
+      ) : view === "setup" ? (
+        <section>
+          <h1>{translate("CLI и MCP")}</h1>
+          {repositories.length > 1 && (
+            <label className="block max-w-xl mb-6">
+              {translate("Репозиторий")}
+              <select
+                className="w-full"
+                value={chosenRepository?.id ?? ""}
+                onChange={(event) => setSetupRepository(event.target.value)}
+              >
+                {repositories.map((repository) => (
+                  <option key={repository.id} value={repository.id}>
+                    {repository.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <SetupGuide
+            key={chosenRepository?.id ?? "none"}
+            {...(chosenRepository ? { repositoryID: chosenRepository.id } : {})}
+          />
+        </section>
+      ) : loading && repositories.length === 0 ? (
+        <p role="status">{translate("Загружаем репозитории…")}</p>
+      ) : (view === "context" || view === "work") &&
+        (!project.role ||
+          !me.scopes.some((scope) =>
+            ["capture:read", "integration:read"].includes(scope),
+          )) ? (
+        <Empty heading="h1" title={translate("Нет доступа к контексту")}>
+          {translate("Выберите проект, к которому у вас есть доступ.")}
+        </Empty>
+      ) : view === "repositories" ||
+        (repositories.length === 0 && !error && view !== "settings") ? (
         <RepositoryCatalog
           client={client}
           me={me}
@@ -90,15 +137,6 @@ export function ProjectWorkspace({
           repositories={repositories}
           refreshProject={refreshProject}
         />
-      ) : !project.role ||
-        !me.scopes.some((scope) =>
-          ["capture:read", "integration:read"].includes(scope),
-        ) ? (
-        <Empty title={translate("Нет доступа к контексту")}>
-          {translate(
-            "Нужны членство в проекте и разрешение на чтение соответствующих источников.",
-          )}
-        </Empty>
       ) : view === "work" ? (
         <WorkWorkspace
           client={client}

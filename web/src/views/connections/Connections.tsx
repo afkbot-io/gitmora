@@ -1,10 +1,9 @@
 import { t as translate } from "../../domain/locale.js";
-import { useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
 import type { Project, Repository } from "../../domain/context.js";
 import type { ApiClient } from "../../transport/api.js";
 import { ForgeConnection } from "./ForgeConnection.js";
 import { TasktopiaConnection } from "./TasktopiaConnection.js";
-
 export function Connections({
   client,
   project,
@@ -18,60 +17,74 @@ export function Connections({
   canRead: boolean;
   canManage: boolean;
 }) {
-  const selectorID = useId();
-  const [selected, setSelected] = useState("");
-  useEffect(() => {
-    if (!repositories.some((item) => item.id === selected))
-      setSelected(repositories[0]?.id ?? "");
-  }, [repositories, selected]);
-  const repository = repositories.find((item) => item.id === selected);
+  const id = useId();
+  const [selected, setSelected] = useState(repositories[0]?.id ?? "");
+  const repository =
+    repositories.find((r) => r.id === selected) ?? repositories[0];
   return (
-    <>
+    <div className="grid gap-8">
+      <section className="grid grid-cols-[220px_minmax(0,1fr)] gap-6 border-b border-line pb-8 mobile:grid-cols-1">
+        <div>
+          <h2 className="text-base">{translate("Репозитории")}</h2>
+          <p className="text-sm text-muted">
+            {translate("Коммиты и запросы на слияние.")}
+          </p>
+        </div>
+        <div className="min-w-0">
+          {repository ? (
+            <>
+              {repositories.length > 1 ? (
+                <>
+                  <label htmlFor={id}>{translate("Репозиторий")}</label>
+                  <select
+                    id={id}
+                    className="w-full"
+                    value={repository.id}
+                    onChange={(e) => setSelected(e.target.value)}
+                  >
+                    {repositories.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              ) : (
+                <h3 className="text-base font-medium mt-0">
+                  {repository.name}
+                </h3>
+              )}
+              <ForgeConnection
+                key={repository.id}
+                client={client}
+                repository={repository}
+                canRead={canRead}
+                canManage={canManage}
+              />
+            </>
+          ) : (
+            <div>
+              <p className="text-sm text-muted">
+                {translate(
+                  "Подключите GitHub или GitLab, чтобы начать работу.",
+                )}
+              </p>
+              <a
+                className="action-link bg-action text-white"
+                href={`#view=repositories&project=${project.id}`}
+              >
+                {translate("Подключить репозиторий")}
+              </a>
+            </div>
+          )}
+        </div>
+      </section>
       <TasktopiaConnection
         client={client}
         project={project}
         canRead={canRead}
         canManage={canManage}
       />
-      <section className="settings-section border-t border-line px-0 py-7 mt-6 [&_h2]:text-2xl [&_h3]:text-base [&_h3]:font-medium [&_h3]:mt-0">
-        <h2>{repository?.provider === "github" ? "GitHub" : "GitLab"}</h2>
-        <p className="muted text-muted">
-          {translate("Синхронизация коммитов, MR/PR и проверок CI.")}
-        </p>
-        {repositories.length ? (
-          <div className="repository-choice max-w-110 flex flex-col gap-2">
-            <label htmlFor={selectorID}>
-              {translate("Репозиторий интеграции")}
-            </label>
-            <select
-              id={selectorID}
-              value={selected}
-              onChange={(e) => setSelected(e.target.value)}
-            >
-              {repositories.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        ) : (
-          <p>
-            {translate(
-              "Сначала зарегистрируйте репозиторий в разделе «Репозитории».",
-            )}
-          </p>
-        )}
-        {repository && (
-          <ForgeConnection
-            key={repository.id}
-            client={client}
-            repository={repository}
-            canRead={canRead}
-            canManage={canManage}
-          />
-        )}
-      </section>
-    </>
+    </div>
   );
 }

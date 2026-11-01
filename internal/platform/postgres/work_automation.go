@@ -33,7 +33,7 @@ const workMRMatches = `WITH bound AS (
  WHERE sr.project_id=$1 AND b.country_id=$2 AND ($3::text='' OR b.task_id::text=$3)
 ), matches AS (
  SELECT b.*,tr.id AS target_repository_id,tr.gitlab_url AS base_url,tr.gitlab_project_id AS provider_id,o.iid,o.model->>'url' AS url,o.digest AS mr_digest,o.code_key
- FROM bound b JOIN repositories tr ON tr.project_id=$1 AND tr.provider=b.provider AND (tr.provider='github' OR tr.gitlab_url=b.gitlab_url)
+ FROM bound b JOIN repositories tr ON tr.project_id=$1 AND tr.provider=b.provider AND ((tr.provider='github' AND regexp_replace(tr.gitlab_url,'/[^/]+/[^/]+$','')=regexp_replace(b.gitlab_url,'/[^/]+/[^/]+$','')) OR(tr.provider='' AND tr.gitlab_url=b.gitlab_url))
  JOIN forge_connections fc ON fc.repository_id=tr.id AND fc.enabled AND NOT fc.blocked AND fc.last_synced_at>now()-interval '10 minutes'
  JOIN forge_merge_requests m ON m.repository_id=tr.id AND m.available
  JOIN forge_mr_observations o ON o.repository_id=m.repository_id AND o.iid=m.iid AND o.digest=m.digest AND o.model->>'project_id'=tr.gitlab_project_id::text
@@ -42,7 +42,7 @@ const workMRMatches = `WITH bound AS (
  AND (EXISTS(SELECT 1 FROM forge_mr_commits mc WHERE mc.repository_id=o.repository_id AND mc.iid=o.iid AND mc.code_key=o.code_key AND mc.source_project_id=b.source_project_id AND o.model->>'source_project_id'=b.source_project_id::text AND mc.sha=b.sha)
  OR(b.source_repository_id=tr.id AND o.model->>'state'='merged' AND b.sha IN(o.model->>'merge',o.model->>'squash')))
 )
- SELECT DISTINCT ON(m.task_id,m.target_repository_id,m.iid,m.url) m.task_id::text,m.target_repository_id::text,m.base_url,m.provider_id,m.iid,m.url,m.source_repository_id::text,m.session_id::text,m.revision,m.capture_digest,m.sha,m.mr_digest,m.code_key
+ SELECT DISTINCT ON(m.task_id,m.target_repository_id,m.iid,m.url) m.task_id::text,m.target_repository_id::text,m.base_url,m.provider_id,m.iid,m.url,m.source_repository_id::text,m.session_id::text,m.revision,m.capture_digest,m.sha,m.mr_digest,m.code_key,m.provider
  FROM matches m WHERE true `
 const workMRMatchOrder = ` ORDER BY m.task_id,m.target_repository_id,m.iid,m.url,m.revision DESC,m.source_repository_id,m.session_id,m.sha LIMIT 100`
 

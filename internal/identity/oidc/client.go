@@ -248,5 +248,5 @@ func (c *Client) Exchange(ctx context.Context, code, verifier, nonce string) (do
 	if name == "" {
 		name = verified.Subject
 	}
-	return domain.Identity{Issuer: verified.Issuer, Subject: verified.Subject, DisplayName: name}, nil
+	return domain.Identity{Issuer: verified.Issuer, Subject: verified.Subject, DisplayName: name, Username: profile.Username}, nil
 }

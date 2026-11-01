@@ -52,16 +52,23 @@ test("account setup is available before any repository is assigned", () => {
   assert.throws(() => onboardingCommands("https://example.com", ""));
 });
 
-test("platform-specific installation requires exact named checksums before executing downloaded bytes", () => {
-  const mac = clientInstallCommand(
+test("one-line installer selects the fixed HTTPS application and detects the platform itself", () => {
+  const command = clientInstallCommand(
     "https://gitmora.tasktopia.online",
     "gitmora_darwin_arm64",
   );
-  assert.match(mac, /shasum -a 256 -c selected.sha256/);
-  assert.ok(mac.indexOf("-c selected.sha256") < mac.indexOf("chmod 700"));
+  assert.match(command, /https:\/\/gitmora.tasktopia.online\/install.sh/);
   assert.match(
-    clientInstallCommand("https://example.com", "gitmora_linux_amd64"),
-    /sha256sum -c/,
+    command,
+    /sh -s -- --server 'https:\/\/gitmora.tasktopia.online'/,
+  );
+  assert.equal(command.split("\n").length, 1);
+  assert.equal(
+    command,
+    clientInstallCommand(
+      "https://gitmora.tasktopia.online",
+      "gitmora_linux_amd64",
+    ),
   );
   assert.throws(() =>
     clientInstallCommand(

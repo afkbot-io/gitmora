@@ -81,7 +81,12 @@ def main():
             signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
             signal.pause()
         else:
-            payload = dict(url=public, issuer=issuer, oidc=True, admin=admin, admin_user=identity["user_id"], reader=reader, reader_token=json.loads(issued.stdout)["token"], project=identity["project_id"], repository=identity["repository_id"], gitlab=gitlab)
+            payload = dict(url=public, issuer=issuer, oidc=True, admin=admin, admin_user=identity["user_id"], reader=reader, reader_token=json.loads(issued.stdout)["token"], project=identity["project_id"], repository=identity["repository_id"], gitlab=gitlab, github=args.github)
+            newcomer=str(uuid.uuid4())
+            write("/v1/admin/users",dict(request_id=str(uuid.uuid4()),id=newcomer,display_name="Новая команда"))
+            newcomer_key=api.command(["issue-token","--user-id",newcomer,"--scopes","directory:read,integration:read,capture:read"],environment)
+            assert newcomer_key.returncode==0
+            payload["new_user_token"]=json.loads(newcomer_key.stdout)["token"]
             write_key = api.command(["issue-token", "--user-id", identity["user_id"], "--scopes", "directory:read,integration:manage"], environment)
             assert write_key.returncode == 0
             payload["write_only_token"] = json.loads(write_key.stdout)["token"]

@@ -97,7 +97,7 @@ export function SessionTranscript({
           />
         </label>
         <button className={buttonStyles.secondary} disabled={loading}>
-          {translate("Открыть ревизию")}
+          {translate("Открыть версию")}
         </button>
         <button
           type="button"
@@ -105,7 +105,7 @@ export function SessionTranscript({
           disabled={loading}
           onClick={() => void load()}
         >
-          {translate("Последняя ревизия")}
+          {translate("Последняя версия")}
         </button>
       </form>
       <ErrorNotice>{error}</ErrorNotice>
@@ -182,7 +182,7 @@ export function SessionTranscript({
                   <span className="small text-sm">
                     {value.confirmed_commits.includes(sha)
                       ? translate("Подтверждён провайдером")
-                      : translate("Нет подтверждения провайдера")}
+                      : translate("Коммит ещё не проверен")}
                   </span>
                 </li>
               ))}

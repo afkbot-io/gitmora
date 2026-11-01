@@ -72,9 +72,7 @@ async function search(text) {
     const query = r.request().postDataJSON();
     return query.project_id === project && query.text === text;
   });
-  await page
-    .getByRole("button", { name: "Найти контекст", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Найти", exact: true }).click();
   const result = await response;
   assert.equal(result.status(), 200);
   return result.json();
@@ -92,7 +90,9 @@ try {
   await page.getByRole("link", { name: "Войти" }).click();
   await visible(page.getByRole("searchbox"));
   assert.equal(
-    await page.locator("#project option").count(),
+    await page
+      .locator('#project option:not([value="__new__"]):not([value=""])')
+      .count(),
     1,
     "OIDC reader saw an unrelated project",
   );
@@ -190,7 +190,7 @@ try {
   if (!mobile) await page.setViewportSize({ width: 1440, height: 1000 });
   await clickUI(page, "Репозитории");
   await visible(page.getByRole("heading", { name: "Tasktopia", exact: true }));
-  await clickUI(page, "Контекст");
+  await clickUI(page, "Поиск");
   await page.route(
     "**/v1/context/search",
     (route) =>
@@ -202,7 +202,7 @@ try {
     { times: 1 },
   );
   await page.getByRole("searchbox").fill("refreshToken");
-  await page.getByRole("button", { name: "Найти контекст" }).click();
+  await page.getByRole("button", { name: "Найти" }).click();
   await visible(page.getByRole("alert"));
   assert.match(
     await page.getByRole("alert").textContent(),
@@ -272,7 +272,7 @@ try {
     }
   });
   await page.getByRole("searchbox").fill("refreshToken");
-  await page.getByRole("button", { name: "Найти контекст" }).click();
+  await page.getByRole("button", { name: "Найти" }).click();
   await started;
   await page.locator("#project").selectOption(fixture.other_project);
   assert.equal(await page.locator(".result-row").count(), 0);
@@ -282,7 +282,9 @@ try {
   assert.equal(await page.locator(".source-quote").count(), 0);
   assert.equal((await search("refreshToken")).items.length, 0);
   const storage = await page.evaluate(() => ({
-    local: Object.keys(localStorage),
+    local: Object.keys(localStorage).filter(
+      (key) => !key.startsWith("gitmora.project."),
+    ),
     session: Object.keys(sessionStorage),
     url: location.href,
   }));
@@ -309,7 +311,7 @@ try {
     "PUT",
   );
   await page.getByRole("searchbox").fill("refreshToken changed");
-  await page.getByRole("button", { name: "Найти контекст" }).click();
+  await page.getByRole("button", { name: "Найти" }).click();
   await visible(
     page.getByRole("heading", { name: "Задачи, код и решения вместе." }),
   );

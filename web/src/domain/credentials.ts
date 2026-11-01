@@ -14,15 +14,6 @@ export interface IssuedKey {
   secret?: string;
   created: boolean;
 }
-export interface Binding {
-  id: string;
-  user_id: string;
-  issuer: string;
-  subject: string;
-  enabled: boolean;
-  version: number;
-  created_at: string;
-}
 
 export const permissions: ReadonlyArray<{ id: string; label: string }> = [
   { id: "capture:read", label: "Читать сессии агента" },

@@ -4,6 +4,7 @@ package domain
 import (
 	"encoding/json"
 	"errors"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -19,6 +20,7 @@ import (
 var (
 	ErrInvalid             = errors.New("invalid directory input")
 	ErrNotFound            = errors.New("directory entry unavailable")
+	ErrUsernameTaken       = errors.New("username already taken")
 	ErrConflict            = errors.New("directory version or identity conflict")
 	ErrRetired             = errors.New("directory identity retired")
 	ErrLastAdmin           = errors.New("last enabled project administrator")
@@ -34,6 +36,7 @@ const MaxVersion int64 = 9007199254740991
 type Action string
 
 const (
+	SetUsername      Action = "set_username"
 	CreateProject    Action = "create_project"
 	RenameProject    Action = "rename_project"
 	DeleteProject    Action = "delete_project"
@@ -51,6 +54,7 @@ const (
 
 // Command is an internal discriminated union. HTTP uses separate strict body types and route-owned actions/identities.
 type Command struct {
+	Username             string  `json:"username,omitempty"`
 	RequestID            string  `json:"request_id"`
 	Action               Action  `json:"action"`
 	ProjectID            string  `json:"project_id,omitempty"`
@@ -81,6 +85,13 @@ func Normalize(c Command) (Command, error) {
 	requiredName := false
 	projectScoped := false
 	switch c.Action {
+	case SetUsername:
+		extra.Username = ""
+		username, e := Username(c.Username)
+		if e != nil {
+			return Command{}, e
+		}
+		c.Username = username
 	case CreateProject:
 		creation = true
 		requiredName = true
@@ -230,7 +241,9 @@ func (c Command) ScopeProject() string {
 	}
 	return c.ProjectID
 }
-func (c Command) Platform() bool { return c.Kind() == "user" || c.Action == CreateProject }
+func (c Command) Platform() bool {
+	return c.Kind() == "user" && c.Action != SetUsername || c.Action == CreateProject
+}
 func (c Command) Deleted() bool {
 	return c.Action == DeleteProject || c.Action == DeleteRepository || c.Action == DeleteUser || c.Action == RemoveMember || c.Action == RevokeToken
 }
@@ -320,6 +333,7 @@ type ResolvedRepository struct {
 
 // User retains an opaque historical actor ID after logical deletion; enabling never restores revoked credentials.
 type User struct {
+	Username    string     `json:"username,omitempty"`
 	ID          string     `json:"id"`
 	DisplayName string     `json:"display_name"`
 	Enabled     bool       `json:"enabled"`
@@ -331,6 +345,7 @@ type User struct {
 
 // Member describes a local grant; its globally monotonic version prevents stale mutations after re-adding it.
 type Member struct {
+	Username    string `json:"username,omitempty"`
 	UserID      string `json:"user_id"`
 	DisplayName string `json:"display_name"`
 	Enabled     bool   `json:"enabled"`
@@ -391,4 +406,21 @@ type IssuedToken struct {
 	Token   Token  `json:"token"`
 	Secret  string `json:"secret,omitempty"`
 	Created bool   `json:"created"`
+}
+
+var usernamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,79}$`)
+
+// Username is a public project invitation handle; it never selects an authentication subject.
+func Username(raw string) (string, error) {
+	value := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(raw), "@"))
+	if !usernamePattern.MatchString(value) {
+		return "", ErrInvalid
+	}
+	return value, nil
+}
+
+type MemberCandidate struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"display_name"`
+	Username    string `json:"username,omitempty"`
 }

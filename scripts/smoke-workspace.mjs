@@ -1,0 +1,365 @@
+/** Signed browser/API/PostgreSQL flows for the project workspace. Synthetic accounts only. */
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { writeFileSync } from "node:fs";
+import { chromium, webkit, firefox, devices } from "playwright";
+import { signInAs, clickUI } from "./browser-auth.mjs";
+import { auditUI } from "./audit-ui.mjs";
+import { watchBrowserPolicy } from "./browser-policy.mjs";
+
+let raw = "";
+for await (const chunk of process.stdin) raw += chunk;
+const fixture = JSON.parse(raw);
+raw = "";
+const engine = { chromium, webkit, firefox }[
+  process.env.GITMORA_BROWSER ?? "chromium"
+];
+assert.ok(engine);
+const mobile = process.env.GITMORA_MOBILE_DEVICE === "1";
+const browser = await engine.launch();
+const context = await browser.newContext(
+  mobile
+    ? devices[engine === webkit ? "iPhone 13" : "Pixel 7"]
+    : { viewport: { width: 1920, height: 1080 } },
+);
+const page = await context.newPage();
+const faults = [];
+let actorToken = fixture.reader_token;
+page.on("pageerror", (e) => faults.push(e.message));
+const policy = await watchBrowserPolicy(page);
+async function nav(name) {
+  await clickUI(page, name);
+  await page.locator("#workspace-main h1").first().waitFor();
+}
+async function call(
+  path,
+  body,
+  method = body ? "POST" : "GET",
+  token = actorToken,
+) {
+  const r = await fetch(fixture.url + path, {
+    method,
+    headers: {
+      Authorization: "Bearer " + token,
+      "Content-Type": "application/json",
+    },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  assert.ok(r.ok, "Synthetic API operation failed: " + r.status);
+  return r.status === 204 ? undefined : r.json();
+}
+async function audit(name) {
+  await auditUI(page, "workspace-" + name, {
+    enabled: true,
+    widths: mobile ? [390] : [1920, 390],
+  });
+}
+try {
+  // Establish the public invitation handle through the same authenticated profile form.
+  await signInAs(page, fixture);
+  await nav("Личные настройки");
+  await page
+    .getByLabel("Ник для приглашений", { exact: true })
+    .fill("fixture-owner");
+  await page
+    .getByRole("button", { name: "Сохранить профиль", exact: true })
+    .click();
+  await page
+    .getByRole("status")
+    .filter({ hasText: "Профиль сохранён" })
+    .waitFor();
+  await page.getByRole("button", { name: "Выйти", exact: true }).click();
+  await signInAs(page, fixture, fixture.reader_token);
+  await page.locator("#project").selectOption(fixture.project);
+  await nav("Участники");
+  assert.equal(
+    await page
+      .getByRole("button", { name: "Добавить участника", exact: true })
+      .count(),
+    0,
+  );
+  for (const name of [
+    "Проекты",
+    "Учётные записи",
+    "Привязки входа",
+    "Личные ключи",
+  ])
+    assert.equal(
+      await page
+        .locator(".sidebar")
+        .getByRole("link", { name, exact: true })
+        .count(),
+      0,
+    );
+  const globalStatus = await page.evaluate(
+    async () => (await fetch("/v1/admin/users")).status,
+  );
+  assert.equal(globalStatus, 403);
+  await page.getByRole("button", { name: "Выйти", exact: true }).click();
+  actorToken = fixture.new_user_token;
+  await signInAs(page, fixture, actorToken);
+  await page
+    .getByRole("heading", { name: "Создайте первый проект", exact: true })
+    .waitFor();
+  assert.equal(
+    await page.evaluate(
+      async (id) => (await fetch(`/v1/projects/${id}`)).status,
+      fixture.project,
+    ),
+    403,
+  );
+  await audit("first-project");
+  const projectName = "Browser team " + randomUUID().slice(0, 8);
+  await page.getByLabel("Название проекта", { exact: true }).fill(projectName);
+  await page
+    .getByRole("button", { name: "Создать проект", exact: true })
+    .click();
+  await page
+    .getByRole("heading", { name: "Подключить репозиторий", exact: true })
+    .waitFor();
+  const project = await page.locator("#project").inputValue();
+  assert.notEqual(project, fixture.project);
+  const me = await page.evaluate(async () => (await fetch("/v1/me")).json());
+  assert.equal(me.user.operator, false);
+  const own = await page.evaluate(
+    async (id) => (await fetch(`/v1/projects/${id}`)).json(),
+    project,
+  );
+  assert.equal(own.role, "admin");
+  if (!mobile) {
+    await page.setViewportSize({ width: 2560, height: 1440 });
+    const box = await page.locator(".workspace").boundingBox();
+    assert.equal(box.x, 0);
+    assert.equal(box.width, 2560);
+    await page.setViewportSize({ width: 1920, height: 1080 });
+  }
+  await audit("first-repository");
+  const host = fixture.github ? "github" : "gitlab";
+  await page.getByLabel("Сервис", { exact: true }).selectOption(host);
+  await page
+    .getByLabel("Ссылка на репозиторий", { exact: true })
+    .fill(
+      fixture.github
+        ? "https://github.com/example/gitmora-fixture"
+        : fixture.gitlab + "/example/project",
+    );
+  await page
+    .getByLabel("Токен чтения", { exact: true })
+    .fill("intentionally-rejected-token");
+  await page
+    .getByRole("button", { name: "Подключить репозиторий", exact: true })
+    .click();
+  await page
+    .getByRole("alert")
+    .filter({ hasText: "Токен не принят" })
+    .waitFor();
+  assert.equal(
+    await page.getByLabel("Токен чтения", { exact: true }).inputValue(),
+    "",
+  );
+  const empty = await call(`/v1/projects/${project}/repositories`);
+  assert.equal(empty.items.length, 0);
+  await page
+    .getByLabel("Токен чтения", { exact: true })
+    .fill(
+      fixture.github ? "synthetic-github-read-token" : "synthetic-gitlab-token",
+    );
+  await page
+    .getByRole("button", { name: "Подключить репозиторий", exact: true })
+    .click();
+  await page.locator(".settings-resource").waitFor();
+  const catalog = await call(`/v1/projects/${project}/repositories`);
+  assert.equal(catalog.items.length, 1);
+  const repository = catalog.items[0];
+  assert.equal(repository.provider ?? "", fixture.github ? "github" : "");
+  await nav("Настройки проекта");
+  await page.getByRole("link", { name: "Интеграции", exact: true }).click();
+  await page.getByText("Подключено", { exact: true }).waitFor();
+  await audit("integrations");
+  const current = await call(`/v1/repositories/${repository.id}/forge`);
+  assert.equal(current.enabled, true);
+  assert.equal(current.anonymous ?? false, false);
+  await page
+    .getByRole("button", { name: "Изменить доступ", exact: true })
+    .first()
+    .click();
+  await page
+    .getByLabel("Токен чтения", { exact: true })
+    .fill("intentionally-rejected-token");
+  await page
+    .getByRole("button", { name: "Сохранить подключение", exact: true })
+    .click();
+  await page
+    .getByRole("alert")
+    .filter({ hasText: "Токен не принят" })
+    .waitFor();
+  const unchanged = await call(`/v1/repositories/${repository.id}/forge`);
+  assert.equal(unchanged.generation, current.generation);
+  assert.equal(
+    await page.getByLabel("Токен чтения", { exact: true }).inputValue(),
+    "",
+  );
+  await page.getByRole("button", { name: "Отмена", exact: true }).click();
+  if (fixture.github) {
+    await page
+      .getByRole("button", { name: "Изменить доступ", exact: true })
+      .first()
+      .click();
+    await page
+      .getByLabel("Публичный репозиторий без токена", { exact: true })
+      .check();
+    await page
+      .getByRole("button", { name: "Сохранить подключение", exact: true })
+      .click();
+    await page
+      .getByRole("status")
+      .filter({ hasText: "Подключение сохранено" })
+      .waitFor();
+    const publicConnection = await call(
+      `/v1/repositories/${repository.id}/forge`,
+    );
+    assert.equal(publicConnection.anonymous, true);
+    assert.ok(publicConnection.generation > current.generation);
+    await page.route(
+      `**/v1/repositories/${repository.id}/forge`,
+      async (route) => {
+        if (route.request().method() !== "GET") return route.continue();
+        const response = await route.fetch();
+        await route.fulfill({
+          json: {
+            ...(await response.json()),
+            anonymous: true,
+            last_error_code: "provider_rate_limited",
+          },
+        });
+      },
+    );
+    await page.reload();
+    await page
+      .getByRole("button", { name: "Подключить токен", exact: true })
+      .waitFor();
+    await audit("github-rate-limit");
+    await page
+      .getByRole("button", { name: "Подключить токен", exact: true })
+      .click();
+    assert.equal(
+      await page
+        .getByLabel("Публичный репозиторий без токена", { exact: true })
+        .isChecked(),
+      false,
+    );
+    await page.unroute(`**/v1/repositories/${repository.id}/forge`);
+    await page.getByRole("button", { name: "Отмена", exact: true }).click();
+  }
+  await page
+    .getByRole("button", { name: "Подключить Tasktopia", exact: true })
+    .click();
+  await page
+    .getByLabel("URL Tasktopia", { exact: true })
+    .fill("https://tasks.example.com/mcp");
+  assert.equal(
+    await page
+      .getByLabel("URL Tasktopia", { exact: true })
+      .getAttribute("readonly"),
+    null,
+  );
+  await audit("tasktopia-form");
+  await nav("Участники");
+  await audit("members");
+  await page
+    .getByLabel("Ник или UUID пользователя", { exact: true })
+    .fill("@fixture-owner");
+  await page
+    .getByRole("button", { name: "Добавить участника", exact: true })
+    .click();
+  await page
+    .locator(".member-row")
+    .filter({ hasText: "fixture-owner" })
+    .waitFor();
+  await page
+    .getByLabel("Ник или UUID пользователя", { exact: true })
+    .fill("fixture-owner");
+  await page
+    .getByRole("button", { name: "Добавить участника", exact: true })
+    .click();
+  await page.getByRole("alert").filter({ hasText: "уже в проекте" }).waitFor();
+  await nav("Работа");
+  await audit("work");
+  assert.doesNotMatch(
+    await page.locator(".main").innerText(),
+    /Показаны принятые локальные|Пустой список не означает/,
+  );
+  await nav("Поиск");
+  await audit("search");
+  await page.getByRole("searchbox").fill("history");
+  await page.getByRole("button", { name: "Найти", exact: true }).click();
+  await page.getByText("Совпадений пока нет", { exact: true }).waitFor();
+  await nav("CLI и MCP");
+  assert.match(await page.locator(".setup-guide").innerText(), /\/install.sh/);
+  await audit("cli");
+  await page.getByText("Поиск через MCP", { exact: true }).click();
+  await audit("mcp");
+  await nav("Личные настройки");
+  await audit("preferences");
+  await page.getByLabel("Язык", { exact: true }).selectOption("en");
+  await page
+    .getByRole("heading", { name: "Personal settings", exact: true })
+    .waitFor();
+  await page.reload();
+  assert.equal(await page.locator("html").getAttribute("lang"), "en");
+  await audit("preferences-en");
+  for (const section of [
+    "Members",
+    "Repositories",
+    "Search",
+    "Work",
+    "CLI and MCP",
+    "Project settings",
+  ]) {
+    await nav(section);
+    await audit("en-" + section.toLowerCase().replaceAll(" ", "-"));
+  }
+  await nav("Personal settings");
+  await page.getByLabel("Language", { exact: true }).selectOption("ru");
+  await nav("Настройки проекта");
+  await page.getByRole("link", { name: "Основное", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Удалить проект", exact: true })
+    .click();
+  await page.getByRole("dialog").waitFor();
+  await audit("delete-project");
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Удалить проект и его данные", exact: true })
+    .click();
+  await page.getByRole("dialog").waitFor({ state: "hidden" });
+  assert.equal(
+    (await call("/v1/projects")).items.some((p) => p.id === project),
+    false,
+  );
+  assert.deepEqual(faults, []);
+  assert.deepEqual(policy.unexpected(), []);
+  console.log(
+    JSON.stringify({
+      result: "passed",
+      browser: engine.name(),
+      mobile,
+      provider: host,
+      ordinary_user_created_project: true,
+      global_accounts_hidden: true,
+      member_by_handle: true,
+      full_width: true,
+      invalid_token_clear_and_no_rotation: true,
+      locale: true,
+      areas: 16,
+    }),
+  );
+} catch (error) {
+  writeFileSync(
+    "build/workspace-browser-failure.txt",
+    await page.locator(".main").innerText(),
+  );
+  throw error;
+} finally {
+  await browser.close();
+}

@@ -162,7 +162,7 @@ func (s *Service) finish(ctx context.Context, state, browser, code, oldCookie st
 	if e != nil {
 		return domain.Login{}, e
 	}
-	session, e := s.store.OpenSession(ctx, domain.SessionSeed{ID: id, CookieHash: domain.SecretHash(domain.SessionPrefix, cookie), CSRFHash: domain.SecretHash(domain.CSRFPrefix, csrf), Configuration: s.config.Fingerprint(), Binding: binding, Credential: issued.Record, OldCookieHash: domain.SecretHash(domain.SessionPrefix, oldCookie)})
+	session, e := s.store.OpenSession(ctx, domain.SessionSeed{Username: identity.Username, ID: id, CookieHash: domain.SecretHash(domain.SessionPrefix, cookie), CSRFHash: domain.SecretHash(domain.CSRFPrefix, csrf), Configuration: s.config.Fingerprint(), Binding: binding, Credential: issued.Record, OldCookieHash: domain.SecretHash(domain.SessionPrefix, oldCookie)})
 	if e != nil {
 		return domain.Login{}, e
 	}

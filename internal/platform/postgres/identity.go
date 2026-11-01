@@ -322,6 +322,11 @@ func (s *IdentityStore) OpenSession(ctx context.Context, seed domain.SessionSeed
 	if b != seed.Binding {
 		return domain.Session{}, domain.ErrLogin
 	}
+	if username, err := directory.Username(seed.Username); err == nil {
+		if _, e = tx.Exec(ctx, `INSERT INTO user_handles(user_id,username)VALUES($1,$2)ON CONFLICT DO NOTHING`, b.UserID, username); e != nil {
+			return domain.Session{}, e
+		}
+	}
 	if seed.OldCookieHash != "" {
 		var old domain.Session
 		e = tx.QueryRow(ctx, `SELECT id::text,user_id::text,token_id::text FROM identity_sessions WHERE cookie_hash=$1`, seed.OldCookieHash).Scan(&old.ID, &old.Principal.UserID, &old.Principal.TokenID)

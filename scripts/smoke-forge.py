@@ -74,6 +74,9 @@ class GitLabFixture(http.server.BaseHTTPRequestHandler):
             return
         parsed = urllib.parse.urlparse(self.path)
         query = urllib.parse.parse_qs(parsed.query)
+        if parsed.path == "/api/v4/projects/example%2Fproject":
+            raw=json.dumps(dict(id=42,web_url="http://"+self.headers["Host"]+self.installation_prefix+"/example/project",path_with_namespace="example/project")).encode()
+            self.send_response(200);self.send_header("Content-Type","application/json");self.end_headers();self.wfile.write(raw);return
         if parsed.path.startswith("/api/v4/projects/42/repository/files/"):
             if not self.code_allowed:
                 self.send_error(401)

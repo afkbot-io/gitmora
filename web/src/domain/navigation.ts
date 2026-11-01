@@ -2,11 +2,9 @@ const views = [
   "context",
   "repositories",
   "settings",
-  "catalog",
-  "accounts",
+  "members",
   "work",
   "keys",
-  "bindings",
   "setup",
   "preferences",
 ] as const;

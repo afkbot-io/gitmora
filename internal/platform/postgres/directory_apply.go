@@ -22,6 +22,9 @@ func decodeDirectoryReceipt(raw []byte, r *domain.Receipt) error { return json.U
 func directoryError(e error) error {
 	var pg *pgconn.PgError
 	if errors.As(e, &pg) && (pg.Code == "23505" || pg.Code == "23503") {
+		if pg.ConstraintName == "user_handles_username_key" {
+			return domain.ErrUsernameTaken
+		}
 		return domain.ErrConflict
 	}
 	return e
@@ -128,11 +131,13 @@ func (s *DirectoryStore) apply(ctx context.Context, p access.Principal, c domain
 	if found {
 		return previous, false, tx.Commit(ctx)
 	}
-	if c.Platform() {
+	if c.Action == domain.CreateProject {
+		// The creator receives the sole initial membership in this transaction.
+	} else if c.Platform() {
 		if !a.platform() {
 			return domain.Receipt{}, false, access.ErrDenied
 		}
-	} else if c.Action != domain.RevokeToken {
+	} else if c.Action != domain.RevokeToken && c.Action != domain.SetUsername {
 		if e = directoryProjectAuthority(ctx, tx, a, c.ScopeProject(), true); e != nil {
 			return domain.Receipt{}, false, e
 		}
@@ -357,6 +362,15 @@ func directoryChangeUser(ctx context.Context, tx pgx.Tx, c domain.Command, r *do
 	}
 	if e = domain.MatchVersion(c.ExpectedVersion, u.Version); e != nil {
 		return e
+	}
+	if c.Action == domain.SetUsername {
+		if !u.Enabled {
+			return domain.ErrConflict
+		}
+		if _, e = tx.Exec(ctx, `INSERT INTO user_handles(user_id,username)VALUES($1,$2)ON CONFLICT(user_id)DO UPDATE SET username=EXCLUDED.username`, u.ID, c.Username); e != nil {
+			return e
+		}
+		return tx.QueryRow(ctx, `UPDATE users SET version=nextval('directory_revision')WHERE id=$1 RETURNING version`, u.ID).Scan(&r.Version)
 	}
 	if c.Action == domain.SetOperator {
 		if !u.Enabled {

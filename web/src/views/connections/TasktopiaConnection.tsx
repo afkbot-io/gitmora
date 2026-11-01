@@ -1,12 +1,10 @@
 import { t as translate } from "../../domain/locale.js";
-import { buttonStyles, sharedStyles } from "../ui.js";
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import type { Project } from "../../domain/context.js";
 import type { TasktopiaStatus } from "../../domain/settings.js";
-import { diagnostic } from "../../domain/settings.js";
-import { useMutation } from "../../application/useMutation.js";
 import type { ApiClient } from "../../transport/api.js";
+import { useMutation } from "../../application/useMutation.js";
 import {
   ConfirmAction,
   MutationNotice,
@@ -14,7 +12,7 @@ import {
 } from "../SettingsShared.js";
 import { ErrorNotice } from "../shared.js";
 import { useConnection } from "./useConnection.js";
-
+import { buttonStyles, sharedStyles } from "../ui.js";
 export function TasktopiaConnection({
   client,
   project,
@@ -29,13 +27,13 @@ export function TasktopiaConnection({
   const path = `/v1/projects/${project.id}/tasktopia`;
   const status = useConnection<TasktopiaStatus>(client, path, canRead);
   const action = useMutation(client);
+  const value = status.value;
   const [editing, setEditing] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [endpoint, setEndpoint] = useState("");
   const [country, setCountry] = useState("");
   const [token, setToken] = useState("");
   const [autoLink, setAutoLink] = useState(false);
-  const [task, setTask] = useState("");
   useEffect(() => {
     if (!canManage) {
       setEditing(false);
@@ -44,16 +42,23 @@ export function TasktopiaConnection({
     }
   }, [canManage]);
   function open() {
-    setEditing(!editing);
+    setEndpoint(value?.endpoint ?? "");
+    setCountry(value?.country_id ?? "");
+    setAutoLink(value?.auto_link_merge_requests ?? false);
     setToken("");
-    setEndpoint(status.value?.endpoint ?? "");
-    setCountry(status.value?.country_id ?? "");
-    setAutoLink(status.value?.auto_link_merge_requests ?? false);
+    setEditing(true);
   }
-  async function save(event: FormEvent) {
-    event.preventDefault();
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    let target = endpoint.trim();
+    try {
+      const u = new URL(target);
+      if (u.pathname === "/" || u.pathname === "") target = u.origin + "/mcp";
+    } catch {
+      /* Validated by browser and server. */
+    }
     const body = {
-      endpoint: endpoint.trim(),
+      endpoint: target,
       country_id: country.trim(),
       api_token: token,
       auto_link_merge_requests: autoLink,
@@ -63,220 +68,172 @@ export function TasktopiaConnection({
     if (saved) {
       status.setValue(saved.value);
       setEditing(false);
-      action.setMessage(
-        "Соединение Tasktopia сохранено после проверки страны.",
-      );
+      action.setMessage("Tasktopia подключена.");
     }
-  }
-  async function refreshTask(event: FormEvent) {
-    event.preventDefault();
-    if (await action.run("POST", path + `/tasks/${task.trim()}/sync`))
-      action.setMessage(
-        "Обновление задачи запрошено. Оно выполняется фоновым процессом.",
-      );
   }
   async function remove() {
     if (await action.run("DELETE", path)) {
       setRemoving(false);
-      status.clear();
-      action.setMessage("Tasktopia отключена. Ключ соединения удалён.");
+      setEditing(false);
       await status.refresh();
     }
   }
-  const value = status.value;
   return (
-    <section className="settings-section border-t border-line px-0 py-7 mt-6 [&_h2]:text-2xl [&_h3]:text-base [&_h3]:font-medium [&_h3]:mt-0">
-      <h2>Tasktopia</h2>
-      <p className="muted text-muted">
-        {translate(
-          "Одна страна Tasktopia на проект Gitmora. Адрес и страна сохраняются при замене ключа.",
-        )}
-      </p>
-      <ErrorNotice>{status.error}</ErrorNotice>
-      {status.loading && (
-        <p role="status">{translate("Читаем состояние Tasktopia…")}</p>
-      )}
-      {status.missing && (
-        <p className="muted text-muted">
-          {translate("Tasktopia ещё не подключена.")}
+    <section className="grid grid-cols-[220px_minmax(0,1fr)] gap-6 border-b border-line pb-8 mobile:grid-cols-1">
+      <div>
+        <h2 className="text-base">Tasktopia</h2>
+        <p className="text-sm text-muted">
+          {translate("Задачи и связи с изменениями кода.")}
         </p>
-      )}
-      {!canRead && !value && (
-        <p className="muted text-muted">
-          {translate("Состояние соединения недоступно без integration:read.")}
-        </p>
-      )}
-      {value && (
-        <>
-          <div
-            className={`
-            connection-summary flex flex-wrap justify-between gap-3 px-0 py-4
-            border-t border-line [&_strong]:font-medium [&_span]:text-muted
-          `}
-          >
-            <strong>
-              {!value.enabled
-                ? translate("Отключено")
-                : value.blocked
-                  ? translate("Требует вмешательства")
-                  : translate("Соединение включено")}
+      </div>
+      <div className="min-w-0">
+        <ErrorNotice>{editing ? status.error : ""}</ErrorNotice>
+        <MutationNotice action={action} />
+        {value && (
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <strong
+              className={`text-sm ${value.enabled && !value.blocked && !value.error_code ? "text-success" : "text-muted"}`}
+            >
+              {value.enabled
+                ? value.blocked || value.error_code
+                  ? translate("Требует внимания")
+                  : translate("Подключено")
+                : translate("Отключено")}
             </strong>
-            <span className="small text-sm">
-              {translate("Поколение")} {value.generation}
+            <span className="text-sm text-muted break-all">
+              {value.endpoint}
             </span>
           </div>
-          <dl className={sharedStyles.connectionScope}>
-            <dt>{translate("Адрес MCP")}</dt>
-            <dd>{value.endpoint}</dd>
-            <dt>{translate("Страна")}</dt>
-            <dd className="mono font-mono text-xs wrap-anywhere">
-              {value.country_id}
-            </dd>
-            <dt>{translate("Добавление MR")}</dt>
-            <dd>
-              {value.auto_link_merge_requests
-                ? translate("Включено для подтверждённых связей")
-                : translate("Выключено")}
-            </dd>
-            <dt>{translate("Диагностика")}</dt>
-            <dd className="mono font-mono text-xs wrap-anywhere">
-              {diagnostic(value.error_code)}
-            </dd>
-          </dl>
-        </>
-      )}
-      <MutationNotice action={action} />
-      <div className="actions flex gap-3 flex-wrap items-center">
-        {canRead && (
-          <button
-            className={buttonStyles.secondary}
-            disabled={status.loading}
-            onClick={() => void status.refresh()}
-          >
-            {translate("Обновить состояние Tasktopia")}
+        )}
+        {!editing && canManage && (
+          <button className={buttonStyles.secondary} onClick={open}>
+            {value
+              ? translate("Изменить доступ")
+              : translate("Подключить Tasktopia")}
           </button>
         )}
-        {canManage && (
-          <>
-            <button className={buttonStyles.secondary} onClick={open}>
-              {editing
-                ? translate("Отменить настройку")
-                : value
-                  ? translate("Изменить Tasktopia")
-                  : translate("Настроить Tasktopia")}
-            </button>
-            {value?.enabled && (
+        {editing && (
+          <MutationForm
+            pending={action.pending}
+            onSubmit={(e) => void save(e)}
+            className="grid gap-4"
+          >
+            <label>
+              {translate("URL Tasktopia")}
+              <input
+                className="w-full mt-2"
+                name="tasktopia_url"
+                type="url"
+                required
+                readOnly={!!value}
+                value={endpoint}
+                onChange={(e) => setEndpoint(e.target.value)}
+                placeholder="https://tasktopia.company.ru/mcp"
+              />
+            </label>
+            <label>
+              {translate("UUID пространства Tasktopia")}
+              <input
+                className="w-full mt-2"
+                name="tasktopia_space"
+                required
+                readOnly={!!value}
+                pattern="[0-9a-fA-F-]{36}"
+                value={country}
+                onChange={(e) => setCountry(e.target.value)}
+              />
+            </label>
+            <label>
+              {translate("Ключ Tasktopia")}
+              <input
+                className="w-full mt-2"
+                name="tasktopia_token"
+                type="password"
+                required
+                autoComplete="off"
+                minLength={8}
+                maxLength={4096}
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+              />
+            </label>
+            <label className="flex items-center gap-2 text-sm font-normal">
+              <input
+                type="checkbox"
+                checked={autoLink}
+                onChange={(e) => setAutoLink(e.target.checked)}
+              />
+              {translate("Добавлять ссылки на запросы слияния в задачи")}
+            </label>
+            <details className="text-sm text-muted">
+              <summary>{translate("Где найти ключ и UUID")}</summary>
+              <p className="mt-3">
+                {translate(
+                  "В Tasktopia откройте настройки → MCP-интеграция и создайте ключ с country:read и tasks:read. UUID страны можно получить через MCP country.list. Для добавления ссылок нужно tasks:write.",
+                )}
+              </p>
+            </details>
+            <div className="flex flex-wrap gap-3">
+              <button className={buttonStyles.primary}>
+                {translate("Сохранить подключение")}
+              </button>
               <button
-                className={sharedStyles.destructiveText}
+                type="button"
+                className={buttonStyles.secondary}
+                onClick={() => {
+                  setEditing(false);
+                  setToken("");
+                }}
+              >
+                {translate("Отмена")}
+              </button>
+            </div>
+          </MutationForm>
+        )}
+        {value && (
+          <details className="mt-5 border-t border-line pt-4 text-sm">
+            <summary>{translate("Состояние подключения")}</summary>
+            <dl className={sharedStyles.connectionScope}>
+              <dt>{translate("Пространство")}</dt>
+              <dd className="break-all">{value.country_id}</dd>
+              <dt>{translate("Статус")}</dt>
+              <dd>
+                {value.error_code
+                  ? translate(
+                      "Не удалось обновить задачи. Проверьте адрес и права ключа.",
+                    )
+                  : translate("Ошибок нет")}
+              </dd>
+            </dl>
+            <button
+              className={buttonStyles.text}
+              onClick={() => void status.refresh()}
+            >
+              {translate("Обновить состояние")}
+            </button>
+            {canManage && value.enabled && (
+              <button
+                className={sharedStyles.destructiveText + " ml-5"}
                 onClick={() => setRemoving(true)}
               >
                 {translate("Отключить Tasktopia")}
               </button>
             )}
-          </>
+          </details>
+        )}
+        {removing && (
+          <ConfirmAction
+            title={translate("Отключить Tasktopia?")}
+            pending={action.pending}
+            error={action.error}
+            onClose={() => setRemoving(false)}
+            onConfirm={() => void remove()}
+            label={translate("Отключить Tasktopia")}
+          >
+            <p>{translate("Новые задачи перестанут поступать в Gitmora.")}</p>
+          </ConfirmAction>
         )}
       </div>
-      {canManage && editing && (
-        <MutationForm
-          pending={action.pending}
-          className={sharedStyles.setup}
-          onSubmit={(event) => void save(event)}
-        >
-          <h3>{translate("Доступ к Tasktopia")}</h3>
-          <div className={sharedStyles.formGrid}>
-            <label>
-              HTTP MCP endpoint
-              <input
-                type="url"
-                required
-                maxLength={2000}
-                readOnly={!!value}
-                value={endpoint}
-                onChange={(e) => setEndpoint(e.target.value)}
-                placeholder="https://tasktopia.internal/mcp"
-              />
-            </label>
-            <label>
-              {translate("UUID страны Tasktopia")}
-              <input
-                required
-                pattern="[0-9a-fA-F-]{36}"
-                readOnly={!!value}
-                value={country}
-                onChange={(e) => setCountry(e.target.value)}
-              />
-            </label>
-          </div>
-          <label>
-            {translate("MCP-ключ Tasktopia")}
-            <input
-              type="password"
-              required
-              minLength={8}
-              maxLength={4096}
-              autoComplete="off"
-              value={token}
-              onChange={(e) => setToken(e.target.value)}
-            />
-          </label>
-          <label className="checkbox [&_input]:[accent-color:var(--color-accent)] [&_input]:w-4 [&_input]:min-h-4 [&_input]:m-0">
-            <input
-              type="checkbox"
-              checked={autoLink}
-              onChange={(e) => setAutoLink(e.target.checked)}
-            />
-            {translate("Добавлять подтверждённые MR в задачи автоматически")}
-          </label>
-          <p className="field-help text-sm text-muted mx-0 mt-2 mb-5 leading-[1.5]">
-            {translate(
-              "Отдельному сервисному аккаунту нужны права чтения страны и задач. Добавление ссылок требует tasks:write. Эта политика не меняет стадию, приёмку или описание задачи. Ключ очищается после отправки; для изменения политики также требуется действующий ключ.",
-            )}
-          </p>
-          <button className={buttonStyles.primary} disabled={action.pending}>
-            {translate("Проверить и сохранить Tasktopia")}
-          </button>
-        </MutationForm>
-      )}
-      {canManage && value?.enabled && (
-        <MutationForm
-          pending={action.pending}
-          className={`
-            inline-form task-refresh [&_label]:flex [&_label]:flex-col [&_label]:gap-2 flex items-end gap-3
-            flex-wrap px-0 py-4 [&_label]:[flex:1] [&_label]:min-w-50 [&_label]:max-w-125 [&_label]:mb-0
-            [&_.notice]:w-full [&_.notice]:mb-0 [&_.error]:w-full [&_.error]:mb-0
-          `}
-          onSubmit={(event) => void refreshTask(event)}
-        >
-          <label>
-            {translate("UUID задачи для обновления")}
-            <input
-              required
-              pattern="[0-9a-fA-F-]{36}"
-              value={task}
-              onChange={(e) => setTask(e.target.value)}
-            />
-          </label>
-          <button className={buttonStyles.secondary} disabled={action.pending}>
-            {translate("Обновить задачу Tasktopia")}
-          </button>
-        </MutationForm>
-      )}
-      {canManage && removing && (
-        <ConfirmAction
-          title={translate("Отключить Tasktopia?")}
-          pending={action.pending}
-          error={action.error}
-          onClose={() => setRemoving(false)}
-          onConfirm={() => void remove()}
-          label={translate("Отключить Tasktopia")}
-        >
-          <p>
-            {translate(
-              "Ключ будет удалён. Фоновый процесс перестанет получать новые задачи и публиковать данные. Уже отправленный внешний запрос может завершиться.",
-            )}
-          </p>
-        </ConfirmAction>
-      )}
     </section>
   );
 }
