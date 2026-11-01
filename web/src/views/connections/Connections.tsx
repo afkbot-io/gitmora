@@ -36,7 +36,7 @@ export function Connections({
       <section className="settings-section border-t border-line px-0 py-7 mt-6 [&_h2]:text-2xl [&_h3]:text-base [&_h3]:font-medium [&_h3]:mt-0">
         <h2>{repository?.provider === "github" ? "GitHub" : "GitLab"}</h2>
         <p className="muted text-muted">
-          {translate("Синхронизация коммитов, merge requests и CI.")}
+          {translate("Синхронизация коммитов, MR/PR и проверок CI.")}
         </p>
         {repositories.length ? (
           <div className="repository-choice max-w-110 flex flex-col gap-2">

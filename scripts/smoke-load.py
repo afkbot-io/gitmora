@@ -269,7 +269,17 @@ def main() -> None:
                         status, value = request(
                             path, body, token, headers if kind == "mcp_search" else None
                         )
-                        assert status == 200, "HTTP " + str(status)
+                        assert status == 200, (
+                            "HTTP "
+                            + str(status)
+                            + " "
+                            + str(
+                                value.get("error", {}).get("code", "")
+                                if isinstance(value, dict)
+                                and isinstance(value.get("error"), dict)
+                                else ""
+                            )
+                        )
                         if kind == "mcp_search":
                             assert not value.get("error") and not value["result"].get(
                                 "isError"

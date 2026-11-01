@@ -16,6 +16,13 @@ import {
 } from "../SettingsShared.js";
 import { ErrorNotice, date } from "../shared.js";
 
+const streamLabels: Readonly<Record<string, string>> = {
+  merge_requests: "Запросы на слияние",
+  pipelines: "Проверки CI",
+  child_pipelines: "Дочерние проверки CI",
+  deployments: "Развёртывания",
+};
+
 export function ForgeConnection({
   client,
   repository,
@@ -188,7 +195,9 @@ export function ForgeConnection({
             >
               {value.streams.map((stream) => (
                 <article key={stream.kind}>
-                  <strong>{stream.kind}</strong>
+                  <strong>
+                    {translate(streamLabels[stream.kind] ?? "Синхронизация")}
+                  </strong>
                   <span>
                     {stream.active
                       ? translate("Страница {0}", stream.next_page)

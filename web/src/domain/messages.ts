@@ -199,6 +199,7 @@ export const english: Readonly<Record<string, string>> = {
     "MR/PR availability depends on repository synchronization.",
   "Доступных цитат пока нет. Проверьте права и индексацию.":
     "No source fragments are available yet. Check access and indexing.",
+  "Дочерние проверки CI": "Child CI checks",
   "Единый вход Gitmora": "Sign in to Gitmora",
   "Есть дополнительные MR, не вошедшие в контекст.":
     "More MRs exist outside this context.",
@@ -249,6 +250,7 @@ export const english: Readonly<Record<string, string>> = {
     "Request cancelled in the terminal. No key was created.",
   "Запрос превышает допустимый размер.": "The request exceeds the size limit.",
   "Запросить сверку {0}": "Request {0} sync",
+  "Запросы на слияние": "Merge/pull requests",
   "Запрошенный срок превышает 90 дней или оставшийся срок текущего ключа или сессии.":
     "The requested lifetime exceeds 90 days or the remaining connection lifetime.",
   "Зарегистрировать репозиторий": "Add repository",
@@ -562,6 +564,7 @@ export const english: Readonly<Record<string, string>> = {
   "Проверить и сохранить {0}": "Verify and save {0}",
   "Проверить сбор и повторить доставку": "Check collection and retry delivery",
   "Проверка вебхука": "Webhook verification",
+  "Проверки CI": "CI checks",
   "Проверьте введённые данные и параметры запроса.":
     "Check the entered details and request parameters.",
   "Проверьте выбранный вид, фильтр и состояние интеграций.":
@@ -581,6 +584,7 @@ export const english: Readonly<Record<string, string>> = {
   "Пути, указанные агентом:": "Agent-reported paths:",
   Работа: "Work",
   "Рабочие источники": "Work sources",
+  Развёртывания: "Deployments",
   Разделы: "Sections",
   "Разделы проекта": "Project sections",
   "Разрешения нового ключа": "New key permissions",
@@ -654,8 +658,8 @@ export const english: Readonly<Record<string, string>> = {
   "Сессия:": "Session:",
   "Символы {0}–{1}": "Characters {0}–{1}",
   Синхронизация: "Sync",
-  "Синхронизация коммитов, merge requests и CI.":
-    "Sync commits, merge requests and CI.",
+  "Синхронизация коммитов, MR/PR и проверок CI.":
+    "Sync commits, merge/pull requests and CI checks.",
   "Синхронизация работает автоматически. Вебхуки ускоряют обновления.":
     "Synchronization runs automatically. Webhooks speed up updates.",
   "Система компьютера разработчика": "Your computer",
