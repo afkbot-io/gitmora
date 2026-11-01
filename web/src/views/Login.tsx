@@ -41,11 +41,11 @@ export function Login({
             id="login-title"
             className="text-[clamp(2.5rem,4.5vw,4.75rem)] leading-[1.06] font-semibold tracking-tight mb-6 mobile:text-4xl mobile:mb-4"
           >
-            {translate("Задачи, код и решения вместе.")}
+            {translate("История разработки под рукой.")}
           </h1>
           <p className="text-lg leading-relaxed text-muted max-w-120 mb-8 mobile:text-base mobile:mb-6">
             {translate(
-              "Gitmora связывает сессии агентов, коммиты и задачи в одну историю. Находите решения команды и продолжайте работу с нужным контекстом.",
+              "Gitmora связывает сессии агентов с коммитами и MR/PR. Находите решения команды и продолжайте работу с нужным контекстом.",
             )}
           </p>
           <ErrorNotice>
@@ -102,7 +102,7 @@ export function Login({
         <figure
           className="landing-preview m-0 min-w-0"
           aria-label={translate(
-            "Пример: задача, сессия агента, коммит и merge request связаны между собой",
+            "Пример: проект, сессия агента, коммит и merge request",
           )}
         >
           <svg
@@ -124,7 +124,7 @@ export function Login({
           <ol className="landing-history relative grid grid-cols-2 gap-x-8 gap-y-12 list-none m-0 p-6 mobile:p-4 mobile:gap-x-4 mobile:gap-y-4">
             {(
               [
-                [translate("Задача"), translate("Обновить вход")],
+                [translate("Проект"), "Gitmora"],
                 [
                   translate("Сессия агента"),
                   translate("Обсуждение и изменения"),

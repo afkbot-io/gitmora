@@ -61,14 +61,12 @@ export interface AuthConfig {
   login_path?: string;
 }
 export interface Source {
-  kind: "capture" | "task" | "code";
+  kind: "capture" | "code";
   project_id: string;
   digest: string;
   repository_id?: string;
   session_id?: string;
   revision?: number;
-  country_id?: string;
-  task_id?: string;
   commit_sha?: string;
   file_path?: string;
   blob_id?: string;
@@ -90,8 +88,6 @@ export interface Hit {
   confirmed_count: number;
   line_start?: number;
   line_end?: number;
-  country_id?: string;
-  task_id?: string;
 }
 export interface SearchResult {
   items: Hit[];
@@ -113,8 +109,6 @@ export interface SearchQuery {
 
 export const sourceNames: Record<string, string> = {
   session: "Сессия агента",
-  task: "Задача",
-  document: "Документ задачи",
   code_reference: "Ссылка на код",
   code: "Код репозитория",
 };

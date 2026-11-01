@@ -90,7 +90,7 @@ def main() -> None:
         status, initialized = rpc("server/discover", {})
         assert status == 200 and initialized.get("result", {}).get("_meta", {}).get("io.modelcontextprotocol/serverInfo", {}).get("name") == "Gitmora", f"MCP initialization failed: {status} {initialized}"
         status, tools = rpc("tools/list", {})
-        assert status == 200 and {tool["name"] for tool in tools["result"]["tools"]} == {"context.search", "context.expand", "context.task","context.file","context.pack","context.browse"}
+        assert status == 200 and {tool["name"] for tool in tools["result"]["tools"]} == {"context.search", "context.expand", "context.resolve","context.file","context.pack","context.browse"}
         discovery_query = dict(project_id=identity["project_id"], kind="session", limit=1)
         status, discovered = rpc("tools/call", {"name": "context.browse", "arguments": discovery_query})
         assert status == 200 and not discovered["result"].get("isError")
@@ -101,11 +101,11 @@ def main() -> None:
         status, searched = rpc("tools/call", {"name": "context.search", "arguments": query})
         assert status == 200 and not searched["result"].get("isError")
         assert searched["result"]["structuredContent"]["result"]["items"][0]["id"] == hit["id"]
-        status, task_context = rpc("tools/call", {"name": "context.task", "arguments": {"project_id": identity["project_id"], "country_id": country, "task_id": task}})
-        assert status == 200 and task_context["result"]["structuredContent"]["result"]["items"], "Bound capture missing from task context"
+        status, missing = rpc("tools/call", {"name": "context.resolve", "arguments": {"project_id": identity["project_id"], "url": "https://gitlab.internal/team/repo/-/merge_requests/999"}})
+        assert status == 200 and missing["result"].get("isError"), "Unknown MR resolved without an observation"
         status, detail = rpc("tools/call", {"name": "context.expand", "arguments": {"evidence_id": hit["id"], "offset": 10, "limit": 40}})
         assert status == 200 and len(detail["result"]["structuredContent"]["result"]["content"]) == 40
-        issued = api.command(["issue-token", "--user-id", identity["user_id"], "--label", "Task-only context", "--scopes", "integration:read", "--ttl", "1h"], environment)
+        issued = api.command(["issue-token", "--user-id", identity["user_id"], "--label", "Integration-only context", "--scopes", "integration:read", "--ttl", "1h"], environment)
         assert issued.returncode == 0
         scoped = json.loads(issued.stdout)
         assert request("/v1/context/browse", discovery_query, scoped["token"])[0] == 403
@@ -134,7 +134,7 @@ def main() -> None:
         verify_native_context(ROOT, "http://" + address, native_identity["token"], native_query, native_hit["id"],
             lambda: api.sql(f'UPDATE "{schema}".api_tokens SET revoked_at=now() WHERE id=\'{native_identity["token_id"]}\''))
         print("Native CLI API/stdio MCP processes passed: explicit environment authority, six read tools, search, exact expansion, live revocation and no credential stdout.")
-        print("Built API/index worker/PostgreSQL + MCP passed: source discovery/returned-selector pack, bilingual search, exact Unicode citations, pending coverage, restart, confirmed references, task context, independent source capabilities, historical expansion, token revocation.")
+        print("Built API/index worker/PostgreSQL + MCP passed: source discovery/returned-selector pack, bilingual search, exact Unicode citations, pending coverage, restart, confirmed references, scoped MR URL resolution, independent source capabilities, historical expansion, token revocation.")
     finally:
         if process is not None:
             if process.poll() is None:

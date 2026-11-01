@@ -11,7 +11,6 @@ import { RepositoryCatalog } from "./Catalog.js";
 import { Members, ProjectSettings } from "./ProjectSettings.js";
 import { SetupGuide } from "./AgentSetup.js";
 import { capabilities } from "../domain/settings.js";
-import { WorkWorkspace } from "./work/WorkWorkspace.js";
 
 export function ProjectWorkspace({
   client,
@@ -24,16 +23,27 @@ export function ProjectWorkspace({
   client: ApiClient;
   project: Project;
   me: Me;
-  view: "context" | "repositories" | "settings" | "members" | "setup" | "work";
+  view: "context" | "repositories" | "settings" | "members" | "setup";
   refreshProject: (deleted?: boolean) => Promise<void>;
   refreshing: boolean;
 }) {
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [next, setNext] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
   const [requests] = useState(() => new LatestRequest());
   const [setupRepository, setSetupRepository] = useState("");
+  useEffect(() => {
+    const read = () => {
+      const p = new URLSearchParams(location.hash.slice(1));
+      if (p.get("project") === project.id && p.get("view") === "setup")
+        setSetupRepository(p.get("repository") ?? "");
+    };
+    read();
+    window.addEventListener("hashchange", read);
+    return () => window.removeEventListener("hashchange", read);
+  }, [project.id]);
   const chosenRepository =
     repositories.find((r) => r.id === setupRepository) ?? repositories[0];
   async function load(after = "") {
@@ -57,7 +67,10 @@ export function ProjectWorkspace({
     } catch (e) {
       if (!aborted(e) && request.current()) setError(readableError(e));
     } finally {
-      if (request.current()) setLoading(false);
+      if (request.current()) {
+        setLoading(false);
+        setLoaded(true);
+      }
     }
   }
   useEffect(() => {
@@ -107,9 +120,9 @@ export function ProjectWorkspace({
             {...(chosenRepository ? { repositoryID: chosenRepository.id } : {})}
           />
         </section>
-      ) : loading && repositories.length === 0 ? (
+      ) : !loaded && loading ? (
         <p role="status">{translate("Загружаем репозитории…")}</p>
-      ) : (view === "context" || view === "work") &&
+      ) : view === "context" &&
         (!project.role ||
           !me.scopes.some((scope) =>
             ["capture:read", "integration:read"].includes(scope),
@@ -128,27 +141,27 @@ export function ProjectWorkspace({
             await load();
             await refreshProject();
           }}
+          onConnected={(id) => {
+            location.hash = new URLSearchParams({
+              view: "setup",
+              project: project.id,
+              repository: id,
+            }).toString();
+          }}
         />
       ) : view === "settings" ? (
         <ProjectSettings
           client={client}
           me={me}
           project={project}
-          repositories={repositories}
           refreshProject={refreshProject}
-        />
-      ) : view === "work" ? (
-        <WorkWorkspace
-          client={client}
-          project={project}
-          repositories={repositories}
-          me={me}
         />
       ) : (
         <ContextWorkspace
           client={client}
           project={project}
           repositories={repositories}
+          me={me}
         />
       )}
       {next && (

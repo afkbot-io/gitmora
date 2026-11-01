@@ -85,16 +85,13 @@ func (p Plan) Fingerprint() string {
 
 // Counts records content-free displaced authority/work totals, not payloads or provider secrets.
 type Counts struct {
-	Users                int64 `json:"users"`
-	Tokens               int64 `json:"tokens"`
-	Memberships          int64 `json:"memberships"`
-	Operators            int64 `json:"operators"`
-	Bindings             int64 `json:"bindings"`
-	Flows                int64 `json:"flows"`
-	GitLabConnections    int64 `json:"gitlab_connections"`
-	TasktopiaConnections int64 `json:"tasktopia_connections"`
-	TaskWrites           int64 `json:"task_writes"`
-	TaskReads            int64 `json:"task_reads"`
+	Users             int64 `json:"users"`
+	Tokens            int64 `json:"tokens"`
+	Memberships       int64 `json:"memberships"`
+	Operators         int64 `json:"operators"`
+	Bindings          int64 `json:"bindings"`
+	Flows             int64 `json:"flows"`
+	GitLabConnections int64 `json:"gitlab_connections"`
 }
 
 // Receipt is durable first-commit evidence; replay never renews or restores the issued authority.

@@ -34,7 +34,7 @@ One original native conversation pins a stream root and its initial task/worktre
 
 Durable file-event consumption spans the source's windows and replacement branches. A replay cannot reintroduce an already consumed path. Pruning preserves previously captured tool bytes using the stable identity; if the source pruned before first capture, the retained text explicitly reports that the output was unavailable.
 
-Task rebinding affects another new native conversation. It cannot retarget an existing root or child. Publication permission likewise spans only that original source: a push selecting one member authorizes its source windows, including an already dirty final window after a later human commit. Another source/worktree stays private. A failed Git push can still have authorized context delivery; provider confirmation remains independent.
+Publication permission likewise spans only that original source: a push selecting one member authorizes its source windows, including an already dirty final window after a later human commit. Another source/worktree stays private. A failed Git push can still have authorized context delivery; provider confirmation remains independent.
 
 Commit relations copied into a child are inherited conversation context, not new path or authorship claims. A child created before a later human commit may have no own SHA relation. Exact-SHA search still filters the stored revision's own relations; richer stream-wide context expansion remains required agent-context work.
 

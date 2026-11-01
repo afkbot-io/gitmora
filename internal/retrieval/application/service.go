@@ -88,7 +88,7 @@ type Lease struct {
 }
 
 // Part is a sanitized source part prepared by the persistence anti-corruption adapter.
-type Part struct{ Kind, Name, Title, Content, CountryID, TaskID string }
+type Part struct{ Kind, Name, Title, Content string }
 
 // IndexStore atomically claims sources and persists chunks with their durable acknowledgment.
 type IndexStore interface {
@@ -119,10 +119,6 @@ func (w *Indexer) ReconcileOnce(parent context.Context) (bool, error) {
 		}
 		var group []domain.Chunk
 		group, err = domain.Chunks(lease.Source, part.Kind, part.Name, part.Title, part.Content)
-		for i := range group {
-			group[i].CountryID = part.CountryID
-			group[i].TaskID = part.TaskID
-		}
 		chunks = append(chunks, group...)
 		if len(chunks) > 8192 {
 			err = domain.ErrInvalid

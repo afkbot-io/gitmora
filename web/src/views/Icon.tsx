@@ -1,6 +1,5 @@
 const paths = {
   setup: "M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5",
-  work: "M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01",
   context: "m21 21-4.5-4.5M19 10.5a8.5 8.5 0 1 1-17 0 8.5 8.5 0 0 1 17 0",
   repositories:
     "M6 3v12a4 4 0 0 0 4 4h4M6 7h8a4 4 0 0 1 4 4v2M3 3h6M15 19h6M15 13h6",

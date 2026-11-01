@@ -125,7 +125,7 @@ func (o NormalizedObservation) Digest() string { return o.digest }
 // EventKey identifies the event within a recording without persisting an arbitrary raw event ID.
 func (o NormalizedObservation) EventKey() string { return hash([]byte(o.value.EventID)) }
 
-// SessionKey scopes native agent identity by repository, worktree and Tasktopia binding.
+// SessionKey scopes native agent identity by repository, worktree and any immutable legacy namespace.
 func SessionKey(repository, worktree string, task *capture.TaskRef, o NormalizedObservation) string {
 	return NativeSessionKey(repository, worktree, o.value.Agent.Name, o.value.SourceSessionID, task)
 }

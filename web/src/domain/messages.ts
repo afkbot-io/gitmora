@@ -1,27 +1,16 @@
-/** Authored English interface messages. */
+/** Authored UI translations. Source text and user content are never translated. */
 export const english: Readonly<Record<string, string>> = {
   " / резюме агента": " / agent summary",
-  " · Изменено в источнике": " · Updated at source",
-  " Проверка ограничена глубиной.": " Verification depth is limited.",
   " — недоступно родителю": " — unavailable to this connection",
   "(пустое сообщение)": "(empty message)",
-  ", открытых:": ", open:",
-  ". Корень, указанный источником:": ". Source-reported root:",
-  ". Ошибки индексации:": ". Indexing errors:",
-  ". Подтверждённых коммитов этой ревизии:":
-    ". Verified commits in this revision:",
-  ". Полная запись доступна в источнике.":
-    ". The full record is available from the source.",
   ". Родитель:": ". Parent:",
   ". Учётная запись:": ". Account:",
   ". Фрагмент": ". Part",
-  ". Цитаты могут появиться позже.": ". Source fragments may appear later.",
   "1. Установите CLI": "1. Install the CLI",
   "2. Войдите и подключите репозиторий":
     "2. Sign in and connect your repository",
   "3. Включите нужный агент": "3. Enable your agent",
   "API-ключ": "API key",
-  "CI для наблюдаемого head": "CI for observed head",
   "CLI и MCP": "CLI and MCP",
   "Contents, Pull requests и Actions: Read-only. Выберите только этот репозиторий.":
     "Contents, Pull requests and Actions: Read-only. Select only this repository.",
@@ -29,23 +18,24 @@ export const english: Readonly<Record<string, string>> = {
     "GitHub → Settings → Developer settings → Fine-grained tokens. Select the repository and allow Contents, Pull requests and Actions: Read-only.",
   "GitLab → Settings → Access tokens. Создайте токен с правом read_api и доступом к этому проекту.":
     "GitLab → Settings → Access tokens. Create a token with read_api permission and access to this project.",
-  "Gitmora связывает сессии агентов, коммиты и задачи в одну историю. Находите решения команды и продолжайте работу с нужным контекстом.":
-    "Gitmora connects agent sessions, commits and tasks into one history. Find your team's decisions and continue with the context you need.",
+  "Gitmora связывает сессии агентов с коммитами и MR/PR. Находите решения команды и продолжайте работу с нужным контекстом.":
+    "Gitmora connects agent sessions to commits and merge requests. Find your team’s decisions and continue with the context you need.",
   "Gitmora — история разработки": "Gitmora — development history",
-  "Head MR изменился относительно выбранного SHA. Приведённые CI относятся к наблюдаемому head, а не к ожидавшемуся.":
-    "The MR head has changed from the selected SHA. These CI results apply to the observed head.",
-  "ID репозитория источника": "Source repository ID",
   "IID превышает точный числовой диапазон интерфейса.":
     "The IID exceeds the interface's exact numeric range.",
   "MCP использует ваш вход в CLI. После настройки перезапустите агент.":
     "MCP uses your CLI sign-in. Restart the agent after setup.",
-  "Tasktopia подключена.": "Tasktopia connected.",
+  "MR и PR": "Merge and pull requests",
+  "MR/PR ещё не синхронизирован. Проверьте подключение репозитория.":
+    "This MR/PR has not synced yet. Check the repository connection.",
+  "MR/PR пока недоступен. Проверьте подключение репозитория.":
+    "This MR/PR is unavailable. Check the repository connection.",
+  "MR/PR появятся после синхронизации репозитория.":
+    "Merge and pull requests appear after the repository syncs.",
   "UUID пользователя": "User UUID",
-  "UUID пространства Tasktopia": "Tasktopia workspace UUID",
   "macOS и Linux": "macOS and Linux",
   "{0} дн.": "{0} days",
   "{0} мин.": "{0} min",
-  "· Выполнение по Tasktopia:": "· Tasktopia completion:",
   Агент: "Agent",
   "Агент / модель": "Agent / model",
   "Агент в источнике:": "Reported agent:",
@@ -55,9 +45,6 @@ export const english: Readonly<Record<string, string>> = {
   "Администратор сервера должен настроить шифрование и разрешённые адреса интеграций.":
     "Ask the server administrator to configure encryption and allowed integration servers.",
   "Адрес вебхука": "Webhook URL",
-  "Адрес и страна Tasktopia уже закреплены за проектом. Проверьте исходную привязку.":
-    "This project's Tasktopia server and country are already fixed. Check the existing connection.",
-  "Адрес репозитория недоступен": "Repository URL is unavailable",
   "Без токена доступен небольшой общий лимит GitHub API.":
     "Without a token, GitHub applies a small shared API limit.",
   "Блоки вне текстового импорта:": "Blocks outside this text import:",
@@ -66,10 +53,7 @@ export const english: Readonly<Record<string, string>> = {
     "Project membership will be removed. The account and other project access will remain.",
   "Будут отозваны этот ключ и все его дочерние ключи.":
     "This key and all its child keys will be revoked.",
-  "Будут удалены запись репозитория и связанные локальные сессии, индексы и результаты. Исходный репозиторий останется у вашего провайдера.":
-    "The repository record and its local sessions, indexes and results will be deleted. The source repository stays with your provider.",
-  "В Tasktopia откройте настройки → MCP-интеграция и создайте ключ с country:read и tasks:read. UUID страны можно получить через MCP country.list. Для добавления ссылок нужно tasks:write.":
-    "In Tasktopia, open Settings → MCP integration and create a key with country:read and tasks:read. Use MCP country.list to find the country UUID. Adding links also requires tasks:write.",
+  "В MR/PR появились новые коммиты.": "This MR/PR has new commits.",
   "В папке репозитория": "Inside your repository folder",
   "Введите название ключа длиной до 120 байт UTF-8.":
     "Enter a key name of up to 120 UTF-8 bytes.",
@@ -86,13 +70,18 @@ export const english: Readonly<Record<string, string>> = {
   Версия: "Version",
   "Версия или идентификатор операции изменились. Обновите данные перед новым изменением.":
     "The version or operation ID changed. Refresh the data before editing.",
+  "Включите запись сессий в CLI": "Enable session recording in the CLI",
   Войти: "Sign in",
   "Войти через организацию заново": "Sign in again",
   "Впервые здесь?": "New here?",
   "Время коммита": "Commit time",
   "Время неизвестно": "Unknown time",
+  "Все доступные коммиты": "All available commits",
   "Все источники": "All sources",
   "Все репозитории": "All repositories",
+  "Вставьте полный SHA коммита.": "Paste the full commit SHA.",
+  "Вставьте ссылку на репозиторий. Адрес сервера и ID определим автоматически.":
+    "Paste a repository URL. We will detect its server and ID.",
   "Вход CLI через организацию не настроен на этом сервере.":
     "CLI sign-in is not configured on this server.",
   "Вход в Gitmora": "Sign in to Gitmora",
@@ -100,7 +89,6 @@ export const english: Readonly<Record<string, string>> = {
     "Sign-in is not configured. Contact the server administrator.",
   "Вход пока недоступен. Обратитесь к администратору команды.":
     "Sign-in is unavailable. Contact your team administrator.",
-  "Выберите запись": "Select a record",
   "Выберите поддерживаемую платформу CLI.": "Select a supported CLI platform.",
   "Выберите проект": "Choose a project",
   "Выберите проект, к которому у вас есть доступ.":
@@ -113,23 +101,19 @@ export const english: Readonly<Record<string, string>> = {
   "Выделите команду и скопируйте вручную.":
     "Select the command and copy it manually.",
   Выйти: "Sign out",
-  Выполнено: "Complete",
   "Выполняем…": "Working…",
+  Выполняется: "Running",
   "Выпускать и отзывать свои ключи": "Issue and revoke your keys",
   "Выпустить ключ": "Issue key",
   "Выпустить личный ключ": "Issue personal key",
-  "Где найти ключ и UUID": "Where to find the key and UUID",
   "Готово к проверке": "Ready for review",
-  "Данные Tasktopia": "Tasktopia data",
   "Данные изменились. Обновите страницу и повторите действие.":
     "The data has changed. Refresh and try again.",
   "Данные источника. Авторство указано внешним инструментом; строки без меток имеют неизвестное происхождение.":
     "Source data. Attribution comes from an external tool; unmarked lines have unknown authorship.",
-  "Данные сервиса": "Service data",
   "Действия проекта": "Project actions",
   Действует: "Active",
   "Действует до": "Expires",
-  "Дефекты:": "Defects:",
   "Диапазоны относятся к коммиту": "Ranges refer to commit",
   "Диапазоны, указанные источником:": "Source-reported ranges:",
   "Для закрытого репозитория нужен токен чтения.":
@@ -138,16 +122,13 @@ export const english: Readonly<Record<string, string>> = {
     "Start a new sign-in from your terminal to try again.",
   "Для подтверждения CLI войдите через организацию заново по ссылке из терминала.":
     "Sign in again using the link from your terminal to approve CLI access.",
+  "Для этих коммитов ещё нет записанных сессий.":
+    "No sessions have been recorded for these commits.",
   "Добавить репозиторий": "Add repository",
   "Добавить участника": "Add member",
-  "Добавлять ссылки на запросы слияния в задачи":
-    "Add pull request links to tasks",
   "Добавьте GitHub или GitLab, чтобы сохранять историю разработки.":
     "Connect GitHub or GitLab to start saving development history.",
   "Добавьте коллегу по нику или UUID.": "Add a teammate by username or UUID.",
-  "Добро пожаловать в Gitmora": "Welcome to Gitmora",
-  "Документ задачи": "Task document",
-  "Документы:": "Documents:",
   Дополнительно: "Advanced",
   "Достигнут лимит API сервиса. Проверьте токен или дождитесь следующей попытки.":
     "The service API limit was reached. Check the token or wait for the next attempt.",
@@ -155,31 +136,18 @@ export const english: Readonly<Record<string, string>> = {
     "GitHub's shared limit has been reached. Connect a read token for regular synchronization.",
   "Доступ терминала сохранится после выхода из браузера. Отозвать его можно в личных настройках.":
     "Terminal access remains active after browser sign-out. Revoke it in personal settings.",
-  "Доступных цитат пока нет. Проверьте права и индексацию.":
-    "No source fragments are available yet. Check access and indexing.",
-  "Есть дополнительные MR, не вошедшие в контекст.":
-    "More MRs exist outside this context.",
   "За доступом обратитесь к администратору команды.":
     "Contact your team administrator for access.",
-  "Зависимости:": "Dependencies:",
   "Загружаем проекты…": "Loading projects…",
   "Загружаем репозитории…": "Loading repositories…",
   "Загружаем фрагмент…": "Loading fragment…",
   "Загрузить ещё": "Load more",
-  "Загрузить ещё источники": "Load more sources",
   "Загрузить ещё ключи": "Load more keys",
   "Загрузить ещё репозитории": "Load more repositories",
   "Загрузить ещё участников": "Load more members",
   "Загрузка подтверждения CLI…": "Loading CLI confirmation…",
   "Загрузка…": "Loading…",
-  Задача: "Task",
-  "Задача Tasktopia": "Tasktopia task",
-  "Задача пока недоступна": "Task unavailable",
-  "Задачи Tasktopia": "Tasktopia tasks",
-  "Задачи и связи с изменениями кода.": "Tasks and links to code changes.",
-  "Задачи, код и решения вместе.": "Tasks, code and decisions together.",
-  "Закрыть цитату": "Close fragment",
-  "Запись агента": "Agent record",
+  Закрыт: "Closed",
   "Запись не найдена или больше недоступна.":
     "The record was not found or is no longer available.",
   "Запись сессии": "Session record",
@@ -193,34 +161,30 @@ export const english: Readonly<Record<string, string>> = {
     "This CLI request uses unsupported connection settings.",
   "Запрос должен занимать не более 512 байт UTF-8.":
     "The query must be no longer than 512 UTF-8 bytes.",
-  "Запрос или полный SHA коммита": "Search query or full commit SHA",
+  "Запрос или ссылка на MR/PR": "Query or MR/PR URL",
   "Запрос отклонён. Ключ не создан.": "Request denied. No key was created.",
   "Запрос отменён в терминале. Ключ не создан.":
     "Request cancelled in the terminal. No key was created.",
   "Запрос превышает допустимый размер.": "The request exceeds the size limit.",
   "Запрошенный срок превышает 90 дней или оставшийся срок текущего ключа или сессии.":
     "The requested lifetime exceeds 90 days or the remaining connection lifetime.",
-  "Здесь появятся полный фрагмент, точная версия и происхождение источника.":
-    "The source fragment, version and provenance will appear here.",
   Идентификатор: "Identifier",
   "Идентификатор проекта": "Project ID",
   "Идентификаторы источника": "Source identifiers",
   "Изменения в коде": "Code changes",
   "Изменить доступ": "Edit access",
   "Импорт:": "Import:",
-  Интеграции: "Integrations",
+  "Индекс обновляется": "Index updating",
+  "Инструкция сервиса": "Provider instructions",
   "Историческая версия": "Historical version",
-  "Историческая запись": "Historical record",
   "Исторические версии": "Historical versions",
-  "История Gitmora будет удалена. Исходный код и задачи во внешних сервисах сохранятся.":
-    "Gitmora history will be deleted. Source code and tasks in external services will remain.",
-  "История пока пуста": "No history yet",
+  "История Gitmora будет удалена. Репозитории в GitHub и GitLab сохранятся.":
+    "Gitmora history will be deleted. Your GitHub and GitLab repositories will remain.",
+  "История разработки под рукой.": "Your development history, at hand.",
   Источник: "Source",
   "Источник SHA-256": "Source SHA-256",
   "Источник не содержит однозначной области навигации.":
     "The source does not identify a single navigation scope.",
-  "Источник относится к другому проекту.":
-    "The source belongs to another project.",
   "Источник ссылается на внешние transcripts. Их содержимое в эту запись не загружалось.":
     "The source references external transcripts. Their contents were not imported into this record.",
   "Источник указал AI: {0} / {1}": "Source reports AI: {0} / {1}",
@@ -232,59 +196,55 @@ export const english: Readonly<Record<string, string>> = {
   "Как получить токен": "How to create a token",
   "Клиенты с этими ключами потеряют доступ.":
     "Clients using these keys will lose access.",
-  "Ключ Tasktopia": "Tasktopia key",
   "Ключ действует до": "Key expires",
   "Ключ создан, секрет недоступен": "Key created; secret unavailable",
   "Ключи для автоматизации": "Automation keys",
   "Ключи и браузерные сессии вашей учётной записи. Доступ к проектам проверяется отдельно.":
     "Keys and browser sessions for your account. Project access is checked separately.",
   "Код входа CLI": "CLI sign-in code",
+  "Код коммита": "Commit code",
   "Код репозитория": "Repository code",
   "Код:": "Code:",
-  "Комментарии:": "Comments:",
   Коммит: "Commit",
   "Коммит ещё не проверен": "Commit not verified yet",
   "Коммит репозитория": "Repository commit",
-  "Коммиты и запросы на слияние.": "Commits and pull requests.",
+  Коммиты: "Commits",
   "Коммиты, указанные агентом:": "Agent-reported commits:",
-  "Контекст источника": "Source context",
+  "Контекст MR/PR": "MR/PR context",
+  "Контекст коммита": "Commit context",
   "Контекст не совпал с выбранным источником.":
     "The context does not match the selected source.",
-  "Контекст работы": "Work context",
   Копировать: "Copy",
   "Копировать: {0}": "Copy: {0}",
   "Корневой ключ": "Root key",
-  "Критерии приёмки": "Acceptance criteria",
   "Личные ключи": "Personal keys",
   "Личные настройки": "Personal settings",
-  "Наблюдаемый head": "Observed head",
-  "Назад к источнику": "Back to source",
+  "Назад к поиску": "Back to search",
   "Название в Gitmora": "Name in Gitmora",
+  "Название и удаление": "Name and deletion",
   "Название ключа": "Key name",
   "Название проекта": "Project name",
   "Название сохранено.": "Name saved.",
-  "Найдите сессию, задачу или коммит по ключевым словам.":
-    "Find a session, task or commit using keywords.",
+  "Найдено фрагментов: {0}": "Excerpts found: {0}",
   Найти: "Search",
   "Например, alex…": "For example, alex…",
-  "Например, команда разработки…": "For example, Development team…",
   "Например, локальный сборщик": "For example, local collector",
-  "Например, обновление токена доступа": "For example, refresh access token",
+  "Например, платформа или продукт…": "For example, a platform or product…",
   "Настраивать интеграции проекта": "Configure project integrations",
+  Настроить: "Configure",
+  "Настроить CLI и MCP": "Set up CLI and MCP",
   "Настройки проекта": "Project settings",
   Начало: "Started",
   "Начало фрагмента": "Start of fragment",
-  "Не применяется к наблюдаемому head.": "Does not apply to the observed head.",
   "Не удалось войти. Повторите попытку или обратитесь к администратору.":
     "Could not sign in. Try again or contact your administrator.",
   "Не удалось выполнить запрос. Повторите попытку.":
     "The request failed. Try again.",
   "Не удалось завершить сессию.": "Could not end your session.",
-  "Не удалось обновить задачи. Проверьте адрес и права ключа.":
-    "Tasks could not be updated. Check the URL and key permissions.",
   "Не удалось проверить доступ к внешнему сервису. Проверьте адрес, ключ и его права.":
     "Could not verify external service access. Check the address, key and permissions.",
   "Не указана": "Not specified",
+  "Недавние сессии": "Recent sessions",
   "Недопустимый адрес подключения или идентификатор репозитория.":
     "Invalid server address or repository ID.",
   "Недопустимый идентификатор репозитория.": "Invalid repository ID.",
@@ -294,22 +254,17 @@ export const english: Readonly<Record<string, string>> = {
   "Нельзя передать больше прав, чем у текущего ключа.":
     "You cannot grant more permissions than this connection has.",
   "Нет доступа к контексту": "No context access",
-  "Нет доступа к рабочим источникам": "No source access",
-  "Нет наблюдаемого SHA": "No observed SHA",
-  "Нет разрешения на данные задачи": "No task data access",
+  "Нет доступа к сессиям.": "You do not have access to sessions.",
   "Ник для приглашений": "Invitation username",
   "Ник или UUID пользователя": "Username or user UUID",
+  "Ничего не найдено": "No results",
   "Новое название репозитория": "New repository name",
   "Новые данные перестанут поступать. Сохранённые сессии останутся в Gitmora.":
     "New data will stop arriving. Saved sessions will remain in Gitmora.",
-  "Новые задачи перестанут поступать в Gitmora.":
-    "New tasks will stop arriving in Gitmora.",
   "Новый API-ключ": "New API key",
   "Новый ключ превышает полномочия, срок или глубину текущего подключения. Проверьте ограничения родителя.":
     "The key exceeds this connection's permissions or lifetime. Check its parent limits.",
   "Новый проект": "New project",
-  "Нужно capture:read для сессий или integration:read для задач и MR.":
-    "Sessions require capture:read; tasks and MRs require integration:read.",
   "Нужны Git 2.43+ и curl. Для входа на Linux установите libsecret-tools и запустите Secret Service в своей пользовательской сессии.":
     "Requires Git 2.43+ and curl. For Linux sign-in, install libsecret-tools and run Secret Service in your user session.",
   "Нужны read_api и доступ к этому проекту GitLab.":
@@ -317,25 +272,20 @@ export const english: Readonly<Record<string, string>> = {
   "Обновите список или выпустите ограниченный ключ.":
     "Refresh the list or issue a restricted key.",
   Обновить: "Refresh",
-  "Обновить вход": "Update sign-in",
   "Обновить запрос CLI": "Refresh CLI request",
-  "Обновить контекст": "Refresh context",
   "Обновить состояние": "Refresh status",
   "Обновить список ключей": "Refresh keys",
   "Обновить участников": "Refresh members",
   Обновлено: "Updated",
   "Обсуждение и изменения": "Discussion and changes",
+  "Объедините репозитории и команду в одном проекте.":
+    "Bring your repositories and team together in one project.",
   Объект: "Object",
-  "Ожидают индексации:": "Awaiting indexing:",
-  "Ожидают индексации: {0}. ": "Awaiting indexing: {0}. ",
-  "Окна сессии": "Session windows",
+  Ожидает: "Pending",
   "Окно подтверждения": "Confirmation deadline",
   "Окно подтверждения истекло. Проверьте состояние входа в терминале.":
     "The confirmation has expired. Check sign-in status in your terminal.",
   Окончание: "Ended",
-  Описание: "Description",
-  "Основание связи:": "Link basis:",
-  Основное: "General",
   "Остановить сбор в этом репозитории": "Stop collection in this repository",
   "Ответ не совпал с выбранной сессией и ревизией.":
     "The response does not match this session and revision.",
@@ -346,22 +296,17 @@ export const english: Readonly<Record<string, string>> = {
   "Отклонить запрос CLI…": "Deny CLI request…",
   "Отклонить запрос терминала?": "Deny terminal request?",
   Отключено: "Disconnected",
-  "Отключить Tasktopia": "Disconnect Tasktopia",
-  "Отключить Tasktopia?": "Disconnect Tasktopia?",
   "Отключить {0}": "Disconnect {0}",
   "Отключить {0}?": "Disconnect {0}?",
-  "Откройте сессию, задачу или запрос на слияние из списка.":
-    "Open a session, task or pull request from the list.",
-  "Откройте фрагмент": "Open a fragment",
-  Открыто: "Open",
-  "Открыть в Tasktopia": "Open in Tasktopia",
+  Открыт: "Open",
+  "Открыть в {0}": "Open in {0}",
   "Открыть версию": "Open version",
-  "Открыть задачу из привязки агента": "Open agent-linked task",
-  "Открыть источник": "Open source",
-  "Открыть контекст MR": "Open MR context",
-  "Открыть наблюдаемый head": "Open observed head",
-  "Открыть окно": "Open window",
+  "Открыть контекст": "Open context",
+  "Открыть последнюю версию": "Open latest version",
+  "Открыть проект": "Open project",
+  "Открыть сессию": "Open session",
   Отмена: "Cancel",
+  Отменено: "Canceled",
   Отозван: "Revoked",
   "Отозвать {0}?": "Revoke {0}?",
   "Отозвать выданный ключ?": "Revoke issued key?",
@@ -370,32 +315,25 @@ export const english: Readonly<Record<string, string>> = {
   "Отозвать этот выданный ключ": "Revoke this issued key",
   "Отправлять сессии агента": "Upload agent sessions",
   Оформление: "Appearance",
-  "Ошибки индексации: {0}. ": "Indexing errors: {0}. ",
-  "Ошибок нет": "No errors",
-  "Первые MR": "First MRs",
-  "Первые окна": "First windows",
+  Ошибка: "Failed",
   "Перезапустите OpenCode после подключения.":
     "Restart OpenCode after connecting.",
-  Переименовать: "Rename",
   "Повторить выход": "Retry sign-out",
   "Повторить загрузку": "Retry loading",
   "Повторить загрузку репозиториев": "Retry loading repositories",
-  "Повторить список источников": "Retry loading sources",
   "Повторить чтение": "Retry loading",
   "Подключаемся…": "Connecting…",
   "Подключаем…": "Connecting…",
   "Подключение агента": "Connect your agent",
   "Подключение сохранено.": "Connection saved.",
   Подключено: "Connected",
-  "Подключите CLI и выполните первый commit и push.":
-    "Connect the CLI, then make your first commit and push.",
-  "Подключите GitHub или GitLab, чтобы начать работу.":
-    "Connect GitHub or GitLab to get started.",
+  "Подключите CLI и запишите первую сессию агента.":
+    "Connect the CLI and record your first agent session.",
+  "Подключите GitHub или GitLab": "Connect GitHub or GitLab",
+  "Подключите исходный репозиторий, чтобы открыть связанные сессии.":
+    "Connect the source repository to open its sessions.",
   "Подключите первый репозиторий": "Connect your first repository",
-  "Подключите репозиторий и пригласите команду.":
-    "Connect a repository and invite your team.",
   "Подключить CLI и локальных агентов": "Connect CLI and local agents",
-  "Подключить Tasktopia": "Connect Tasktopia",
   "Подключить репозиторий": "Connect repository",
   "Подключить терминал": "Connect terminal",
   "Подключить токен": "Connect token",
@@ -407,73 +345,46 @@ export const english: Readonly<Record<string, string>> = {
   "Подтверждение входа CLI": "CLI sign-in confirmation",
   "Подтверждение принято. Проверьте завершение входа в терминале.":
     "Approved. Check that sign-in completes in your terminal.",
-  "Подтверждено коммитов: {0}": "Confirmed commits: {0}",
   "Подтверждено провайдером:": "Confirmed by provider:",
   "Подтверждён провайдером": "Verified by provider",
-  "Подтверждённое членство указанного коммита":
-    "Verified membership of the selected commit",
-  "Подтверждённые коммиты связанного потока сессии":
-    "Verified commits in the linked session stream",
-  "Подтверждённые результирующие SHA": "Verified resulting SHAs",
-  "Подтверждённых связей с MR/PR пока нет. Проверьте состояние синхронизации репозитория.":
-    "No verified MR/PR links yet. Check repository synchronization status.",
-  "Подходящих принятых окон пока нет.": "No matching accepted windows yet.",
   Поиск: "Search",
+  "Поиск по истории": "Search history",
   "Поиск через MCP": "Search through MCP",
   "Поиск…": "Searching…",
-  "Показана часть deployment.": "Some deployment records are omitted.",
-  "Показана часть подтверждённых SHA. Полная запись доступна в деталях сессии.":
-    "Some verified SHAs are omitted. Open the session record for the full list.",
-  "Показана часть проверок CI. Откройте источник, чтобы увидеть все.":
-    "Some CI checks are shown. Open the source to see them all.",
-  "Показана часть результатов. Уточните запрос.":
-    "Only some results are shown. Refine your query.",
-  "Показана часть цитат. Уточните запрос в разделе «Контекст» или откройте отдельный источник.":
-    "Some fragments are omitted. Refine your Context query or open an individual source.",
-  Показано: "Showing",
-  Показать: "Show",
-  "Полная цепочка родительских ссылок не подтверждена.":
-    "The complete parent-reference chain is not verified.",
+  "Показаны первые 50 коммитов.": "Showing the first 50 commits.",
+  "Показать ещё": "Show more",
+  "Попробуйте другие слова или полный SHA коммита.":
+    "Try other words or a full commit SHA.",
   "Последняя версия": "Latest version",
-  "Последняя запись": "Latest record",
   "Последняя сохранённая версия": "Latest saved version",
   "Права и срок ключа ограничены текущей сессией. Выход завершит работу выданных через неё ключей.":
     "Key permissions and lifetime are limited by this session. Signing out revokes keys issued through it.",
   "Права токена": "Token permissions",
   "Предыдущие диапазоны": "Previous ranges",
   "Предыдущие сообщения": "Previous messages",
-  "Привязка агента к задаче и подтверждённое членство коммита":
-    "Agent task link and verified commit membership",
-  "Привязка агента не подтверждает доступность задачи в Tasktopia. Проверьте синхронизацию и права.":
-    "The agent's link does not verify Tasktopia task access. Check synchronization and permissions.",
   "Привязка уже существует или её версия изменилась. Обновите OIDC-привязки перед новым изменением.":
     "The binding already exists or has changed. Refresh the list before editing.",
-  "Пример: задача, сессия агента, коммит и merge request связаны между собой":
-    "Example: a task, agent session, commit and merge request linked together",
+  "Пример: проект, сессия агента, коммит и merge request":
+    "Example: project, agent session, commit and merge request",
   "Пример: работа над входом": "Example: updating sign-in",
-  "Проверен Git blob": "Verified Git blob",
   "Проверить подключение": "Check connection",
-  "Проверок CI пока нет.": "No CI checks yet.",
+  "Проверки CI": "CI checks",
   "Проверьте введённые данные и параметры запроса.":
     "Check the entered details and request parameters.",
   "Проверьте данные репозитория.": "Check the repository details.",
   "Проверьте данные.": "Check the entered details.",
   "Проверьте параметры запроса.": "Check the request parameters.",
   "Проверяем…": "Checking…",
+  "Продолжение сессии": "Session continuation",
   Проект: "Project",
   "Происхождение импорта": "Import provenance",
-  Пространство: "Workspace",
+  Пропущено: "Skipped",
   Профиль: "Profile",
   "Профиль сохранён.": "Profile saved.",
-  Прочитано: "Read",
   "Публичный репозиторий без токена": "Public repository without a token",
   "Пути, указанные агентом:": "Agent-reported paths:",
-  Работа: "Work",
   "Работайте как обычно: git commit и git push отправят историю в Gitmora.":
     "Work as usual: git commit and git push will send your history to Gitmora.",
-  "Рабочие источники": "Work sources",
-  "Развёртываний пока нет.": "No deployments yet.",
-  Развёртывания: "Deployments",
   "Разделы проекта": "Project sections",
   "Разрешения нового ключа": "New key permissions",
   "Разрешите команды Gitmora через /hooks в Codex и перезапустите сессию.":
@@ -495,12 +406,11 @@ export const english: Readonly<Record<string, string>> = {
   "Роль нового участника": "New member role",
   Русский: "Русский",
   "Сведения об источнике": "Source details",
+  Свернуть: "Collapse",
   "Сверьте этот код с кодом в вашем терминале. Подтверждайте только вход, который начали сами.":
     "Compare this code with your terminal. Approve only a sign-in you started yourself.",
-  "Связанные MR": "Linked MRs",
   "Связанные сессии": "Linked sessions",
-  "Связи с MR скрыты: нужны разрешения на соответствующие источники.":
-    "MR links are hidden because source access is required.",
+  "Сегмент {0}": "Segment {0}",
   "Сейчас доступно не более": "Available now: up to",
   "Секрет вебхука": "Webhook secret",
   "Секретный заголовок": "Secret header",
@@ -525,11 +435,10 @@ export const english: Readonly<Record<string, string>> = {
     "The service is temporarily unavailable. Try again later.",
   "Сервис входа временно недоступен. Повторите попытку позже.":
     "The sign-in service is unavailable. Try again later.",
-  "Сессии агента": "Agent sessions",
-  "Сессии скрыты: требуется capture:read.":
-    "Sessions are hidden: capture:read is required.",
-  "Сессии, задачи и код выбранного проекта.":
-    "Sessions, tasks and code in this project.",
+  "Сессии агентов, коммиты и код проекта.":
+    "Agent sessions, commits and project code.",
+  "Сессии и история этого репозитория будут удалены из Gitmora.":
+    "This repository’s sessions and history will be deleted from Gitmora.",
   Сессия: "Session",
   "Сессия агента": "Agent session",
   "Сессия завершена. Войдите снова.": "Your session has ended. Sign in again.",
@@ -540,7 +449,6 @@ export const english: Readonly<Record<string, string>> = {
   "Синхронизация запущена.": "Synchronization started.",
   "Синхронизация недоступна. Проверьте подключение.":
     "Synchronization is unavailable. Check the connection.",
-  Синхронизировано: "Synchronized",
   Синхронизировать: "Synchronize",
   "Системные требования и загрузки": "Requirements and downloads",
   "Скопировано.": "Copied.",
@@ -548,13 +456,13 @@ export const english: Readonly<Record<string, string>> = {
     "Copy it to your password manager. The secret will not be shown again after closing this view or navigating away.",
   "Скрыть результат выпуска": "Close key result",
   "Скрыть уведомление": "Dismiss notification",
-  "Скрыть форму": "Hide form",
   "Следующая попытка": "Next attempt",
   "Следующая часть": "Next part",
   "Следующие MR": "Next MRs",
   "Следующие диапазоны": "Next ranges",
-  "Следующие окна": "Next windows",
+  "Следующие сессии": "More sessions",
   "Следующие сообщения": "Next messages",
+  Слит: "Merged",
   "Слишком много запросов. Повторите позже.":
     "Too many requests. Try again later.",
   "Слишком много попыток входа. Повторите позже.":
@@ -566,16 +474,14 @@ export const english: Readonly<Record<string, string>> = {
   "Сначала сохраните или отзовите ключ и скройте результат предыдущего выпуска.":
     "Save or revoke the previous key, then close its result before issuing another.",
   "Снимок ref": "Ref snapshot",
-  "Совпадает с наблюдаемым head.": "Matches the observed head.",
-  "Совпадений пока нет": "No matches yet",
   "Создайте первый проект": "Create your first project",
+  "Создайте проект": "Create a project",
   "Создать аккаунт": "Create account",
   "Создать проект": "Create project",
   "Создаём…": "Creating…",
   Сообщения: "Messages",
   "Соответствующая браузерная сессия завершится.":
     "The associated browser session will end.",
-  "Состояние подключения": "Connection status",
   "Состояние синхронизации": "Synchronization status",
   Сохранено: "Saved",
   "Сохраните ключ сейчас": "Save your key now",
@@ -583,22 +489,18 @@ export const english: Readonly<Record<string, string>> = {
   "Сохранить подключение": "Save connection",
   "Сохранить профиль": "Save profile",
   "Сохранить роль": "Save role",
-  "Список не совпал с выбранной областью.":
-    "The list does not match the selected scope.",
+  "Список коммитов обновляется.": "The commit list is updating.",
   "Список пуст": "No keys",
   "Способ проверки": "Verification method",
   "Срок в минутах": "Lifetime in minutes",
   "Срок ключа": "Key lifetime",
+  "Ссылка на MR/PR, полный SHA или текст…": "MR/PR URL, full SHA or text…",
   "Ссылка на код": "Code reference",
-  "Ссылка на предыдущую ревизию:": "Previous revision reference:",
   "Ссылка на репозиторий": "Repository URL",
-  Статус: "Status",
+  "Ссылка относится к другому репозиторию. Смените фильтр.":
+    "This URL belongs to another repository. Change the filter.",
   "Статус и отключение": "Status and disabling capture",
-  Страна: "Country",
   "Строки {0}–{1}": "Lines {0}–{1}",
-  "Текст документов доступен через точные цитаты и поиск контекста.":
-    "Read document text through source fragments and context search.",
-  "Текст сокращён в контексте.": "Text is shortened in this context.",
   "Текущая сессия не предоставляет все запрошенные права. Можно отклонить запрос.":
     "Your session does not have all requested permissions. You can deny the request.",
   "Текущее подключение": "Current connection",
@@ -610,7 +512,6 @@ export const english: Readonly<Record<string, string>> = {
   "Токен чтения": "Read token",
   "Только API": "API only",
   "Точная версия источника": "Exact source version",
-  "Точные источники": "Exact sources",
   "Точный источник": "Exact source",
   "Требует внимания": "Needs attention",
   "Тёмная тема": "Dark theme",
@@ -620,20 +521,21 @@ export const english: Readonly<Record<string, string>> = {
   "Убрать доступ {0}?": "Remove access for {0}?",
   "Удаление проекта": "Delete project",
   "Удалить {0}?": "Delete {0}?",
-  "Удалить локальные данные": "Delete local data",
   "Удалить проект": "Delete project",
   "Удалить проект {0}?": "Delete project {0}?",
   "Удалить проект и его данные": "Delete project and data",
   "Удалить репозиторий": "Delete repository",
+  "Удалить репозиторий и его данные": "Delete repository and its data",
   "Удаляет историю и настройки проекта в Gitmora.":
     "Deletes this project's Gitmora history and settings.",
   "Управлять каталогом проекта": "Manage the project catalog",
   "Управлять своими ключами": "Manage your keys",
   "Управлять установкой при наличии роли оператора":
     "Manage Gitmora with an administrator role",
+  Успешно: "Succeeded",
   "Устройство:": "Device:",
-  "Уточните формулировку, проверьте фильтры или дождитесь индексации новых источников.":
-    "Refine your query, check filters or wait for new sources to finish indexing.",
+  "Уточните запрос, чтобы увидеть нужный результат.":
+    "Refine your query to find the right result.",
   Участник: "Contributor",
   "Участник добавлен.": "Member added.",
   Участники: "Members",
@@ -647,26 +549,15 @@ export const english: Readonly<Record<string, string>> = {
   "Фрагмент SHA-256": "Fragment SHA-256",
   "Фрагмент источника": "Source fragment",
   "Фрагмент прочитан до конца": "End of fragment",
-  "Фрагменты:": "Fragments:",
-  "Цепочка точных родительских ссылок проверена.":
-    "The exact parent-reference chain is verified.",
-  "Цитаты контекста": "Context fragments",
-  "Часть деталей сокращена до лимита контекста. Используйте точные источники и продолжение списков.":
-    "Some detail is omitted to fit the context limit. Open the exact sources or continue the lists.",
-  "Часть полей дочерних записей сокращена.":
-    "Some child record fields have been shortened.",
-  "Чек-лист:": "Checklist:",
-  "Читаем доступные источники…": "Loading available sources…",
   "Читаем запись сессии…": "Loading session…",
   "Читаем условия подключения…": "Loading connection details…",
+  "Читать данные репозиториев": "Read repository data",
   "Читать доступные проекты и репозитории":
     "Read available projects and repositories",
-  "Читать задачи и данные репозиториев": "Read tasks and repository data",
   "Читать интеграции и внешние источники":
     "Read integrations and external sources",
   "Читать каталог и участников": "Read the catalog and members",
   "Читать сессии агента": "Read agent sessions",
-  "Членство исходных коммитов:": "Source commit membership:",
   Чтение: "Read only",
   "Это пути из записи агента; наличие файла в репозитории проверяется отдельно.":
     "These are paths from the agent record; file existence in the repository is checked separately.",
@@ -681,7 +572,6 @@ export const english: Readonly<Record<string, string>> = {
   "Этот ник уже занят. Выберите другой.":
     "This username is taken. Choose another one.",
   "Этот пользователь уже в проекте.": "This user is already a project member.",
-  "Явно выбранный MR/PR": "Explicitly selected MR/PR",
   Язык: "Language",
   "Язык интерфейса": "Interface language",
   "вне точного диапазона интерфейса":
@@ -689,12 +579,7 @@ export const english: Readonly<Record<string, string>> = {
   "заявление источника Git AI": "Git AI attribution",
   из: "of",
   "корневой ключ": "root key",
-  "не подтверждена": "not verified",
-  "полная сверка не завершена": "full reconciliation is incomplete",
   "полных минут. Браузерная сессия ограничивает срок её дочерних ключей; более долгий корневой ключ выдаётся отдельной доверенной процедурой.":
     "whole minutes. A browser session limits its child keys' lifetime; longer-lived root keys require trusted server administration.",
-  проверена: "verified",
   "сведения об импорте": "import details",
-  "сверено для этого code key": "verified for this code key",
-  "＋ Создать проект": "＋ Create project",
 };

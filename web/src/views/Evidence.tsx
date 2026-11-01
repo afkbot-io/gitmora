@@ -46,12 +46,10 @@ export function Evidence({ client, hit }: { client: ApiClient; hit: Hit }) {
   }, [hit.id, client, requests]);
   const source = hit.source;
   const current = expanded ?? hit;
-  const task = source.task_id ?? hit.task_id;
-  const country = source.country_id ?? hit.country_id;
   return (
     <div
       className={`
-      evidence-detail p-6 [&_h2]:text-xl [&_h2]:mx-0 [&_h2]:my-2 [&_header_p]:text-xs
+      evidence-detail p-5 [&_h2]:text-xl [&_h2]:mx-0 [&_h2]:my-2 [&_header_p]:text-xs
       mobile:px-4 mobile:py-5
     `}
     >
@@ -77,16 +75,6 @@ export function Evidence({ client, hit }: { client: ApiClient; hit: Hit }) {
               </dd>
               <dt>{translate("Ревизия")}</dt>
               <dd>{source.revision}</dd>
-            </>
-          )}
-          {task && (
-            <>
-              <dt>{translate("Задача Tasktopia")}</dt>
-              <dd className="mono font-mono text-xs wrap-anywhere">{task}</dd>
-              <dt>{translate("Страна")}</dt>
-              <dd className="mono font-mono text-xs wrap-anywhere">
-                {country}
-              </dd>
             </>
           )}
           {source.file_path && (

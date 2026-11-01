@@ -5,9 +5,6 @@ import (
 	"errors"
 	"strings"
 	"testing"
-	"time"
-	workapp "workgraph.local/platform/internal/work/application"
-	work "workgraph.local/platform/internal/work/domain"
 
 	"workgraph.local/platform/internal/access"
 	captureapp "workgraph.local/platform/internal/capture/application"
@@ -274,73 +271,5 @@ func TestRetrievalProjectionFailureNeverAcknowledgesPartialSource(t *testing.T) 
 	}
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM outbox_events WHERE completed_at IS NOT NULL`).Scan(&done); err != nil || done != 1 {
 		t.Fatal("completed projection not acknowledged", err)
-	}
-}
-
-func TestRetrievalTaskSourceCapabilitiesAvailabilityAndIndexLease(t *testing.T) {
-	pool := database(t)
-	seed(t, pool)
-	ctx := context.Background()
-	_, _ = pool.Exec(ctx, "UPDATE memberships SET role='admin' WHERE user_id=$1", subject)
-	// Use the actual Work store path; source observations and indexing work share one transaction.
-	workStore := postgres.NewWorkStore(pool)
-	config := work.Config{Endpoint: "https://tasks.internal/mcp", CountryID: taskCountry, Token: "synthetic-token"}
-	if _, err := workStore.Connect(ctx, subject, project, config, make([]byte, 64)); err != nil {
-		t.Fatal(err)
-	}
-	if err := workStore.Refresh(ctx, subject, project, taskUUID); err != nil {
-		t.Fatal(err)
-	}
-	lease, found, err := workStore.Claim(ctx)
-	if err != nil || !found {
-		t.Fatal(found, err)
-	}
-	task := work.Task{CountryID: taskCountry, ID: taskUUID, Number: 1, Status: "PLANNING", UpdatedAt: time.Now(), URL: "https://tasks.internal/task/1"}
-	task.Title = "Refresh token requirements"
-	task.Description = "Авторизация и проверка доступа"
-	task.Documents = []work.Document{{ID: taskUUID, FileName: "architecture.md", Title: "Architecture", Content: "The refresh token implementation must validate its issuer."}}
-	if err := workStore.Finish(ctx, lease, workapp.Outcome{Task: &task}); err != nil {
-		t.Fatal(err)
-	}
-	store := postgres.NewRetrievalStore(pool)
-	indexer := application.NewIndexer(store)
-	service := application.NewService(store)
-	if _, err := indexer.ReconcileOnce(ctx); err != nil {
-		t.Fatal(err)
-	}
-	integration := access.Principal{UserID: reader, Scopes: []access.Permission{access.ReadIntegration}}
-	query := domain.Query{ProjectID: project, Text: "refreshToken"}
-	hits, err := service.Search(ctx, integration, query)
-	if err != nil || len(hits.Items) < 2 || hits.Items[0].Kind != "task" {
-		t.Fatal("ranking/source indexing", hits, err)
-	}
-	docID := ""
-	for _, h := range hits.Items {
-		if h.Kind == "document" {
-			docID = h.ID
-		}
-	}
-	if docID == "" {
-		t.Fatal("document not indexed")
-	}
-	byName, err := service.Search(ctx, integration, domain.Query{ProjectID: project, Text: "architecture.md", Kinds: []string{"document"}})
-	if err != nil || len(byName.Items) != 1 {
-		t.Fatal("document filename missing from lexical projection", byName, err)
-	}
-	captureOnly := access.Principal{UserID: reader, Scopes: []access.Permission{access.ReadCapture}}
-	if restricted, err := service.Search(ctx, captureOnly, query); err != nil || len(restricted.Items) != 0 {
-		t.Fatal("task leaked through capture capability", restricted, err)
-	}
-	if _, err := service.Expand(ctx, captureOnly, domain.Expansion{EvidenceID: docID}); !errors.Is(err, domain.ErrNotFound) {
-		t.Fatal("task expansion bypassed source capability", err)
-	}
-	if err := workStore.Disconnect(ctx, subject, project); err != nil {
-		t.Fatal(err)
-	}
-	if restricted, err := service.Search(ctx, integration, query); err != nil || len(restricted.Items) != 0 {
-		t.Fatal("disabled source leaked", restricted, err)
-	}
-	if _, err := service.Expand(ctx, integration, domain.Expansion{EvidenceID: docID}); !errors.Is(err, domain.ErrNotFound) {
-		t.Fatal("disabled source expanded", err)
 	}
 }

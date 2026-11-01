@@ -1,42 +1,94 @@
-import { t as translate } from "../domain/locale.js";
-import { buttonStyles } from "./ui.js";
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
+import { t } from "../domain/locale.js";
 import { LatestRequest } from "../application/latest.js";
 import { readableError, searchQuery, sourceNames } from "../domain/context.js";
 import type {
   Hit,
+  Me,
   Project,
   Repository,
   SearchResult,
 } from "../domain/context.js";
-import type { ApiClient } from "../transport/api.js";
-import { ErrorNotice, Empty, date, aborted } from "./shared.js";
+import type {
+  BrowseCursor,
+  BrowseEntry,
+  BrowsePage,
+  Selection,
+} from "../domain/history.js";
+import { browseQuery, navigateEntry, packQuery } from "../domain/history.js";
+import { ApiClient, ApiError } from "../transport/api.js";
+import { ErrorNotice, date, aborted } from "./shared.js";
 import { Evidence } from "./Evidence.js";
+import { ContextDetail } from "./history/ContextDetail.js";
+import { buttonStyles } from "./ui.js";
+import { Icon } from "./Icon.js";
 
+function selectionFromHash(project: string): Selection | null {
+  const p = new URLSearchParams(location.hash.slice(1));
+  if (p.get("project") !== project) return null;
+  const repository_id = p.get("repository") ?? undefined;
+  const session_id = p.get("session") ?? undefined;
+  const commit_sha = p.get("commit") ?? undefined;
+  const mr = p.get("mr");
+  if (!session_id && !commit_sha && !mr) return null;
+  try {
+    return packQuery({
+      project_id: project,
+      ...(repository_id ? { repository_id } : {}),
+      ...(session_id ? { session_id } : {}),
+      ...(commit_sha ? { commit_sha } : {}),
+      ...(mr ? { merge_request_iid: Number(mr) } : {}),
+      ...(p.get("head") ? { expected_head_sha: p.get("head")! } : {}),
+    });
+  } catch {
+    return null;
+  }
+}
 export function ContextWorkspace({
   client,
   project,
   repositories,
+  me,
 }: {
   client: ApiClient;
   project: Project;
   repositories: Repository[];
+  me: Me;
 }) {
   const [text, setText] = useState("");
   const [repository, setRepository] = useState("");
   const [kind, setKind] = useState("");
   const [history, setHistory] = useState(false);
   const [result, setResult] = useState<SearchResult | null>(null);
-  const [selected, setSelected] = useState<Hit | null>(null);
+  const [hit, setHit] = useState<Hit | null>(null);
+  const [selection, setSelection] = useState<Selection | null>(() =>
+    selectionFromHash(project.id),
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [requests] = useState(() => new LatestRequest());
   useEffect(() => () => requests.cancel(), [requests]);
+  useEffect(() => {
+    const read = () => setSelection(selectionFromHash(project.id));
+    window.addEventListener("hashchange", read);
+    return () => window.removeEventListener("hashchange", read);
+  }, [project.id]);
+  function open(value: Selection) {
+    const q = packQuery(value);
+    if (q.project_id !== project.id) return;
+    const p = new URLSearchParams({ view: "context", project: project.id });
+    if (q.repository_id) p.set("repository", q.repository_id);
+    if (q.session_id) p.set("session", q.session_id);
+    if (q.commit_sha) p.set("commit", q.commit_sha);
+    if (q.merge_request_iid) p.set("mr", String(q.merge_request_iid));
+    if (q.expected_head_sha) p.set("head", q.expected_head_sha);
+    location.hash = p.toString();
+  }
   function clearResults() {
     requests.cancel();
     setResult(null);
-    setSelected(null);
+    setHit(null);
     setError("");
     setLoading(false);
   }
@@ -44,86 +96,121 @@ export function ContextWorkspace({
     event.preventDefault();
     clearResults();
     const request = requests.begin();
+    setLoading(true);
     try {
-      const query = searchQuery(project.id, repository, text, kind, history);
-      setLoading(true);
+      if (/^https?:\/\//i.test(text.trim())) {
+        const resolved = await client.request<{ query: Selection }>(
+          "/v1/context/resolve",
+          { project_id: project.id, url: text.trim() },
+          request.signal,
+        );
+        if (!request.current()) return;
+        if (
+          resolved.query.project_id !== project.id ||
+          (repository && resolved.query.repository_id !== repository)
+        )
+          throw new Error(
+            "Ссылка относится к другому репозиторию. Смените фильтр.",
+          );
+        open(resolved.query);
+        return;
+      }
+      if (/^[0-9a-f]{7,39}$/i.test(text.trim()))
+        throw new Error("Вставьте полный SHA коммита.");
       const found = await client.request<SearchResult>(
         "/v1/context/search",
-        query,
+        searchQuery(project.id, repository, text, kind, history),
         request.signal,
       );
       if (!request.current()) return;
-      if (found.items.some((hit) => hit.source.project_id !== project.id))
+      if (found.items.some((item) => item.source.project_id !== project.id))
         throw new Error("Сервер вернул источники другого проекта.");
       setResult(found);
+      setHit(found.items[0] ?? null);
     } catch (e) {
-      if (!aborted(e) && request.current()) setError(readableError(e));
+      if (!aborted(e) && request.current())
+        setError(
+          e instanceof ApiError && e.status === 404
+            ? t(
+                "MR/PR ещё не синхронизирован. Проверьте подключение репозитория.",
+              )
+            : readableError(e),
+        );
     } finally {
       if (request.current()) setLoading(false);
     }
   }
+  if (selection)
+    return (
+      <ContextDetail
+        key={JSON.stringify(selection)}
+        client={client}
+        selection={selection}
+        onNavigate={open}
+        onBack={() => {
+          location.hash = new URLSearchParams({
+            view: "context",
+            project: project.id,
+          }).toString();
+        }}
+      />
+    );
   return (
-    <section className="context-view pb-8">
-      <div className="page-intro [&_h1]:mb-2 [&_p]:text-muted [&_p]:text-base mobile:[&_h1]:text-2xl mobile:[&_p]:text-sm">
-        <h1>{translate("Поиск")}</h1>
-        <p>{translate("Сессии, задачи и код выбранного проекта.")}</p>
+    <section className="context-view min-w-0">
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="mb-1">{t("Поиск по истории")}</h1>
+          <p className="mb-0 text-sm text-muted">
+            {t("Сессии агентов, коммиты и код проекта.")}
+          </p>
+        </div>
       </div>
       <form
-        className="search-form mx-0 mt-7 mb-5"
-        onSubmit={(event) => void search(event)}
+        className="search-form rounded-lg border border-line bg-paper p-4"
+        onSubmit={(e) => void search(e)}
       >
-        <label htmlFor="search">
-          {translate("Запрос или полный SHA коммита")}
+        <label className="sr-only" htmlFor="search">
+          {t("Запрос или ссылка на MR/PR")}
         </label>
-        <div
-          className={`
-          search-line flex gap-3 [&_input]:[flex:1] [&_input]:min-w-0 [&_input]:px-4 [&_input]:py-3
-          [&_input]:text-base [&_button]:min-w-40 mobile:grid
-          mobile:[&_button]:w-full
-        `}
-        >
-          <input
-            id="search"
-            type="search"
-            autoComplete="off"
-            value={text}
-            maxLength={512}
-            onChange={(e) => {
-              setText(e.target.value);
-              clearResults();
-            }}
-            placeholder={translate("Например, обновление токена доступа")}
-          />
+        <div className="search-line flex gap-3 mobile:flex-col">
+          <div className="relative min-w-0 flex-1">
+            <span className="pointer-events-none absolute left-3 top-3 text-muted">
+              <Icon name="context" />
+            </span>
+            <input
+              id="search"
+              className="w-full pl-10 pr-3"
+              type="search"
+              autoComplete="off"
+              value={text}
+              maxLength={2000}
+              placeholder={t("Ссылка на MR/PR, полный SHA или текст…")}
+              onChange={(e) => {
+                setText(e.target.value);
+                clearResults();
+              }}
+            />
+          </div>
           <button
-            className={buttonStyles.primary}
+            className={buttonStyles.primary + " min-w-28"}
             disabled={loading || !text.trim()}
           >
-            {loading ? translate("Ищем…") : translate("Найти")}
+            {loading ? t("Ищем…") : t("Найти")}
           </button>
         </div>
-        <div
-          className={`
-          filters flex gap-4 items-end mt-4 flex-wrap [&_label]:text-xs [&_label]:text-muted
-          [&_label]:font-normal [&_label]:m-0 [&_select]:block [&_select]:text-sm [&_select]:mt-1
-          [&_select]:min-w-45 [&_select]:min-h-11 [&_select]:px-3 [&_select]:py-2 [&_.checkbox]:flex
-          [&_.checkbox]:gap-2 [&_.checkbox]:items-center [&_.checkbox]:text-sm [&_.checkbox]:min-h-11
-          compact:gap-3 compact:[&_select]:min-w-40
-          mobile:grid mobile:grid-cols-[1fr_1fr]
-          mobile:gap-3 mobile:[&_select]:min-w-0
-          mobile:[&_select]:w-full mobile:[&_select]:text-base
-          mobile:[&_.checkbox]:[grid-column:1/-1]
-        `}
-        >
-          <label>
-            {translate("Репозиторий")}
+        <div className="filters mt-3 flex flex-wrap items-center gap-3 border-t border-line pt-3 mobile:grid mobile:grid-cols-2">
+          <label className="m-0">
+            <span className="sr-only">{t("Репозиторий")}</span>
             <select
+              className="min-w-45 text-sm mobile:w-full mobile:min-w-0"
+              aria-label={t("Репозиторий")}
               value={repository}
               onChange={(e) => {
                 setRepository(e.target.value);
                 clearResults();
               }}
             >
-              <option value="">{translate("Все репозитории")}</option>
+              <option value="">{t("Все репозитории")}</option>
               {repositories.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.name}
@@ -131,24 +218,26 @@ export function ContextWorkspace({
               ))}
             </select>
           </label>
-          <label>
-            {translate("Источник")}
+          <label className="m-0">
+            <span className="sr-only">{t("Источник")}</span>
             <select
+              className="min-w-40 text-sm mobile:w-full mobile:min-w-0"
+              aria-label={t("Источник")}
               value={kind}
               onChange={(e) => {
                 setKind(e.target.value);
                 clearResults();
               }}
             >
-              <option value="">{translate("Все источники")}</option>
-              {Object.entries(sourceNames).map(([value, title]) => (
+              <option value="">{t("Все источники")}</option>
+              {Object.entries(sourceNames).map(([value, label]) => (
                 <option key={value} value={value}>
-                  {translate(title)}
+                  {t(label)}
                 </option>
               ))}
             </select>
           </label>
-          <label className="checkbox [&_input]:[accent-color:var(--color-accent)] [&_input]:w-4 [&_input]:min-h-4 [&_input]:m-0">
+          <label className="checkbox m-0 ml-auto flex min-h-11 items-center gap-2 text-sm font-normal text-muted mobile:col-span-2 mobile:ml-0">
             <input
               type="checkbox"
               checked={history}
@@ -157,135 +246,265 @@ export function ContextWorkspace({
                 clearResults();
               }}
             />
-            {translate("Исторические версии")}
+            {t("Исторические версии")}
           </label>
         </div>
       </form>
       <ErrorNotice>{error}</ErrorNotice>
       {loading && (
-        <p className="notice px-4 py-4 mx-0 my-3 text-muted" role="status">
-          {translate("Поиск…")}
+        <p className="mt-4 text-sm text-muted" role="status">
+          {t("Поиск…")}
         </p>
       )}
       {result ? (
-        <>
+        <div className="mt-5">
           <div
-            className={`
-              result-summary flex gap-4 justify-between items-baseline text-sm text-muted px-0 py-4 [&_strong]:text-ink
-              [&_strong]:font-medium [&_strong]:whitespace-nowrap mobile:items-start
-            `}
+            className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm text-muted"
             role="status"
           >
-            <strong>
-              {translate("Фрагменты:")} {result.items.length}
-            </strong>
-            <span>
-              {result.pending_sources_in_project > 0 &&
-                translate(
-                  "Ожидают индексации: {0}. ",
-                  result.pending_sources_in_project,
-                )}
-              {result.failed_sources_in_project > 0 &&
-                translate(
-                  "Ошибки индексации: {0}. ",
-                  result.failed_sources_in_project,
-                )}
-              {result.has_more &&
-                translate("Показана часть результатов. Уточните запрос.")}
-            </span>
+            <span>{t("Найдено фрагментов: {0}", result.items.length)}</span>
+            {result.has_more && (
+              <span>
+                {t("Уточните запрос, чтобы увидеть нужный результат.")}
+              </span>
+            )}
+            {result.pending_sources_in_project > 0 && (
+              <span>{t("Индекс обновляется")}</span>
+            )}
           </div>
-          {result.items.length === 0 ? (
-            <Empty title={translate("Совпадений пока нет")}>
-              {translate(
-                "Уточните формулировку, проверьте фильтры или дождитесь индексации новых источников.",
-              )}
-            </Empty>
+          {!result.items.length ? (
+            <div className="rounded-lg border border-line bg-paper p-6">
+              <h2 className="mb-2 text-base">{t("Ничего не найдено")}</h2>
+              <p className="mb-0 text-sm text-muted">
+                {t("Попробуйте другие слова или полный SHA коммита.")}
+              </p>
+            </div>
           ) : (
-            <div
-              className={`
-              evidence-layout grid grid-cols-[minmax(0,_1fr)_minmax(340px,_0.95fr)]
-              border-t border-line items-start bg-paper
-              border-b border-line
-              wide:grid-cols-[minmax(0,_1.05fr)_minmax(380px,_1fr)]
-              compact:grid-cols-[minmax(0,_1fr)]
-            `}
-            >
+            <div className="evidence-layout grid grid-cols-[minmax(0,1fr)_minmax(340px,1fr)] overflow-hidden rounded-lg border border-line bg-paper compact:grid-cols-1">
               <div
                 className="results min-w-0"
                 role="region"
-                aria-label={translate("Результаты поиска")}
+                aria-label={t("Результаты поиска")}
               >
-                {result.items.map((hit) => (
+                {result.items.map((item) => (
                   <button
-                    className={`result-row w-full border-b border-line [border-left:3px_solid_transparent] rounded-none p-5 text-left block bg-paper font-normal text-ink wrap-anywhere [&:last-child]:border-b-0 [&:hover:not(.selected)]:bg-canvas [&.selected]:[border-left-color:var(--color-accent)] [&.selected]:bg-accent-soft mobile:px-4 mobile:py-4 border-t-0 border-r-0 ${selected?.id === hit.id ? "selected" : ""}`}
-                    aria-pressed={selected?.id === hit.id}
-                    key={hit.id}
-                    onClick={() => setSelected(hit)}
+                    key={item.id}
+                    className={`result-row block w-full rounded-none border-0 border-b border-l-2 border-b-line px-4 py-4 text-left font-normal ${hit?.id === item.id ? "selected border-l-accent bg-accent-soft" : "border-l-transparent bg-paper hover:bg-canvas"}`}
+                    aria-pressed={hit?.id === item.id}
+                    onClick={() => setHit(item)}
                   >
-                    <span className="result-meta flex flex-wrap items-center gap-2 justify-between text-xs text-muted mb-3">
-                      <span>
-                        {translate(sourceNames[hit.kind] ?? hit.kind)}
-                      </span>
-                      <span
-                        className={`freshness bg-canvas rounded px-2 py-1 text-xs [&.current]:bg-success-soft [&.current]:text-success ${hit.current ? "current" : ""}`}
-                      >
-                        {hit.current
-                          ? translate("Последняя запись")
-                          : translate("Историческая запись")}
-                      </span>
+                    <span className="mb-2 flex flex-wrap justify-between gap-2 text-xs text-muted">
+                      <span>{t(sourceNames[item.kind] ?? item.kind)}</span>
+                      <span>{date(item.observed_at)}</span>
                     </span>
-                    <span className="result-title block font-medium text-lg mb-3">
-                      {hit.title}
+                    <span className="mb-2 block wrap-anywhere text-sm font-medium">
+                      {item.title}
                     </span>
-                    <span className="excerpt block text-sm whitespace-pre-wrap leading-[1.6] mb-4 max-h-[135px] overflow-hidden">
-                      {hit.content}
-                    </span>
-                    <span className="result-footer flex flex-wrap gap-x-4 gap-y-2 text-xs text-muted">
-                      <span>{date(hit.observed_at)}</span>
-                      <span>
-                        {hit.confirmed_count > 0
-                          ? translate(
-                              "Подтверждено коммитов: {0}",
-                              hit.confirmed_count,
-                            )
-                          : hit.source.kind === "capture"
-                            ? translate("Запись агента")
-                            : hit.source.kind === "code"
-                              ? translate("Проверен Git blob")
-                              : translate("Данные Tasktopia")}
-                      </span>
+                    <span className="block max-h-24 overflow-hidden whitespace-pre-wrap wrap-anywhere text-sm leading-relaxed text-muted">
+                      {item.content}
                     </span>
                   </button>
                 ))}
               </div>
               <aside
-                className={`
-                  inspector min-w-0 border-l border-line min-h-100 sticky top-0 max-h-[100dvh] overflow-auto
-                  compact:static compact:max-h-[none]
-                  compact:border-l-0 compact:border-t border-line
-                `}
-                aria-label={translate("Точный источник")}
+                className="inspector min-w-0 border-l border-line compact:border-l-0 compact:border-t"
+                aria-label={t("Точный источник")}
               >
-                {selected ? (
-                  <Evidence key={selected.id} client={client} hit={selected} />
-                ) : (
-                  <Empty title={translate("Откройте фрагмент")}>
-                    {translate(
-                      "Здесь появятся полный фрагмент, точная версия и происхождение источника.",
-                    )}
-                  </Empty>
+                {hit && (
+                  <>
+                    <div className="flex justify-end border-b border-line px-4 py-2">
+                      <button
+                        className={buttonStyles.text}
+                        onClick={() => {
+                          if (hit.source.repository_id && hit.source.session_id)
+                            open({
+                              project_id: project.id,
+                              repository_id: hit.source.repository_id,
+                              session_id: hit.source.session_id,
+                            });
+                          else if (
+                            hit.source.repository_id &&
+                            hit.source.commit_sha
+                          )
+                            open({
+                              project_id: project.id,
+                              repository_id: hit.source.repository_id,
+                              commit_sha: hit.source.commit_sha,
+                            });
+                        }}
+                      >
+                        {t("Открыть контекст")}
+                      </button>
+                    </div>
+                    <Evidence key={hit.id} client={client} hit={hit} />
+                  </>
                 )}
               </aside>
             </div>
           )}
-        </>
+        </div>
       ) : (
-        !loading &&
-        !error && (
-          <p className="search-empty mt-6 text-sm text-muted">
-            {translate("Найдите сессию, задачу или коммит по ключевым словам.")}
-          </p>
+        !loading && (
+          <div className="mt-6 grid grid-cols-2 items-start gap-5 compact:grid-cols-1">
+            {me.scopes.includes("capture:read") && (
+              <RecentSources
+                key={`session/${repository}`}
+                client={client}
+                project={project.id}
+                repository={repository}
+                repositories={repositories}
+                kind="session"
+                onOpen={open}
+              />
+            )}
+            {me.scopes.includes("integration:read") && (
+              <RecentSources
+                key={`mr/${repository}`}
+                client={client}
+                project={project.id}
+                repository={repository}
+                repositories={repositories}
+                kind="merge_request"
+                onOpen={open}
+              />
+            )}
+          </div>
         )
+      )}
+    </section>
+  );
+}
+
+function RecentSources({
+  client,
+  project,
+  repository,
+  repositories,
+  kind,
+  onOpen,
+}: {
+  client: ApiClient;
+  project: string;
+  repository: string;
+  repositories: Repository[];
+  kind: "session" | "merge_request";
+  onOpen: (q: Selection) => void;
+}) {
+  const [items, setItems] = useState<BrowseEntry[]>([]);
+  const [next, setNext] = useState<BrowseCursor | undefined>();
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [requests] = useState(() => new LatestRequest());
+  async function load(after?: BrowseCursor) {
+    const request = requests.begin();
+    setLoading(true);
+    setError("");
+    if (!after) setItems([]);
+    try {
+      const page = await client.request<BrowsePage>(
+        "/v1/context/browse",
+        {
+          ...browseQuery(project, kind, repository, after),
+          order: "recent",
+          limit: 6,
+        },
+        request.signal,
+      );
+      if (!request.current()) return;
+      if (page.items.some((item) => item.query.project_id !== project))
+        throw new Error("Сервер вернул источники другого проекта.");
+      setItems((current) => (after ? [...current, ...page.items] : page.items));
+      setNext(page.next);
+    } catch (e) {
+      if (!aborted(e) && request.current()) {
+        setItems([]);
+        setNext(undefined);
+        setError(readableError(e));
+      }
+    } finally {
+      if (request.current()) setLoading(false);
+    }
+  }
+  useEffect(() => {
+    void load();
+    return () => requests.cancel();
+  }, [client, project, repository, requests]);
+  return (
+    <section className="min-w-0 overflow-hidden rounded-lg border border-line bg-paper">
+      <div className="flex items-center justify-between border-b border-line px-4 py-3">
+        <h2 className="m-0 text-base">
+          {kind === "session" ? t("Недавние сессии") : t("MR и PR")}
+        </h2>
+        <button
+          className={buttonStyles.text}
+          disabled={loading}
+          onClick={() => void load()}
+        >
+          {t("Обновить")}
+        </button>
+      </div>
+      <ErrorNotice>{error}</ErrorNotice>
+      {loading && !items.length && (
+        <p className="m-0 p-5 text-sm text-muted" role="status">
+          {t("Загрузка…")}
+        </p>
+      )}
+      {!loading && !error && !items.length && (
+        <div className="p-5">
+          <p className="mb-3 text-sm text-muted">
+            {kind === "session"
+              ? t("Подключите CLI и запишите первую сессию агента.")
+              : t("MR/PR появятся после синхронизации репозитория.")}
+          </p>
+          <a
+            className={buttonStyles.text}
+            href={`#view=${kind === "session" ? "setup" : "repositories"}&project=${project}`}
+          >
+            {kind === "session"
+              ? t("Настроить CLI и MCP")
+              : t("Проверить подключение")}
+          </a>
+        </div>
+      )}
+      {items.map((item) => (
+        <button
+          key={`${item.query.repository_id}/${item.query.session_id ?? item.cursor.iid}`}
+          className="flex w-full flex-col items-start gap-1 rounded-none border-0 border-b border-line px-4 py-3 text-left font-normal hover:bg-canvas"
+          onClick={() => {
+            try {
+              onOpen(navigateEntry(item, project));
+            } catch (e) {
+              setError(readableError(e));
+            }
+          }}
+        >
+          <span className="w-full truncate text-sm font-medium">
+            {item.title}
+          </span>
+          <span className="flex w-full flex-wrap justify-between gap-2 text-xs text-muted">
+            <span className="min-w-0 truncate">
+              {
+                repositories.find((r) => r.id === item.query.repository_id)
+                  ?.name
+              }
+              {kind === "merge_request"
+                ? ` · #${item.cursor.iid}`
+                : ` · ${item.agent}`}
+            </span>
+            <span>{date(item.observed_at)}</span>
+          </span>
+        </button>
+      ))}
+      {next && (
+        <div className="px-4 py-2">
+          <button
+            className={buttonStyles.text}
+            disabled={loading}
+            onClick={() => void load(next)}
+          >
+            {t("Показать ещё")}
+          </button>
+        </div>
       )}
     </section>
   );

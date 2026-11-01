@@ -3,12 +3,13 @@ package application
 import (
 	"context"
 	"errors"
+	capture "workgraph.local/platform/internal/capture/domain"
 
 	"workgraph.local/platform/internal/collector/domain"
 	"workgraph.local/platform/internal/identifier"
 )
 
-// NativeStream pins initial task scope and the latest accepted source-observation branch.
+// NativeStream pins immutable source scope and the latest accepted source-observation branch.
 type NativeStream struct{ RootKey, ActiveKey string }
 
 func (s *Service) recordNativePage(ctx context.Context, worktree string, input domain.Observation, frontiers []string) (string, error) {
@@ -118,10 +119,7 @@ func (s *Service) recordNativePage(ctx context.Context, worktree string, input d
 		if !known {
 			advance = true
 			if root == nil {
-				task, err := tx.Binding(worktree)
-				if err != nil {
-					return err
-				}
+				var task *capture.TaskRef
 				pinned, exists, err := tx.FrontierSource(native)
 				if err != nil {
 					return err

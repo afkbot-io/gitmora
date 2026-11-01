@@ -333,7 +333,7 @@ def main():
                 "context.search",
                 "context.pack",
                 "context.expand",
-                "context.task",
+                "context.resolve",
                 "context.file",
             }
 
@@ -363,14 +363,7 @@ def main():
                 packed["captures"]["items"][0]["source"]["session_id"]
                 == snapshot["session_id"]
             )
-            assert not tool(
-                "context.task",
-                dict(
-                    project_id=identity["project_id"],
-                    country_id=str(uuid.uuid4()),
-                    task_id=str(uuid.uuid4()),
-                ),
-            )["items"]
+            assert rpc("tools/call", dict(name="context.resolve", arguments=dict(project_id=identity["project_id"], url="https://code.invalid/team/repo/pull/999"))).get("isError")
             unavailable = rpc(
                 "tools/call",
                 dict(

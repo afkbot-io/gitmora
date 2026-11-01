@@ -66,10 +66,10 @@ func TestVersionTwoNativePinContinuesWithOriginalTaskAndConsent(t *testing.T) {
 	}
 	service := application.NewService(store, nil, time.Now)
 	task := &capture.TaskRef{CountryID: config.RepositoryID, TaskID: "22222222-2222-4222-8222-222222222222"}
-	if err := service.Bind(ctx, "tree", task); err != nil {
+	if err := bindLegacyFixture(ctx, store, "tree", task); err != nil {
 		t.Fatal(err)
 	}
-	root, err := service.RecordNative(ctx, "tree", observation())
+	root, err := seedLegacyNativeRecording(ctx, store, "tree", observation(), task)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +91,7 @@ func TestVersionTwoNativePinContinuesWithOriginalTaskAndConsent(t *testing.T) {
 	}
 	store = open(t, path)
 	service = application.NewService(store, nil, time.Now)
-	if err := service.Bind(ctx, "tree", nil); err != nil {
+	if err := bindLegacyFixture(ctx, store, "tree", nil); err != nil {
 		t.Fatal(err)
 	}
 	child, err := service.RecordNative(ctx, "tree", nativeWindow("upgrade", "a", "New protocol observation"))
@@ -123,7 +123,7 @@ func TestNativeWindowsSurviveRestartCompactionAndKeepConsentTaskAndFileDedup(t *
 	}
 	service := application.NewService(store, nil, time.Now)
 	task := &capture.TaskRef{CountryID: config.RepositoryID, TaskID: "22222222-2222-4222-8222-222222222222"}
-	if err := service.Bind(ctx, "tree", task); err != nil {
+	if err := bindLegacyFixture(ctx, store, "tree", task); err != nil {
 		t.Fatal(err)
 	}
 	first := nativeWindow("first", "a", "Original exact tool observation")
@@ -144,7 +144,7 @@ func TestNativeWindowsSurviveRestartCompactionAndKeepConsentTaskAndFileDedup(t *
 	}
 	store = open(t, path)
 	service = application.NewService(store, nil, time.Now)
-	if err := service.Bind(ctx, "tree", &capture.TaskRef{CountryID: config.RepositoryID, TaskID: "33333333-3333-4333-8333-333333333333"}); err != nil {
+	if err := bindLegacyFixture(ctx, store, "tree", &capture.TaskRef{CountryID: config.RepositoryID, TaskID: "33333333-3333-4333-8333-333333333333"}); err != nil {
 		t.Fatal(err)
 	}
 	summary := nativeWindow("summary", "b", "Agent summary after compaction")
@@ -171,7 +171,7 @@ func TestNativeWindowsSurviveRestartCompactionAndKeepConsentTaskAndFileDedup(t *
 	}
 	for _, q := range queue {
 		snap := q.Session.Snapshot()
-		if snap.Task == nil || *snap.Task != *task {
+		if snap.Task != nil {
 			t.Fatal("task retargeted")
 		}
 		if snap.SessionID == child {

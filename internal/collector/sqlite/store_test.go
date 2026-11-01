@@ -127,11 +127,11 @@ func TestBindingWorktreesAndNativeReplayConflictsAreIsolated(t *testing.T) {
 		t.Fatal("native session leaked across worktrees")
 	}
 	task := &capture.TaskRef{CountryID: config.RepositoryID, TaskID: "22222222-2222-4222-8222-222222222222"}
-	if err := service.Bind(ctx, "tree-a", task); err != nil {
+	if err := bindLegacyFixture(ctx, store, "tree-a", task); err != nil {
 		t.Fatal(err)
 	}
 	third, err := service.Record(ctx, "tree-a", observation())
-	if err != nil || third == first {
+	if err != nil || third != first {
 		t.Fatal("new task retargeted an existing recording")
 	}
 	changed := observation()
@@ -146,7 +146,7 @@ func TestBindingWorktreesAndNativeReplayConflictsAreIsolated(t *testing.T) {
 		t.Fatal(err)
 	}
 	queue, err := store.Pending(ctx, time.Now(), 16)
-	if err != nil || len(queue) != 2 {
+	if err != nil || len(queue) != 1 {
 		t.Fatal("commit associated another worktree")
 	}
 	for _, entry := range queue {
@@ -286,10 +286,10 @@ func TestNativeConversationKeepsItsTaskBindingAcrossRestart(t *testing.T) {
 	service := application.NewService(store, nil, time.Now)
 	firstTask := &capture.TaskRef{CountryID: config.RepositoryID, TaskID: "22222222-2222-4222-8222-222222222222"}
 	secondTask := &capture.TaskRef{CountryID: config.RepositoryID, TaskID: "33333333-3333-4333-8333-333333333333"}
-	if err := service.Bind(ctx, "tree", firstTask); err != nil {
+	if err := bindLegacyFixture(ctx, store, "tree", firstTask); err != nil {
 		t.Fatal(err)
 	}
-	first, err := service.RecordNative(ctx, "tree", observation())
+	first, err := seedLegacyNativeRecording(ctx, store, "tree", observation(), firstTask)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -298,7 +298,7 @@ func TestNativeConversationKeepsItsTaskBindingAcrossRestart(t *testing.T) {
 	}
 	store = open(t, path)
 	service = application.NewService(store, nil, time.Now)
-	if err := service.Bind(ctx, "tree", secondTask); err != nil {
+	if err := bindLegacyFixture(ctx, store, "tree", secondTask); err != nil {
 		t.Fatal(err)
 	}
 	late := observation()
@@ -482,4 +482,39 @@ func TestDeliveryFailuresRetryWithoutHoldingLocalTransaction(t *testing.T) {
 	if err != nil || result.Sent != 1 || result.Stats.Pending != 0 {
 		t.Fatal("retry did not recover")
 	}
+}
+
+func bindLegacyFixture(ctx context.Context, store *sqlite.Store, worktree string, task *capture.TaskRef) error {
+	return store.Within(ctx, func(tx application.Transaction) error {
+		return tx.(interface {
+			SeedLegacyBinding(string, *capture.TaskRef) error
+		}).SeedLegacyBinding(worktree, task)
+	})
+}
+
+func seedLegacyNativeRecording(ctx context.Context, store *sqlite.Store, tree string, input domain.Observation, task *capture.TaskRef) (string, error) {
+	id := "fefefefe-fefe-4efe-8efe-fefefefefefe"
+	err := store.Within(ctx, func(tx application.Transaction) error {
+		cfg, e := tx.Config()
+		if e != nil {
+			return e
+		}
+		o, e := domain.Normalize(input)
+		if e != nil {
+			return e
+		}
+		r, e := domain.NewRecording(cfg.RepositoryID, id, tree, task, o, time.Now())
+		if e != nil {
+			return e
+		}
+		key := domain.SessionKey(cfg.RepositoryID, tree, task, o)
+		if e = tx.Save(key, r); e != nil {
+			return e
+		}
+		if e = tx.PinNative(domain.SessionKey(cfg.RepositoryID, tree, nil, o), key); e != nil {
+			return e
+		}
+		return tx.RememberEvent(id, o.EventKey(), o.Digest())
+	})
+	return id, err
 }

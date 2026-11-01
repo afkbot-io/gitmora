@@ -33,10 +33,10 @@ type Config struct {
 	Ready             func(context.Context) error
 	Forge             ForgeService
 	Code              CodeService
-	Work              WorkService
 	Retrieval         RetrievalService
 	ContextPacks      ContextPackService
 	ContextBrowser    ContextBrowseService
+	ContextResolver   ContextResolveService
 	Directory         DirectoryService
 	Identity          IdentityService
 	CLIEnrollment     CLIEnrollmentService
@@ -59,7 +59,6 @@ func NewHandler(config Config) http.Handler {
 	}
 	registerForge(mux, config)
 	registerCode(mux, config)
-	registerWork(mux, config)
 	registerRetrieval(mux, config)
 	registerDirectory(mux, config)
 	registerIdentity(mux, config)

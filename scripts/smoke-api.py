@@ -155,8 +155,6 @@ def main() -> None:
             git("init", "--bare", str(remote))
             git("remote", "add", "origin", str(remote))
             collector("init", "--server", base, "--repository-id", identity["repository_id"])
-            task_id = str(uuid.uuid4())
-            collector("bind", "--country-id", identity["repository_id"], "--task-id", task_id)
             (repository / "a.go").write_text("first change\n")
             (repository / "b.go").write_text("second change\n")
             local = collector("capture", observation={
@@ -187,7 +185,7 @@ def main() -> None:
             status, context = request("GET", local_path)
             assert status == 200 and context["snapshot"]["revision"] == 2
             assert set(context["snapshot"]["commits"]) == {first, second}
-            assert context["snapshot"]["task"]["task_id"] == task_id
+            assert "task" not in context["snapshot"]
             assert "collector-never-persist" not in json.dumps(context)
             assert context["confirmed_commits"] == [], "local push was confused with provider confirmation"
             collector("disable")
@@ -198,7 +196,7 @@ def main() -> None:
         print(json.dumps({"result": "passed", "scope": "built API process + PostgreSQL",
                           "verified": ["migrate", "single bootstrap", "health", "authentication",
                                        "upload", "idempotency", "redaction", "pending commits",
-                                       "conflict", "revision history", "atomic outbox", "collector task binding",
+                                       "conflict", "revision history", "atomic outbox", "collector immutable source identity",
                                        "ordinary multi-commit Git hooks", "offline push", "collector retry after API restart",
                                        "exact context ACK", "graceful shutdown"]}))
     finally:

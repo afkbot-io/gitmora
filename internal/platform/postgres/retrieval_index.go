@@ -14,7 +14,6 @@ import (
 	"workgraph.local/platform/internal/identifier"
 	"workgraph.local/platform/internal/retrieval/application"
 	"workgraph.local/platform/internal/retrieval/domain"
-	work "workgraph.local/platform/internal/work/domain"
 )
 
 // RetrievalStore owns rebuildable source projections and their independently leased indexing work.
@@ -34,21 +33,10 @@ func enqueueCaptureIndex(ctx context.Context, tx pgx.Tx, repository, session str
 	return err
 }
 
-// enqueueTaskIndex records source indexing in the same transaction as the immutable task observation.
-func enqueueTaskIndex(ctx context.Context, tx pgx.Tx, project, country, task, digest string) error {
-	id, err := identifier.New()
-	if err != nil {
-		return err
-	}
-	_, err = tx.Exec(ctx, `INSERT INTO retrieval_jobs(id,source_kind,project_id,country_id,task_id,source_digest,source_observed_at)
- SELECT $1,'task',project_id,country_id,task_id,digest,observed_at FROM work_task_observations WHERE project_id=$2 AND country_id=$3 AND task_id=$4 AND digest=$5 ON CONFLICT DO NOTHING`, id, project, country, task, digest)
-	return err
-}
-
-const sourceColumns = `j.source_kind,j.project_id::text,COALESCE(j.repository_id::text,''),COALESCE(j.session_id::text,''),COALESCE(j.revision,0),COALESCE(j.country_id::text,''),COALESCE(j.task_id::text,''),j.source_digest,COALESCE(j.code_sha,''),COALESCE(j.code_path,''),COALESCE(j.code_blob_id,'')`
+const sourceColumns = `j.source_kind,j.project_id::text,COALESCE(j.repository_id::text,''),COALESCE(j.session_id::text,''),COALESCE(j.revision,0),j.source_digest,COALESCE(j.code_sha,''),COALESCE(j.code_path,''),COALESCE(j.code_blob_id,'')`
 
 func sourceDest(s *domain.Source) []any {
-	return []any{&s.Kind, &s.ProjectID, &s.RepositoryID, &s.SessionID, &s.Revision, &s.CountryID, &s.TaskID, &s.Digest, &s.CommitSHA, &s.FilePath, &s.BlobID}
+	return []any{&s.Kind, &s.ProjectID, &s.RepositoryID, &s.SessionID, &s.Revision, &s.Digest, &s.CommitSHA, &s.FilePath, &s.BlobID}
 }
 
 // Claim leases one immutable source, keeping every provider operation outside SQL transactions.
@@ -104,11 +92,6 @@ func (s *RetrievalStore) Load(ctx context.Context, lease application.Lease) ([]a
 		if err != nil || session.Digest() != source.Digest {
 			return nil, domain.ErrInvalid
 		}
-		country, task := "", ""
-		if snapshot.Task != nil {
-			country = snapshot.Task.CountryID
-			task = snapshot.Task.TaskID
-		}
 		for i, message := range snapshot.Messages {
 			title := snapshot.Agent.Name + " / " + message.Role
 			if message.Kind == "agent_summary" {
@@ -120,17 +103,17 @@ func (s *RetrievalStore) Load(ctx context.Context, lease application.Lease) ([]a
 			if message.ToolName != "" {
 				title += " / " + message.ToolName
 			}
-			parts = append(parts, application.Part{Kind: "session", Name: fmt.Sprintf("messages/%d", i), Title: title, Content: message.Text, CountryID: country, TaskID: task})
+			parts = append(parts, application.Part{Kind: "session", Name: fmt.Sprintf("messages/%d", i), Title: title, Content: message.Text})
 		}
 		if snapshot.Origin != nil {
 			origin, err := json.Marshal(snapshot.Origin)
 			if err != nil {
 				return nil, err
 			}
-			parts = append(parts, application.Part{Kind: "session", Name: "import_origin", Title: "Imported " + snapshot.Origin.System + " origin and source-reported provenance; not verified authorship", Content: string(origin), CountryID: country, TaskID: task})
+			parts = append(parts, application.Part{Kind: "session", Name: "import_origin", Title: "Imported " + snapshot.Origin.System + " origin and source-reported provenance; not verified authorship", Content: string(origin)})
 		}
 		if len(snapshot.Files) > 0 {
-			parts = append(parts, application.Part{Kind: "code_reference", Name: "files", Title: "Capture-reported file references", Content: strings.Join(snapshot.Files, "\n"), CountryID: country, TaskID: task})
+			parts = append(parts, application.Part{Kind: "code_reference", Name: "files", Title: "Capture-reported file references", Content: strings.Join(snapshot.Files, "\n")})
 		}
 	case "code":
 		err := s.pool.QueryRow(ctx, `SELECT f.model FROM forge_code_snapshots f JOIN repositories r ON r.id=f.repository_id WHERE r.project_id=$1 AND f.repository_id=$2 AND f.sha=$3 AND f.path=$4 AND f.digest=$5`, source.ProjectID, source.RepositoryID, source.CommitSHA, source.FilePath, source.Digest).Scan(&raw)
@@ -149,40 +132,6 @@ func (s *RetrievalStore) Load(ctx context.Context, lease application.Lease) ([]a
 			title = title[:len(title)-1]
 		}
 		parts = append(parts, application.Part{Kind: "code", Name: "content", Title: string(title), Content: file.Content})
-	case "task":
-		err := s.pool.QueryRow(ctx, `SELECT model FROM work_task_observations WHERE project_id=$1 AND country_id=$2 AND task_id=$3 AND digest=$4`, source.ProjectID, source.CountryID, source.TaskID, source.Digest).Scan(&raw)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, domain.ErrNotFound
-		}
-		if err != nil {
-			return nil, err
-		}
-		var task work.Task
-		if json.Unmarshal(raw, &task) != nil {
-			return nil, domain.ErrInvalid
-		}
-		task, err = work.NormalizeTask(task)
-		if err != nil || task.Digest() != source.Digest {
-			return nil, domain.ErrInvalid
-		}
-		for _, part := range []struct{ name, body string }{{"title", task.Title}, {"description", task.Description}, {"acceptance_criteria", task.AcceptanceCriteria}} {
-			parts = append(parts, application.Part{Kind: "task", Name: part.name, Title: task.Title, Content: part.body, CountryID: source.CountryID, TaskID: source.TaskID})
-		}
-		for _, doc := range task.Documents {
-			parts = append(parts, application.Part{Kind: "document", Name: "documents/" + doc.FileName, Title: doc.Title, Content: doc.Content, CountryID: source.CountryID, TaskID: source.TaskID})
-		}
-		for _, item := range task.Checklist {
-			parts = append(parts, application.Part{Kind: "task", Name: "checklist/" + item.ID, Title: task.Title, Content: fmt.Sprintf("Checklist done=%t: %s", item.Done, item.Title), CountryID: source.CountryID, TaskID: source.TaskID})
-		}
-		for _, item := range task.Comments {
-			parts = append(parts, application.Part{Kind: "task", Name: "comments/" + item.ID, Title: task.Title, Content: item.Body, CountryID: source.CountryID, TaskID: source.TaskID})
-		}
-		for _, item := range task.Defects {
-			parts = append(parts, application.Part{Kind: "task", Name: "defects/" + item.ID, Title: item.Title, Content: strings.Join([]string{item.Status, item.Title, item.Description, item.ReproductionSteps, item.ActualResult, item.ExpectedResult}, "\n"), CountryID: source.CountryID, TaskID: source.TaskID})
-		}
-		for _, item := range task.Dependencies {
-			parts = append(parts, application.Part{Kind: "task", Name: "dependencies/" + item.ID, Title: task.Title, Content: fmt.Sprintf("Dependency #%d %s: %s", item.Number, item.Status, item.Title), CountryID: source.CountryID, TaskID: source.TaskID})
-		}
 
 	}
 	return parts, nil
@@ -228,14 +177,14 @@ func (s *RetrievalStore) Finish(ctx context.Context, lease application.Lease, ch
 		if chunk.Source != lease.Source || !domain.Digest(chunk.ID) || domain.Hash([]byte(chunk.Content)) != chunk.ContentDigest || chunk.End-chunk.Start != len([]rune(chunk.Content)) {
 			return domain.ErrInvalid
 		}
-		records = append(records, []any{chunk.ID, lease.ID, chunk.Kind, chunk.Part, chunk.Start, chunk.End, chunk.Title, chunk.Content, chunk.ContentDigest, nullString(chunk.CountryID), nullString(chunk.TaskID), domain.Terms(chunk.Title + " " + chunk.Part), domain.Terms(chunk.Content), chunk.LineStart, chunk.LineEnd})
+		records = append(records, []any{chunk.ID, lease.ID, chunk.Kind, chunk.Part, chunk.Start, chunk.End, chunk.Title, chunk.Content, chunk.ContentDigest, domain.Terms(chunk.Title + " " + chunk.Part), domain.Terms(chunk.Content), chunk.LineStart, chunk.LineEnd})
 	}
 	// A source either has its complete deterministic projection or no acknowledged projection.
 	if _, err = tx.Exec(ctx, `DELETE FROM retrieval_chunks WHERE job_id=$1`, lease.ID); err != nil {
 		return err
 	}
 	if len(records) > 0 {
-		_, err = tx.CopyFrom(ctx, pgx.Identifier{"retrieval_chunks"}, []string{"id", "job_id", "kind", "part", "start_rune", "end_rune", "title", "content", "content_digest", "country_id", "task_id", "title_terms", "content_terms", "line_start", "line_end"}, pgx.CopyFromRows(records))
+		_, err = tx.CopyFrom(ctx, pgx.Identifier{"retrieval_chunks"}, []string{"id", "job_id", "kind", "part", "start_rune", "end_rune", "title", "content", "content_digest", "title_terms", "content_terms", "line_start", "line_end"}, pgx.CopyFromRows(records))
 		if err != nil {
 			return err
 		}

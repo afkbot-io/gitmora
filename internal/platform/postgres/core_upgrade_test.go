@@ -12,6 +12,7 @@ import (
 
 	"workgraph.local/platform/internal/access"
 	capture "workgraph.local/platform/internal/capture/application"
+	capturedomain "workgraph.local/platform/internal/capture/domain"
 	"workgraph.local/platform/internal/platform/postgres"
 	retrieval "workgraph.local/platform/internal/retrieval/application"
 	search "workgraph.local/platform/internal/retrieval/domain"
@@ -48,12 +49,24 @@ func TestCoreUpgradePreservesCapturesSearchAndExistingAuthority(t *testing.T) {
 	service := capture.NewService(postgres.NewCaptureStore(pool))
 	input := snapshot()
 	input.Messages[0].Text = "CoreUpgradeSentinel локальная сессия"
-	receipt, e := service.Ingest(ctx, subject, input)
+	receipt, e := capturedomain.Sanitize(input)
 	if e != nil {
 		t.Fatal(e)
 	}
-	index := retrieval.NewIndexer(postgres.NewRetrievalStore(pool))
-	if _, e = index.ReconcileOnce(ctx); e != nil {
+	// Seed the historical schema using its original wire representation. Current writers require the new schema.
+	for _, q := range []struct {
+		sql  string
+		args []any
+	}{
+		{`INSERT INTO capture_sessions(repository_id,session_id,originator_id,identity_digest,latest_revision) VALUES($1,$2,$3,$4,1)`, []any{repository, input.SessionID, subject, fmt.Sprintf("%x", sha256.Sum256([]byte("legacy identity")))}},
+		{`INSERT INTO capture_revisions(repository_id,session_id,revision,digest,canonical) VALUES($1,$2,1,$3,$4)`, []any{repository, input.SessionID, receipt.Digest(), receipt.CanonicalJSON()}},
+		{`INSERT INTO capture_context_scopes(repository_id,session_id,started_at_text,agent_name) VALUES($1,$2,$3,$4)`, []any{repository, input.SessionID, input.StartedAt.UTC().Format(time.RFC3339Nano), input.Agent.Name}},
+	} {
+		if _, e = pool.Exec(ctx, q.sql, q.args...); e != nil {
+			t.Fatal(e)
+		}
+	}
+	if _, e = pool.Exec(ctx, `INSERT INTO retrieval_jobs(id,source_kind,project_id,repository_id,session_id,revision,source_digest,source_observed_at) VALUES('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','capture',$1,$2,$3,1,$4,now())`, project, repository, input.SessionID, receipt.Digest()); e != nil {
 		t.Fatal(e)
 	}
 	issued, e := access.IssueCredential(subject, "Upgrade", []access.Permission{access.ReadCapture}, time.Now(), time.Hour)
@@ -91,8 +104,12 @@ func TestCoreUpgradePreservesCapturesSearchAndExistingAuthority(t *testing.T) {
 		t.Fatal("retired-only credential remained active")
 	}
 	stored, e := service.Get(ctx, subject, repository, input.SessionID, 1)
-	if e != nil || stored.Session.Digest() != receipt.Digest {
+	if e != nil || stored.Session.Digest() != receipt.Digest() {
 		t.Fatal("capture changed", e)
+	}
+	index := retrieval.NewIndexer(postgres.NewRetrievalStore(pool))
+	if _, e = index.ReconcileOnce(ctx); e != nil {
+		t.Fatal(e)
 	}
 	hits, e := retrieval.NewService(postgres.NewRetrievalStore(pool)).Search(ctx, principal, search.Query{ProjectID: project, Text: "CoreUpgradeSentinel"})
 	if e != nil || len(hits.Items) != 1 {

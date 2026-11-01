@@ -39,8 +39,6 @@ import (
 	retrievalapp "workgraph.local/platform/internal/retrieval/application"
 	"workgraph.local/platform/internal/transport/httpapi"
 	"workgraph.local/platform/internal/transport/webui"
-	workapp "workgraph.local/platform/internal/work/application"
-	"workgraph.local/platform/internal/work/tasktopia"
 )
 
 func main() {
@@ -222,16 +220,9 @@ func run(ctx context.Context, args []string, output io.Writer) error {
 		if err != nil {
 			return err
 		}
-		work, err := workService(pool)
-		if err != nil {
-			return err
-		}
 		services := []reconciler{}
 		if forge != nil {
 			services = append(services, forge, code)
-		}
-		if work != nil {
-			services = append(services, work)
 		}
 		services = append(services, retrievalapp.NewIndexer(postgres.NewRetrievalStore(pool)))
 		return runWorker(ctx, once, output, services...)
@@ -248,14 +239,6 @@ func run(ctx context.Context, args []string, output io.Writer) error {
 		if forge != nil {
 			forgePort = forge
 			codePort = code
-		}
-		work, err := workService(pool)
-		if err != nil {
-			return err
-		}
-		var workPort httpapi.WorkService
-		if work != nil {
-			workPort = work
 		}
 		origins, err := mcpAllowedOrigins()
 		if err != nil {
@@ -289,7 +272,7 @@ func run(ctx context.Context, args []string, output io.Writer) error {
 		}
 		directoryService.WithRepositoryResolver(resolver)
 		retrievalService := retrievalapp.NewService(postgres.NewRetrievalStore(pool))
-		handler := httpapi.NewHandler(httpapi.Config{Captures: application.NewService(postgres.NewCaptureStore(pool)), Authenticator: postgres.NewCredentialStore(pool), Ready: func(ctx context.Context) error { return postgres.VerifySchema(ctx, pool) }, Forge: forgePort, Code: codePort, Work: workPort, Retrieval: retrievalService, ContextPacks: contextapp.NewService(postgres.NewContextStore(pool), retrievalService), ContextBrowser: contextapp.NewBrowser(postgres.NewContextStore(pool)), Directory: directoryService, Identity: identityPort, CLIEnrollment: cliEnrollment, MCPAllowedOrigins: origins, MCPPublicOrigin: publicOrigin, WebUI: webui.Embedded()})
+		handler := httpapi.NewHandler(httpapi.Config{Captures: application.NewService(postgres.NewCaptureStore(pool)), Authenticator: postgres.NewCredentialStore(pool), Ready: func(ctx context.Context) error { return postgres.VerifySchema(ctx, pool) }, Forge: forgePort, Code: codePort, Retrieval: retrievalService, ContextPacks: contextapp.NewService(postgres.NewContextStore(pool), retrievalService), ContextBrowser: contextapp.NewBrowser(postgres.NewContextStore(pool)), ContextResolver: contextapp.NewResolver(postgres.NewContextStore(pool)), Directory: directoryService, Identity: identityPort, CLIEnrollment: cliEnrollment, MCPAllowedOrigins: origins, MCPPublicOrigin: publicOrigin, WebUI: webui.Embedded()})
 		return serve(ctx, listen, handler)
 	default:
 		return errors.New("unsupported command")
@@ -459,31 +442,6 @@ func runWorker(ctx context.Context, once bool, output io.Writer, services ...rec
 	}
 }
 
-func workService(pool *pgxpool.Pool) (*workapp.Service, error) {
-	allowed := os.Getenv("WORKGRAPH_TASKTOPIA_ALLOWLIST")
-	proxy := os.Getenv("WORKGRAPH_TASKTOPIA_PROXY_URL")
-	if allowed == "" {
-		if proxy != "" {
-			return nil, errors.New("Tasktopia allowlist is required with an explicit proxy")
-		}
-		return nil, nil
-	}
-	box, err := configuredVault()
-	if err != nil {
-		return nil, err
-	}
-	endpoints := strings.Split(allowed, ",")
-	for i := range endpoints {
-		endpoints[i] = strings.TrimSpace(endpoints[i])
-	}
-	provider, err := tasktopia.NewWithProxy(endpoints, proxy)
-	if err != nil {
-		return nil, errors.New("invalid allowed Tasktopia endpoint")
-	}
-	return workapp.NewService(postgres.NewWorkStore(pool), box, provider), nil
-}
-
-// configuredVault is shared installation wiring; each use case supplies its own encryption scope.
 func configuredVault() (*secretbox.Box, error) {
 	keyring, err := runtimeconfig.Secret(runtimeconfig.EncryptionKeys)
 	if err != nil {

@@ -18,7 +18,7 @@ func TestBrokerExposesOnlyCoreReadToolsAndRechecksRemoteAuthority(t *testing.T) 
 	key := "wg_" + strings.Repeat("A", 43)
 	var revoked atomic.Bool
 	upstream := mcp.NewServer(&mcp.Implementation{Name: "fixture", Version: "1"}, nil)
-	for _, name := range []string{"context.search", "context.browse", "context.pack", "context.expand", "context.task", "context.file", "danger.execute"} {
+	for _, name := range []string{"context.search", "context.browse", "context.pack", "context.expand", "context.resolve", "context.file", "danger.execute"} {
 		mcp.AddTool(upstream, &mcp.Tool{Name: name}, func(context.Context, *mcp.CallToolRequest, map[string]any) (*mcp.CallToolResult, map[string]string, error) {
 			return nil, map[string]string{"text": "Exact permitted context"}, nil
 		})

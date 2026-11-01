@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -106,7 +107,17 @@ func (t *captureTransaction) PutRevision(ctx context.Context, session domain.Ses
 	if snapshot.Task != nil {
 		country, task = snapshot.Task.CountryID, snapshot.Task.TaskID
 	}
-	_, err = t.tx.Exec(ctx, `INSERT INTO capture_context_scopes(repository_id,session_id,started_at_text,agent_name,country_id,task_id) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`, t.repository, snapshot.SessionID, snapshot.StartedAt.UTC().Format(time.RFC3339Nano), snapshot.Agent.Name, country, task)
+	title := snapshot.Agent.Name
+	if len(snapshot.Messages) > 0 {
+		r := []rune(snapshot.Messages[0].Text)
+		if len(r) > 160 {
+			r = r[:160]
+		}
+		if strings.TrimSpace(string(r)) != "" {
+			title = string(r)
+		}
+	}
+	_, err = t.tx.Exec(ctx, `INSERT INTO capture_context_scopes(repository_id,session_id,started_at_text,agent_name,country_id,task_id,title) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(repository_id,session_id) DO UPDATE SET title=EXCLUDED.title WHERE (SELECT latest_revision FROM capture_sessions WHERE repository_id=$1 AND session_id=$2)<=$8`, t.repository, snapshot.SessionID, snapshot.StartedAt.UTC().Format(time.RFC3339Nano), snapshot.Agent.Name, country, task, title, snapshot.Revision)
 	if err != nil {
 		return false, err
 	}
@@ -126,12 +137,6 @@ func (t *captureTransaction) PutRevision(ctx context.Context, session domain.Ses
 		return false, err
 	}
 	_, err = t.tx.Exec(ctx, "UPDATE capture_sessions SET latest_revision=GREATEST(latest_revision,$3) WHERE repository_id=$1 AND session_id=$2", t.repository, snapshot.SessionID, snapshot.Revision)
-	if err == nil && snapshot.Task != nil {
-		_, err = t.tx.Exec(ctx, `INSERT INTO work_capture_bindings(repository_id,session_id,country_id,task_id) VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING`, t.repository, snapshot.SessionID, snapshot.Task.CountryID, snapshot.Task.TaskID)
-		if err == nil {
-			err = wakeTaskDiscovery(ctx, t.tx, t.repository)
-		}
-	}
 	return err == nil, err
 }
 

@@ -68,7 +68,7 @@ func TestLegacySourcesUpgradeToCurrentRetrievalAndCodeQueues(t *testing.T) {
 	if err = postgres.Migrate(ctx, pool); err != nil {
 		t.Fatal(err)
 	}
-	if count(t, pool, "retrieval_jobs") != 1 || count(t, pool, "forge_code_runs") != 1 || count(t, pool, "work_capture_bindings") != 1 {
+	if count(t, pool, "retrieval_jobs") != 1 || count(t, pool, "forge_code_runs") != 1 {
 		t.Fatal("existing sources/confirmed commits not queued")
 	}
 	if _, err = retrieval.NewIndexer(postgres.NewRetrievalStore(pool)).ReconcileOnce(ctx); err != nil {

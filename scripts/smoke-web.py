@@ -25,7 +25,7 @@ def uid():
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--serve", action="store_true", help="Keep synthetic fixtures alive for CLI visual inspection")
-    parser.add_argument("--work", action="store_true", help="Exercise accepted-source navigation and session revisions")
+    parser.add_argument("--history", action="store_true", help="Exercise accepted-source navigation and session revisions")
     args = parser.parse_args()
     schema = "web_smoke_" + uuid.uuid4().hex
     api.sql(f'CREATE SCHEMA "{schema}"')
@@ -37,10 +37,10 @@ def main():
         port = listener.getsockname()[1]
     public = f"http://127.0.0.1:{port}"
     try:
-        result = api.command(["bootstrap", "--project", "Платформа задач", "--repository", "Tasktopia", "--gitlab-url", "https://gitlab.internal", "--gitlab-project-id", "42"], environment)
+        result = api.command(["bootstrap", "--project", "Platform", "--repository", "Platform", "--gitlab-url", "https://gitlab.internal", "--gitlab-project-id", "42"], environment)
         assert result.returncode == 0, "Synthetic setup failed"
         identity = json.loads(result.stdout)
-        issued = api.command(["issue-token", "--user-id", identity["user_id"], "--scopes", "directory:read,directory:manage,platform:manage,capture:read,capture:write,integration:read"], environment)
+        issued = api.command(["issue-token", "--user-id", identity["user_id"], "--scopes", "directory:read,directory:manage,platform:manage,credentials:manage,capture:read,capture:write,integration:read"], environment)
         assert issued.returncode == 0
         admin = json.loads(issued.stdout)["token"]
         fixture = subprocess.Popen([str(ROOT / "bin/verification/oidc-fixture"), "--callback", public + "/v1/auth/oidc/callback"], cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -57,8 +57,8 @@ def main():
             with response:
                 return response.status, json.load(response)
 
-        user, country, task, session = uid(), uid(), uid(), uid()
-        if args.work:
+        user, session = uid(), uid()
+        if args.history:
             session = "11111111-1111-4111-8111-111111111111"
         assert call("/v1/admin/users", dict(request_id=uid(), id=user, display_name="Инженер команды"))[0] == 201
         assert call(f'/v1/projects/{identity["project_id"]}/members/{user}', dict(request_id=uid(), expected_version=0, role="reader"), "PUT")[0] == 200
@@ -68,7 +68,7 @@ def main():
         other = uid()
         assert call("/v1/projects", dict(request_id=uid(), id=other, name="Закрытая лаборатория"))[0] == 201
         assert call(f"/v1/projects/{other}/repositories",dict(request_id=uid(),id=uid(),provider="",gitlab_url="https://gitlab.internal",gitlab_project_id=43,name="Empty repository"))[0]==201
-        if args.work:
+        if args.history:
             assert call(f'/v1/projects/{other}/members/{user}', dict(request_id=uid(), expected_version=0, role="reader"), "PUT")[0] == 200
         # Put non-member metadata first to make default-selection coverage deterministic.
         metadata, custodian = "00000000-0000-4000-8000-" + uuid.uuid4().hex[:12], uid()
@@ -80,13 +80,13 @@ def main():
         text = "refreshToken: проверяем обновление доступа 🧪. <img src=x onerror=window.untrustedExecuted=true>\n" * 40
         capture = dict(schema_version=1, repository_id=identity["repository_id"], session_id=session, revision=1,
                        started_at="2026-10-30T10:00:00Z", agent=dict(name="OpenCode", model="synthetic-local"),
-                       task=dict(country_id=country, task_id=task), messages=[dict(role="assistant", text="obsoleteWord refreshToken: старая версия")], files=["src/auth/refresh-token.ts"])
+                       messages=[dict(role="assistant", text="obsoleteWord refreshToken: старая версия")], files=["src/auth/refresh-token.ts"])
         assert call("/v1/captures", capture)[0] == 201
         capture.update(revision=2, messages=[dict(role="assistant", text=text)])
-        if args.work:
+        if args.history:
             capture["messages"] += [dict(role="tool", tool_name="bash", text=f"QuotedToolMessage {i}") for i in range(25)]
         assert call("/v1/captures", capture)[0] == 201
-        if args.work:
+        if args.history:
             digest = call(f'/v1/repositories/{identity["repository_id"]}/sessions/{session}')[1]["digest"]
             for index in range(1, 22):
                 extra = {**capture, "revision": 1, "session_id": f"eeeeeeee-eeee-4eee-8eee-{index:012x}", "messages": [dict(role="assistant", text=f"Archive marker {index}")]}
@@ -106,12 +106,12 @@ def main():
             signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
             signal.pause()
         else:
-            payload = dict(url=public, issuer=issuer, admin=admin, project=identity["project_id"], other_project=other, metadata_project=metadata, user=user, binding=binding, binding_version=receipt["version"], task=task, repository=identity["repository_id"], session=session)
-            if args.work:
+            payload = dict(url=public, issuer=issuer, admin=admin, project=identity["project_id"], other_project=other, metadata_project=metadata, user=user, binding=binding, binding_version=receipt["version"], repository=identity["repository_id"], session=session)
+            if args.history:
                 issued = api.command(["issue-token", "--user-id", user, "--scopes", "directory:read,capture:read"], environment)
                 assert issued.returncode == 0
                 payload["capture_only"] = json.loads(issued.stdout)["token"]
-            script = "scripts/smoke-work.mjs" if args.work else "scripts/smoke-web.mjs"
+            script = "scripts/smoke-history.mjs" if args.history else "scripts/smoke-web.mjs"
             checked = subprocess.run(["node", script], input=json.dumps(payload), text=True, cwd=ROOT, timeout=600 if os.environ.get("GITMORA_UI_AUDIT") == "1" else 180)
             assert checked.returncode == 0, "Actual browser workflow failed"
     except KeyboardInterrupt:

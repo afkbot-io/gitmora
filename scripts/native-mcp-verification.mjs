@@ -70,7 +70,7 @@ export async function verifySavedMCP(binary, env, url, children) {
       "context.file",
       "context.pack",
       "context.search",
-      "context.task",
+      "context.resolve",
     ]);
     assert(tools.result.tools.every((x) => x.annotations.readOnlyHint));
   } finally {

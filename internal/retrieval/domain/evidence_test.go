@@ -45,7 +45,7 @@ func TestQueriesAreBoundedAndDoNotTurnCodeFiltersIntoAuthority(t *testing.T) {
 	if err != nil || q.Terms == q.Text {
 		t.Fatal("code tokenization missing", q, err)
 	}
-	for _, bad := range []domain.Query{{ProjectID: project}, {ProjectID: "12", Text: "test"}, {ProjectID: project, Text: "test", Limit: 51}, {ProjectID: project, Text: "x", Kinds: []string{"unknown"}}, {ProjectID: project, Text: "x", TaskID: session}, {ProjectID: project, Text: strings.Repeat("x", 513)}} {
+	for _, bad := range []domain.Query{{ProjectID: project}, {ProjectID: "12", Text: "test"}, {ProjectID: project, Text: "test", Limit: 51}, {ProjectID: project, Text: "x", Kinds: []string{"unknown"}}, {ProjectID: project, Text: strings.Repeat("x", 513)}} {
 		if _, err := domain.NormalizeQuery(bad); err == nil {
 			t.Fatal("unbounded/ambiguous query accepted", bad)
 		}

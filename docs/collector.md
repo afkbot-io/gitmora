@@ -8,7 +8,6 @@ Build both binaries with `make build`. Place `workgraph` at a stable executable 
 
 ```sh
 gitmora init --server https://context.internal --repository-id <Gitmora-repository-UUID>
-gitmora bind --country-id <Tasktopia-country-UUID> --task-id <Tasktopia-task-UUID>
 gitmora capture < observation.json
 git add src/queue.go
 git commit -m 'Preserve failed deliveries'
@@ -22,7 +21,7 @@ Bindings affect new Gitmora recordings in the current worktree. Existing recordi
 
 ## Native OpenCode
 
-After repository initialization and task binding, enable the plugin and restart OpenCode:
+After repository initialization, enable the plugin and restart OpenCode:
 
 ```sh
 gitmora agent enable opencode
@@ -34,7 +33,7 @@ This is a global plugin that activates only in explicitly initialized Git reposi
 
 Awaited tool callbacks record a before/after HEAD window. A tool that writes files, commits several times and pushes in one command is therefore linked retrospectively even if Git hooks ran before OpenCode persisted its tool result. Fast-forward windows retain intermediate commits; a rewritten window records its new tip. This is observed session/commit context, not proof of individual line authorship. A separate test exercises agent edits followed by a developer's ordinary commit and push.
 
-Final conversation updates after a push become eligible only for that already authorized recording. The same native source keeps its original task binding across restart; binding a new task requires a new native conversation. Other uncommitted conversations stay private. Durable native file-event identities prevent replayed history from reintroducing paths already consumed by an earlier commit.
+Final conversation updates after a push become eligible only for that already authorized recording. The same native source keeps its original recording identity across restart. Other uncommitted conversations stay private. Durable native file-event identities prevent replayed history from reintroducing paths already consumed by an earlier commit.
 
 The adapter serializes/coalesces lifecycle notifications, re-reads current SDK state and drains pending work on plugin disposal. It sends only a stable complete prefix: an unfinished parallel tool blocks later parts, avoiding insertion into already recorded evidence. Each capture attempts bounded delivery of eligible data. Configure `gitmora sync --watch` for continuing offline recovery after the native process exits.
 
@@ -83,7 +82,7 @@ The private SQLite ledger now stores bounded native source locator values for re
 }
 ```
 
-`started_at`, `ended_at` and agent `version` are optional. For completed sessions provide their actual start/end timestamps. Missing start time uses first observation time. Source/event IDs are nonempty bounded UTF-8 strings; persistent mapping/event keys use digests instead of arbitrary raw identifiers. Gitmora session mapping includes repository, canonical worktree identity, integration name, native source ID and country/task binding.
+`started_at`, `ended_at` and agent `version` are optional. For completed sessions provide their actual start/end timestamps. Missing start time uses first observation time. Source/event IDs are nonempty bounded UTF-8 strings; persistent mapping/event keys use digests instead of arbitrary raw identifiers. Gitmora session mapping includes repository, canonical worktree identity, integration name, native source ID and any immutable legacy source scope.
 
 The event ID must remain stable on retry. Repeating the same event/content is acknowledged locally; changed content under the same event ID conflicts. In the generic protocol a later observation must preserve the recorded message prefix. Shorter snapshots, historical edits and compacted replacements conflict. Native continuations use the additional `native_history` protocol described in [native windows](native-continuation.md). Submit completed messages rather than partial streaming fragments.
 

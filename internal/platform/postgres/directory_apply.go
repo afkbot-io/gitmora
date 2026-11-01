@@ -194,7 +194,7 @@ func directoryChangeProject(ctx context.Context, tx pgx.Tx, a directoryActor, c 
 		r.ProjectVersion = r.Version
 		return e
 	}
-	// Record child tombstones before a transactional local cascade; external GitLab/Tasktopia data is never deleted.
+	// Record child tombstones before a transactional local cascade; external provider data is never deleted.
 	_, e = tx.Exec(ctx, `INSERT INTO directory_identifiers(kind,id,retired_at)SELECT 'repository',id,now() FROM repositories WHERE project_id=$1 ON CONFLICT(kind,id)DO UPDATE SET retired_at=EXCLUDED.retired_at`, c.EntityID)
 	if e != nil {
 		return e

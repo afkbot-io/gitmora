@@ -27,17 +27,7 @@ func bound(p *domain.Pack) error {
 				p.EvidenceMore = true
 			}
 		},
-		func() {
-			if t := p.Task; t != nil {
-				t.Links = t.Links[:min(2, len(t.Links))]
-				t.Checklist = t.Checklist[:min(4, len(t.Checklist))]
-				t.Comments = t.Comments[:min(1, len(t.Comments))]
-				t.Defects = t.Defects[:min(2, len(t.Defects))]
-				t.Dependencies = t.Dependencies[:min(2, len(t.Dependencies))]
-				t.Documents = t.Documents[:min(2, len(t.Documents))]
-				t.ChildrenClipped = true
-			}
-		},
+
 		func() {
 			if len(p.MergeRequests.Items) > 1 {
 				p.MergeRequests.Items = p.MergeRequests.Items[:1]
@@ -63,19 +53,6 @@ func bound(p *domain.Pack) error {
 			}
 		},
 		func() { p.EvidenceMore = p.EvidenceMore || len(p.Evidence) > 0; p.Evidence = p.Evidence[:0] },
-		func() {
-			if t := p.Task; t != nil {
-				t.Links = t.Links[:0]
-				t.Checklist = t.Checklist[:0]
-				t.Comments = t.Comments[:0]
-				t.Defects = t.Defects[:0]
-				t.Dependencies = t.Dependencies[:0]
-				t.Documents = t.Documents[:0]
-				t.ChildrenClipped = true
-				t.Description = domain.Excerpt{Truncated: t.Description.Truncated || t.Description.Text != ""}
-				t.AcceptanceCriteria = domain.Excerpt{Truncated: t.AcceptanceCriteria.Truncated || t.AcceptanceCriteria.Text != ""}
-			}
-		},
 	}
 	for i := 0; ; i++ {
 		raw, err := json.Marshal(p)

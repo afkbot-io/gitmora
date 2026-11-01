@@ -53,8 +53,6 @@ const diagnostics: Record<string, string> = {
     "Администратор сервера должен настроить шифрование и разрешённые адреса интеграций.",
   directory_conflict:
     "Версия или идентификатор операции изменились. Обновите данные перед новым изменением.",
-  task_integration_conflict:
-    "Адрес и страна Tasktopia уже закреплены за проектом. Проверьте исходную привязку.",
 };
 export type MutationMethod = "POST" | "PUT" | "PATCH" | "DELETE";
 export class ApiError extends Error {

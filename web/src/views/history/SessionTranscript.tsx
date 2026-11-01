@@ -2,7 +2,7 @@ import { t as translate } from "../../domain/locale.js";
 import { buttonStyles, sharedStyles } from "../ui.js";
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import type { Selection, SessionRevision } from "../../domain/work.js";
+import type { Selection, SessionRevision } from "../../domain/history.js";
 import type { ApiClient } from "../../transport/api.js";
 import { readableError } from "../../domain/context.js";
 import { LatestRequest } from "../../application/latest.js";
@@ -69,7 +69,7 @@ export function SessionTranscript({
   return (
     <section
       className={`
-        work-section transcript [&_li]:wrap-anywhere border-t border-line px-0 py-6
+        work-section transcript [&_li]:wrap-anywhere border-t border-line px-0 py-4
         [&_h3]:mx-0 [&_h3]:mt-6 [&_h3]:mb-3 [&_h3]:text-lg [&_h3]:font-medium [&_h4]:mx-0
         [&_h4]:mt-4 [&_h4]:mb-2 [&_h4]:text-sm [&_details]:mx-0 [&_details]:my-4
         [&_summary]:cursor-pointer [&_summary]:px-0 [&_summary]:py-2 [&_.source-prose]:[font-family:inherit]
@@ -142,20 +142,7 @@ export function SessionTranscript({
               {value.digest}
             </dd>
           </dl>
-          {s.task && (
-            <button
-              className={buttonStyles.secondary}
-              onClick={() =>
-                onNavigate({
-                  project_id: selection.project_id,
-                  country_id: s.task!.country_id,
-                  task_id: s.task!.task_id,
-                })
-              }
-            >
-              {translate("Открыть задачу из привязки агента")}
-            </button>
-          )}
+
           <details>
             <summary>
               {translate("Коммиты, указанные агентом:")} {s.commits.length}

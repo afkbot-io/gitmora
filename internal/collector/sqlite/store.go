@@ -227,21 +227,6 @@ func (t *transaction) Binding(worktree string) (*capture.TaskRef, error) {
 	}
 	return &task, nil
 }
-func (t *transaction) Bind(worktree string, task *capture.TaskRef) error {
-	if _, err := t.Config(); err != nil {
-		return err
-	}
-	if task == nil {
-		_, err := t.tx.ExecContext(t.ctx, "DELETE FROM bindings WHERE worktree=?", worktree)
-		return err
-	}
-	raw, err := json.Marshal(task)
-	if err != nil {
-		return err
-	}
-	_, err = t.tx.ExecContext(t.ctx, "INSERT INTO bindings(worktree,task) VALUES(?,?) ON CONFLICT(worktree) DO UPDATE SET task=excluded.task", worktree, string(raw))
-	return err
-}
 func (t *transaction) Find(key string) (*domain.Recording, bool, error) {
 	var raw []byte
 	err := t.tx.QueryRowContext(t.ctx, "SELECT state FROM recordings WHERE local_key=?", key).Scan(&raw)

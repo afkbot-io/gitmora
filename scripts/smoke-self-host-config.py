@@ -30,7 +30,6 @@ def main():
                 "github-com",
                 "gitlab-custom",
                 "github-enterprise.example",
-                "tasktopia-custom",
                 "gitlab-ca",
             ]
             overlays = [
@@ -67,9 +66,6 @@ def main():
                 GITMORA_GITHUB_ENTERPRISE_URL="https://hub.example.test:9443/code",
                 GITMORA_GITHUB_ENTERPRISE_AUTHORITY="hub.example.test:9443",
                 GITMORA_GITHUB_ENTERPRISE_VISIBILITY="private",
-                GITMORA_TASKTOPIA_URL="https://tasks.example.test:7443/prefix/mcp",
-                GITMORA_TASKTOPIA_AUTHORITY="tasks.example.test:7443",
-                GITMORA_TASKTOPIA_VISIBILITY="public",
                 GITMORA_GITLAB_CA_BUNDLE=str(bundle),
             )
             policy = state / "compose.env"
@@ -129,21 +125,12 @@ def main():
             assert "WORKGRAPH_OIDC_CLIENT_SECRET_FILE" not in worker["environment"]
             for role in [api, worker]:
                 assert set(role["networks"]) == {"private"}
-                assert (
-                    role["environment"]["WORKGRAPH_TASKTOPIA_ALLOWLIST"]
-                    == settings["GITMORA_TASKTOPIA_URL"]
-                )
-                assert (
-                    role["environment"]["WORKGRAPH_TASKTOPIA_PROXY_URL"]
-                    == "http://tasktopia-egress:8080"
-                )
             for service, authority in [
                 ("gitlab-egress", settings["GITMORA_GITLAB_AUTHORITY"]),
                 (
                     "github-enterprise-egress",
                     settings["GITMORA_GITHUB_ENTERPRISE_AUTHORITY"],
                 ),
-                ("tasktopia-egress", settings["GITMORA_TASKTOPIA_AUTHORITY"]),
             ]:
                 relay = services[service]
                 assert authority in relay["command"]

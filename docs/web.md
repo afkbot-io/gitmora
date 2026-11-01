@@ -14,13 +14,12 @@ Global user and identity-binding management remains available through the author
 
 An empty project offers a GitHub/GitLab connection form. Supply the full repository URL and a read token; the backend resolves and verifies the provider ID before registering the catalog entry and sealing credentials. GitHub public access without a token is an explicit opt-in and subject to the shared API rate limit. A rejected lookup does not create a catalog entry. If a later connection stage fails, retry uses the existing entry rather than making a duplicate. Token fields clear after submission and are never stored in browser storage.
 
-The same upstream repository can be connected independently by different Gitmora projects. Its captures, permissions, connections and synchronization state remain scoped to each local repository UUID. Provider-instance identity also scopes associations between commits, PRs and tasks.
+The same upstream repository can be connected independently by different Gitmora projects. Its captures, permissions, connections and synchronization state remain scoped to each local repository UUID. Provider-instance identity also scopes associations between commits and PRs.
 
-Custom GitLab, GitHub Enterprise and Tasktopia URLs require an operator-approved destination and network route. The browser cannot expand a server allowlist. See [GitLab](gitlab-self-managed.md), [GitHub](github.md) and [Tasktopia](tasktopia.md). Project settings separates general metadata from integrations. Connection health, retry and credential replacement are primary controls; webhook and diagnostic details are collapsed. Tasktopia is optional. Its saved endpoint and workspace identity cannot be silently changed by replacing a key.
 
 ## Search and history
 
-Search accepts lexical terms or a complete commit SHA and offers repository, source and historical-version filters. Open a result to inspect the exact source. Work provides paginated tasks, sessions and merge requests, with transcripts and SHA-scoped CI. Source instructions are rendered as quoted data. Changing the project or request cancels pending reads and removes earlier content; late responses cannot populate another scope.
+Search accepts lexical terms, a complete commit SHA or a synced MR/PR URL and offers repository, source and historical-version filters. Open a result to inspect the exact source. Recent sessions and MR/PR appear on the search home screen, with transcripts and SHA-scoped CI. Source instructions are rendered as quoted data. Changing the project or request cancels pending reads and removes earlier content; late responses cannot populate another scope.
 
 Missing permissions, empty history, pending indexing, provider unavailability and failed requests are distinct states. Lists expose continuation. Source freshness and confirmation rules are enforced by the backend; the interface does not imply that an agent-reported SHA is already provider-confirmed. See [context](context.md) and [work navigation](work-navigation.md).
 
@@ -43,10 +42,8 @@ npm ci
 make build
 npm run test:web
 npm run check:format:web
-make smoke-settings smoke-github-ui smoke-web smoke-work smoke-credentials
+make smoke-settings smoke-github-ui smoke-web smoke-history smoke-credentials
 make smoke-browser-compat
 ```
 
 The Go API embeds compiled assets, local fonts and runtime license notices; production needs no Node or CDN. Build assets before compiling Go. Do not regenerate embedded assets concurrently with Go compilation. An unbuilt checkout serves 503 at the public root while API/health routes remain independent. For local development, `npm run dev:web` proxies `/v1` to loopback; signed authentication tests use the bundled Go origin.
-
-Browser gates use real API/PostgreSQL processes, a signed local identity fixture and local provider fixtures. They verify fresh-account project creation, cross-project denial, nickname invitations, bad-token handling, immutable connection generations, both themes, locale persistence, responsive layout, console/network policy and Axe accessibility. Chromium, WebKit and Firefox are required; missing engines fail explicitly. Screenshots and receipts are ignored under `output/playwright` and `build`. Provider fixtures are not evidence of connectivity to a production private service. Tasktopia's actual-source API compatibility remains a separate optional gate documented in [development](development.md).

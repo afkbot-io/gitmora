@@ -4,7 +4,7 @@ Gitmora can verify exact commits and index their changed source files from GitHu
 
 ## Enable on your server
 
-Append `deploy/compose.github-com.yaml` to the installation's existing ordered Compose policies. It enables `WORKGRAPH_GITHUB_ENABLED=true` and gives API/worker a private CONNECT relay whose only destination is `api.github.com:443`. Keep existing GitLab/Tasktopia/identity overlays when adding it. Follow [deployment](deployment.md) for preparing, inspecting and activating the complete profile.
+Append `deploy/compose.github-com.yaml` to the installation's existing ordered Compose policies. It enables `WORKGRAPH_GITHUB_ENABLED=true` and gives API/worker a private CONNECT relay whose only destination is `api.github.com:443`. Keep existing GitLab/identity overlays when adding it. Follow [deployment](deployment.md) for preparing, inspecting and activating the complete profile.
 
 For a native development server, set `WORKGRAPH_GITHUB_ENABLED=true`. The normal API is fixed to `https://api.github.com`; `WORKGRAPH_GITHUB_API_URL` accepts only an explicit loopback fixture override. `WORKGRAPH_GITHUB_PROXY_URL` is an explicit private HTTP CONNECT proxy. Ambient HTTP proxy variables do not select a route. Redirects are rejected, including repository moves; register the new canonical identity rather than silently transferring stored credentials.
 

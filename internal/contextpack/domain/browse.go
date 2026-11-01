@@ -10,13 +10,15 @@ import (
 
 // BrowseCursor is a stable identity boundary, never an authorization grant. IID is decimal text to avoid JSON rounding.
 type BrowseCursor struct {
-	RepositoryID string `json:"repository_id,omitempty"`
-	ID           string `json:"id,omitempty"`
-	IID          string `json:"iid,omitempty"`
+	ObservedAt   *time.Time `json:"observed_at,omitempty"`
+	RepositoryID string     `json:"repository_id,omitempty"`
+	ID           string     `json:"id,omitempty"`
+	IID          string     `json:"iid,omitempty"`
 }
 
-// BrowseQuery discovers accepted observations; task discovery is project-wide rather than repository-derived.
+// BrowseQuery discovers accepted observations within a project and optional repository.
 type BrowseQuery struct {
+	Order        string        `json:"order,omitempty"`
 	ProjectID    string        `json:"project_id"`
 	RepositoryID string        `json:"repository_id,omitempty"`
 	Kind         string        `json:"kind"`
@@ -26,18 +28,25 @@ type BrowseQuery struct {
 
 // NormalizeBrowse rejects ambiguous cursor shapes and takes ownership before use by an adapter.
 func NormalizeBrowse(q BrowseQuery) (BrowseQuery, error) {
-	if !identifier.Valid(q.ProjectID) || q.RepositoryID != "" && !identifier.Valid(q.RepositoryID) || q.Limit < 0 || q.Limit > 50 {
+	if q.Order != "" && q.Order != "recent" || !identifier.Valid(q.ProjectID) || q.RepositoryID != "" && !identifier.Valid(q.RepositoryID) || q.Limit < 0 || q.Limit > 50 {
 		return BrowseQuery{}, ErrInvalid
 	}
-	if q.Kind != "session" && q.Kind != "task" && q.Kind != "merge_request" || q.Kind == "task" && q.RepositoryID != "" {
+	if q.Kind != "session" && q.Kind != "merge_request" {
 		return BrowseQuery{}, ErrInvalid
 	}
 	if q.After != nil {
 		a := *q.After
+		if q.Order == "recent" {
+			if a.ObservedAt == nil || a.ObservedAt.Year() < 1900 || a.ObservedAt.Year() > 9999 {
+				return BrowseQuery{}, ErrInvalid
+			}
+			owned := *a.ObservedAt
+			a.ObservedAt = &owned
+		} else if a.ObservedAt != nil {
+			return BrowseQuery{}, ErrInvalid
+		}
 		valid := false
 		switch q.Kind {
-		case "task":
-			valid = identifier.Valid(a.ID) && a.RepositoryID == "" && a.IID == ""
 		case "session":
 			valid = identifier.Valid(a.ID) && identifier.Valid(a.RepositoryID) && a.IID == ""
 		case "merge_request":
@@ -57,7 +66,7 @@ func NormalizeBrowse(q BrowseQuery) (BrowseQuery, error) {
 
 // BrowseAllowed preserves independent capture/integration capabilities even when the user has a project role.
 func BrowseAllowed(p access.Principal, kind string) bool {
-	return identifier.Valid(p.UserID) && (kind == "session" && p.Has(access.ReadCapture) || (kind == "task" || kind == "merge_request") && p.Has(access.ReadIntegration))
+	return identifier.Valid(p.UserID) && (kind == "session" && p.Has(access.ReadCapture) || kind == "merge_request" && p.Has(access.ReadIntegration))
 }
 
 // BrowseEntry contains a current source header and its context selector, without conversation/document bodies.

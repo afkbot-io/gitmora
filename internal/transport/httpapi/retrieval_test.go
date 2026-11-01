@@ -124,14 +124,14 @@ func TestReadOnlyMCPToolsReauthenticateAndRejectAmbiguousArguments(t *testing.T)
 		}
 	}
 	result, err = session.CallTool(ctx, &mcp.CallToolParams{Name: "context.task", Arguments: map[string]any{"project_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "country_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "task_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc"}})
-	if err != nil || result.IsError || service.query.CountryID == "" || service.query.TaskID == "" {
-		t.Fatal("task context not explicitly scoped", result, err)
+	if err == nil && (result == nil || !result.IsError) {
+		t.Fatal("removed task tool accepted", result, err)
 	}
 	authenticator.mu.Lock()
 	authenticator.revoked = true
 	authenticator.mu.Unlock()
 	_, err = session.CallTool(ctx, &mcp.CallToolParams{Name: "context.search", Arguments: map[string]any{"project_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "text": "x"}})
-	if err == nil || service.calls != 2 {
+	if err == nil || service.calls != 1 {
 		t.Fatal("MCP reused revoked authentication", err)
 	}
 	r := httptest.NewRequest("POST", "/mcp", strings.NewReader(`{}`))

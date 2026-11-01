@@ -32,8 +32,7 @@ func TestImportCLIIsDurablePrivateAndReplaysOriginalSession(t *testing.T) {
 	if first.Status != "recorded" || len(first.Sessions) != 1 || first.Windows != 1 {
 		t.Fatalf("bad import receipt: %+v", first)
 	}
-	// Independent CLI process + another task binding must retain the immutable import's initial pin.
-	invoke(t, root, nil, "bind", "--country-id", "33333333-3333-4333-8333-333333333333", "--task-id", "44444444-4444-4444-8444-444444444444")
+	// Independent CLI process must retain the immutable import's initial pin.
 	if err := json.Unmarshal([]byte(invoke(t, root, nil, "import", "git-ai", "--commit", target, "--sync")), &second); err != nil {
 		t.Fatal(err)
 	}

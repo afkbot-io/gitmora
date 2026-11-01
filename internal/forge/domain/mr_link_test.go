@@ -3,7 +3,7 @@ package domain_test
 import (
 	"testing"
 
-	"workgraph.local/platform/internal/work/domain"
+	"workgraph.local/platform/internal/forge/domain"
 )
 
 func TestMRLinkAcceptsOnlyItsProviderOriginPathAndExactIID(t *testing.T) {
@@ -16,20 +16,6 @@ func TestMRLinkAcceptsOnlyItsProviderOriginPathAndExactIID(t *testing.T) {
 		if _, err := domain.NewMRLink(repo, link.BaseURL, 42, 7, target); err == nil {
 			t.Fatal("unsafe MR link accepted", target)
 		}
-	}
-}
-
-func TestLinkReadbackRecognizesTasktopiaURLSerialization(t *testing.T) {
-	task := domain.Task{Links: []domain.Link{{URL: "https://gitlab.internal/team/%D0%BA%D0%BE%D0%B4/-/merge_requests/7"}}}
-	if !task.HasLink("https://GITLAB.internal:443/team/код/-/merge_requests/7") {
-		t.Fatal("equivalent provider URL caused a duplicate operation")
-	}
-	if task.HasLink("https://other.internal/team/код/-/merge_requests/7") {
-		t.Fatal("foreign URL matched")
-	}
-	task.Links = []domain.Link{{URL: "https://gitlab.internal/team%2Fproject/-/merge_requests/7"}}
-	if task.HasLink("https://gitlab.internal/team/project/-/merge_requests/7") {
-		t.Fatal("escaped reserved separator was treated as an identical link")
 	}
 }
 

@@ -18,7 +18,7 @@ import (
 )
 
 var ErrUnavailable = errors.New("Gitmora MCP unavailable; check the saved account and server connection")
-var coreTools = []string{"context.browse", "context.search", "context.pack", "context.expand", "context.task", "context.file"}
+var coreTools = []string{"context.browse", "context.search", "context.pack", "context.expand", "context.resolve", "context.file"}
 
 type bearerTransport struct {
 	base     http.RoundTripper

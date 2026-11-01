@@ -1,5 +1,15 @@
 # Changes
 
+## 0.5.0
+
+- Remove the task tracker connector, task API/search/MCP tools, task binding command, worker jobs and deployment profiles. Historical capture bytes and old migration checksums remain immutable.
+- Replace Work with a full-width search workspace, recent sessions and MR/PR lists. Search accepts synced MR/PR URLs, full commit SHAs and text.
+- Add read-only `context.resolve`; MR packs include sessions linked to all verified source commits, with scoped fork and provider checks.
+- Simplify first-project and repository setup, retain drafts through lookup/connection retries, open repository-specific CLI instructions, and tighten spacing in both themes.
+- Update self-hosting configuration, installation, English/Russian copy and live browser/API/CLI/MCP verification.
+
+Upgrade: back up the database and private state before schema 25. Task connector data and derived task indexes are removed; rolling back requires restoring that backup. Update the standalone CLI to 0.5.0 for the new six-tool MCP interface (`context.resolve` replaces `context.task`). Existing capture history and provider credentials are retained.
+
 ## 0.4.4
 
 - Stabilize secret masking for quoted assignments followed by punctuation or adjacent assignments. Sanitized code now passes retention validation without blocking later files in the repository queue; existing stable projections keep their digests.

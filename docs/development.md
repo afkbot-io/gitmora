@@ -39,7 +39,7 @@ python3 -m unittest discover -s scripts/tests -p test_release_cli.py
 | `make smoke-forge-subpath`, `make smoke-gitlab-profile` | GitLab fixture reconciliation under `/gitlab`, custom port/CA/CONNECT and explicit Compose policy. |
 | `make smoke-context`, `make smoke-agent-context` | Real index worker, search, exact source/context and external-agent tool workflow. |
 | `make smoke-directory`, `make smoke-identity` | Catalog/account roles, signed OIDC, cookies/CSRF, revocation and recovery. |
-| `make smoke-web`, `make smoke-settings`, `make smoke-credentials`, `make smoke-work` | Signed browser/API/PostgreSQL workflows, races, denied access, uncertainty and mobile layout. |
+| `make smoke-web`, `make smoke-settings`, `make smoke-credentials`, `make smoke-history` | Signed browser/API/PostgreSQL workflows, races, denied access, uncertainty and mobile layout. |
 | `make smoke-browser-compat` | Chromium/Android, WebKit/iPhone and Firefox layouts, both themes, RU/EN, keyboard, history and accessibility. |
 | `make smoke-keycloak`, `make smoke-keycloak-native`, `make smoke-registration` | Real optimized provider, separate database, bootstrap retirement, signup policy and native account consent. |
 | `make smoke-identity-proxy` | Actual nginx/TLS routes, wrong CA/hostname and private admin denial. |
@@ -50,17 +50,6 @@ python3 -m unittest discover -s scripts/tests -p test_release_cli.py
 
 Test fixtures remain synthetic even when real HTTP/Git/PostgreSQL/browser processes are used. A provider fixture does not establish compatibility with every upstream release. Phone tests are device emulation, not physical-device acceptance. Isolated smoke scripts clean only resources they create; do not use broad shared-host volume/container cleanup.
 
-Tasktopia source compatibility is a separate explicit gate:
-
-```sh
-TASKTOPIA_SOURCE=/absolute/path/to/Tasktopia \
-TASKTOPIA_NODE=/absolute/path/to/node24/bin/node \
-make smoke-tasktopia
-```
-
-`make smoke-settings-tasktopia` and `make smoke-work-tasktopia` use the same inputs for browser workflows. The harness copies only required source into an ignored isolated tree; it must never read the original `.env`, uploads or production database. If you do not have Tasktopia source, do not report these gates as executed.
-
-`python3 scripts/smoke-web.py --serve` keeps a synthetic signed browser fixture alive for manual inspection. Stop it with Ctrl+C/SIGTERM for owned cleanup. Reports/screenshots go under ignored `build/` and `output/`; they do not belong in source control.
 
 ## Review and style
 

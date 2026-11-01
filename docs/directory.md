@@ -61,7 +61,6 @@ Versions are globally monotonic safe integers. Compare an entity's current `vers
 
 Last enabled operator/admin protection returns 409: grant another enabled account first. Disabling removes the user's operator grant and revokes every key, while memberships remain inactive. Re-enabling does not revive keys or operator status. Logical deletion additionally removes memberships, records the retired user UUID and changes its name to `Deleted user`; historical actor IDs remain intact. This does not purge all personal data in source documents/transcripts.
 
-Project/repository DELETE physically cascades local evidence, encrypted connections, jobs and projections. Treat this as a destructive operation when building the UI. It does not delete a GitLab repository/MR or Tasktopia task. In-flight accepted external requests cannot be undone by local deletion. Deleted UUIDs return 410 on re-creation; a deleted project's child repository UUIDs are also retired. Other live projects remain independent. Workers cannot publish late local results against removed leases/sources. Retention/archive policy, comprehensive erasure and backup/restore remain separate platform work.
 
 ## Scoped self-delegation
 
@@ -85,7 +84,6 @@ The first 201 response contains `created:true`, key metadata and a one-time `sec
 
 `GET /v1/directory/events?project_id=<UUID>&after_sequence=<integer>&limit=30` returns content-free receipts with `origin` api/offline/oidc. Project management authority can inspect its current project journal; operators can inspect all events or filter a deleted project's ID. `next_sequence` continues the ordered journal. Gaps are normal. Operator/user IDs are pseudonymous metadata; this is not a tamper-proof global audit service and does not yet cover every provider/content operation.
 
-`make smoke-directory` uses the built API, real PostgreSQL and only public catalog/account APIs after bootstrap. It verifies restart/replay, role separation, immutable provider identity, token hierarchy, disable/re-enable/delete, local evidence deletion/tombstones and journal. PostgreSQL race tests add concurrent request identity/admin removal/delegation-revocation, ABA protection, rollback on journal failure and stale index-worker fences. The default full and Linux gates include the module; actual Tasktopia compatibility runs separately. The [OIDC/subject/session backend](identity.md) and human login/project/member/profile/connection views are implemented; operator account and identity-binding operations use the API/CLI. Native CLI/OS-store login and the selected production installation are implemented; external ACL synchronization and broader audit/retention remain outside the current core scope. See [current acceptance](implementation-status.md).
 
 ## Invitation usernames
 
