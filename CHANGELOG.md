@@ -1,5 +1,10 @@
 # Changes
 
+## 0.4.2
+
+- Unified source/server and standalone CLI release 0.4.2, with matching checked macOS/Linux downloads and onboarding version.
+- Includes the portable self-hosting and own-domain configuration improvements from 0.4.1.
+
 ## 0.4.1
 
 - Complete self-hosting guide, visible Compose/runtime env examples and a checked configuration reference.

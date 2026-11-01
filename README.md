@@ -30,7 +30,7 @@ The UI uses React, TypeScript and Tailwind CSS with light/dark themes and Russia
 Use the **[complete self-hosting guide](docs/deployment.md)** for a new Linux server. It covers one-domain app/login, DNS, ACME/HTTPS renewal, private networks, first administrator, registration policy, source connections and publishing the client downloads. `/install.sh` installs the **developer CLI**, not the platform.
 
 1. Point your domain's DNS at the server and prepare Docker Compose, nginx/Certbot and the source-build toolchains.
-2. Check out `v0.4.1` and build the app, operator CLI, PostgreSQL and hosted-account images.
+2. Check out `v0.4.2` and build the app, operator CLI, PostgreSQL and hosted-account images.
 3. Run `gitmorad deployment init` once with the selected overlays; copy [`.env.example`](.env.example) to the private installation's `compose.env` and the [runtime example](deploy/gitmora.runtime.env.example) to its `runtime.env`.
 4. Set `GITMORA_PUBLIC_HOST` to your domain, select an unused private subnet, and run `scripts/render-nginx.py` for that hostname. Obtain the certificate with the HTTP bootstrap config, then activate the HTTPS config.
 5. Initialize/finalize the same-domain account provider, copy its dedicated OIDC client-secret file into the app slot, and start the app.
@@ -71,7 +71,7 @@ make integration
 - [Entire/Git AI import](docs/compatibility.md): explicit versioned formats and preserved provenance, not universal producer compatibility.
 - Phone checks use browser emulation. SMTP recovery, automatic external ACL synchronization, unattended upgrades and a production capacity guarantee are not included.
 
-Source/server release is 0.4.1; the published standalone client is 0.4.0 (0.2.0 remains compatible). See [changes](CHANGELOG.md). Legacy `workgraph` executable aliases, `WORKGRAPH_*` variables and protocols remain compatible. Dependency and copied-template terms are listed in [third-party notices](THIRD_PARTY_NOTICES.md).
+Source/server release is 0.4.2; the published standalone client is 0.4.2 (0.2.0 remains compatible). See [changes](CHANGELOG.md). Legacy `workgraph` executable aliases, `WORKGRAPH_*` variables and protocols remain compatible. Dependency and copied-template terms are listed in [third-party notices](THIRD_PARTY_NOTICES.md).
 
 ## License
 
