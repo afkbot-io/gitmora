@@ -12,7 +12,7 @@ import (
 // NativeStream pins immutable source scope and the latest accepted source-observation branch.
 type NativeStream struct{ RootKey, ActiveKey string }
 
-func (s *Service) recordNativePage(ctx context.Context, worktree string, input domain.Observation, frontiers []string) (string, error) {
+func (s *Service) recordNativePage(ctx context.Context, worktree string, input domain.Observation, frontiers []domain.CheckpointBinding) (string, error) {
 	o, err := domain.Normalize(input)
 	if err != nil || worktree == "" {
 		return "", domain.ErrInvalid

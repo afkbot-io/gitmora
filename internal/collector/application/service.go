@@ -45,6 +45,8 @@ type Transaction interface {
 	Frontier(string) (domain.Frontier, bool, error)
 	SaveFrontier(domain.Frontier) error
 	PendingFrontiers(string) ([]domain.Frontier, error)
+	HeadScope(string) ([]string, bool, error)
+	SaveHeadScope(string, []string) error
 }
 
 // QueuedRevision is immutable content read without holding a lock during HTTP I/O.

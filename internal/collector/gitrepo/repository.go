@@ -215,7 +215,8 @@ func (r *Repository) Reachable(ctx context.Context, input io.Reader) ([]string, 
 	if err != nil || len(raw) > 4*1024*1024 {
 		return nil, domain.ErrInvalid
 	}
-	revisions := []string{}
+	commits := []string{}
+	seen := map[string]bool{}
 	lines := strings.Split(strings.TrimSpace(string(raw)), "\n")
 	if strings.TrimSpace(string(raw)) == "" {
 		return []string{}, nil
@@ -229,27 +230,46 @@ func (r *Repository) Reachable(ctx context.Context, input io.Reader) ([]string, 
 		if isZero(local) {
 			continue
 		}
-		if !capture.ValidCommit(local) || (!isZero(remote) && !capture.ValidCommit(remote)) {
+		if !capture.ValidCommit(local) || !isZero(remote) && !capture.ValidCommit(remote) {
 			return nil, domain.ErrInvalid
 		}
-		revisions = append(revisions, local)
+		kind, err := r.run(ctx, nil, "cat-file", "-t", local)
+		if err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(string(kind)) != "commit" {
+			if _, err := r.run(ctx, nil, "cat-file", "-e", local+"^{commit}"); err != nil {
+				if ctx.Err() != nil {
+					return nil, ctx.Err()
+				}
+				continue
+			}
+		}
+		revisions := []string{local}
 		if !isZero(remote) {
 			if _, err := r.run(ctx, nil, "cat-file", "-e", remote+"^{commit}"); err == nil {
 				revisions = append(revisions, "^"+remote)
+			} else if ctx.Err() != nil {
+				return nil, ctx.Err()
 			}
 		}
-	}
-	if len(revisions) == 0 {
-		return []string{}, nil
-	}
-	output, err := r.run(ctx, strings.NewReader(strings.Join(revisions, "\n")+"\n"), "rev-list", "--stdin")
-	if err != nil {
-		return nil, err
-	}
-	commits := strings.Fields(string(output))
-	for _, sha := range commits {
-		if !capture.ValidCommit(sha) {
-			return nil, domain.ErrInvalid
+		// Each pushed ref has its own negative boundary. Global negatives can erase
+		// another ref's newly published context during a single multi-ref push.
+		output, err := r.run(ctx, strings.NewReader(strings.Join(revisions, "\n")+"\n"), "rev-list", "--stdin")
+		if err != nil {
+			return nil, err
+		}
+		for _, sha := range strings.Fields(string(output)) {
+			if !capture.ValidCommit(sha) {
+				return nil, domain.ErrInvalid
+			}
+			if !seen[sha] {
+				if len(commits) >= 200000 {
+					return nil, domain.ErrInvalid
+				}
+				seen[sha] = true
+				commits = append(commits, sha)
+			}
 		}
 	}
 	return commits, nil
@@ -282,11 +302,28 @@ func commandEnvironment(ctx context.Context, directory string, environment []str
 	return command
 }
 func runEnvironment(ctx context.Context, directory string, input io.Reader, environment []string, args ...string) ([]byte, error) {
-	command := commandEnvironment(ctx, directory, environment, args...)
+	bounded, cancel := context.WithCancel(ctx)
+	defer cancel()
+	command := commandEnvironment(bounded, directory, environment, args...)
 	command.Stdin = input
-	output, err := command.Output()
-	if err != nil {
+	output := &gitOutput{cancel: cancel}
+	command.Stdout = output
+	if err := command.Run(); err != nil {
 		return nil, errors.New("Git query failed")
 	}
-	return output, nil
+	return output.data.Bytes(), nil
+}
+
+// One query can return a large first-push history, but never unbounded output.
+type gitOutput struct {
+	data   bytes.Buffer
+	cancel context.CancelFunc
+}
+
+func (b *gitOutput) Write(p []byte) (int, error) {
+	if b.data.Len()+len(p) > 16*1024*1024 {
+		b.cancel()
+		return 0, errors.New("Git output exceeds byte budget")
+	}
+	return b.data.Write(p)
 }

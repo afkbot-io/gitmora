@@ -121,3 +121,14 @@ test("search deep links pin revision and source position independently of API sc
   ])
     assert.deepEqual(transcriptLocation(hash), { revision: 0, message: null });
 });
+
+test("legacy OpenCode records expose supplied input and result without altering source", () => {
+  const value = toolPresentation({
+    role: "tool",
+    tool_name: "bash",
+    text: 'Input:\n{"command":"git status --short"}\nResult:\nM app.ts',
+  });
+  assert.equal(value.command, "git status --short");
+  assert.equal(value.output, "M app.ts");
+  assert.equal(value.failed, false);
+});

@@ -97,7 +97,28 @@ test("after-tool acquisition failure retains its original HEAD for a later compl
             if (fail) throw new Error("private source error");
             return reply([row(0), row(1), row(2)]);
           }
-          return reply(latest, next);
+          const complete = latest.map((row, i) =>
+            i === 99
+              ? {
+                  ...row,
+                  parts: [
+                    ...row.parts,
+                    {
+                      id: "tool-result",
+                      type: "tool",
+                      callID: "tool",
+                      tool: "bash",
+                      state: {
+                        status: "completed",
+                        input: { command: "git commit" },
+                        output: "Synthetic result",
+                      },
+                    },
+                  ],
+                }
+              : row,
+          );
+          return reply(complete, next);
         },
       },
     },

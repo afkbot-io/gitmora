@@ -17,6 +17,94 @@ import (
 	"workgraph.local/platform/internal/collector/sqlite"
 )
 
+func TestCheckpointRecoveryRejectsOutOfOrderApplication(t *testing.T) {
+	ctx := context.Background()
+	store := open(t, filepath.Join(t.TempDir(), "state.sqlite"))
+	if err := store.Configure(ctx, config); err != nil {
+		t.Fatal(err)
+	}
+	service := application.NewService(store, nil, time.Now)
+	source := domain.NativeSource{Worktree: "tree", Agent: "local-agent", SessionID: "native"}
+	a, b, c := strings.Repeat("a", 40), strings.Repeat("b", 40), strings.Repeat("c", 40)
+	first, err := service.BeginFrontier(ctx, source, "first", a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.EndFrontier(ctx, source, "first", b); err != nil {
+		t.Fatal(err)
+	}
+	second, err := service.BeginFrontier(ctx, source, "second", b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.EndFrontier(ctx, source, "second", c); err != nil {
+		t.Fatal(err)
+	}
+	o := nativeWindow("both", "a", "first task")
+	o.Messages = append(o.Messages, capture.Message{Role: "assistant", Text: "first result"}, capture.Message{Role: "user", Text: "second task"}, capture.Message{Role: "assistant", Text: "second result"})
+	o.History.MessageIDs = []string{strings.Repeat("a", 64), strings.Repeat("b", 64), strings.Repeat("c", 64), strings.Repeat("d", 64)}
+	if _, err = service.RecordNativeCheckpoints(ctx, "tree", o, []domain.CheckpointBinding{{ID: second.ID, MessageEnd: 4}}); err != nil {
+		t.Fatal(err)
+	}
+	partial, err := service.Frontier(ctx, "tree", second.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = service.ApplyFrontier(ctx, "tree", partial, []string{c}); !errors.Is(err, domain.ErrConflict) {
+		t.Fatal("checkpoint consumed context across an unresolved tool", err)
+	}
+	if _, err = service.RecordNativeCheckpoints(ctx, "tree", o, []domain.CheckpointBinding{{ID: first.ID, MessageEnd: 2}, {ID: second.ID, MessageEnd: 4}}); err != nil {
+		t.Fatal(err)
+	}
+	second, err = service.Frontier(ctx, "tree", second.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = service.ApplyFrontier(ctx, "tree", second, []string{c}); !errors.Is(err, domain.ErrConflict) {
+		t.Fatal("later checkpoint consumed earlier context", err)
+	}
+	if err = store.SetCollection(ctx, false, source.Agent); err != nil {
+		t.Fatal(err)
+	}
+	blocked, err := service.Frontier(ctx, "tree", first.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = service.ApplyFrontier(ctx, "tree", blocked, []string{b}); !errors.Is(err, domain.ErrDisabled) {
+		t.Fatal("disabled agent recovered checkpoint", err)
+	}
+	if err = store.SetCollection(ctx, true, source.Agent); err != nil {
+		t.Fatal(err)
+	}
+	first, err = service.Frontier(ctx, "tree", first.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = service.ApplyFrontier(ctx, "tree", first, []string{b}); err != nil {
+		t.Fatal(err)
+	}
+	if err = service.ApplyFrontier(ctx, "tree", second, []string{c}); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.Within(ctx, func(tx application.Transaction) error {
+		e, found, err := tx.FindSession(second.TargetSessionID)
+		if err != nil {
+			return err
+		}
+		if !found {
+			t.Fatal("missing checkpoint target")
+		}
+		ranges := e.Recording.State().Snapshot.CommitRanges
+		if len(ranges) != 2 || ranges[0].Start != 0 || ranges[0].End != 2 || ranges[1].Start != 2 || ranges[1].End != 4 {
+			t.Fatal("checkpoint intervals overlap", ranges)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+}
+
 func TestFrontierRestartPinsTaskEndAndExactReplayTarget(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "state.sqlite")
@@ -229,7 +317,7 @@ func TestFrontierVersionThreeMigrationAndFutureRefusal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := old.Exec(`DROP TABLE native_frontiers;DROP TABLE native_frontier_sources;PRAGMA user_version=3;`); err != nil {
+	if _, err := old.Exec(`DROP TABLE IF EXISTS git_frontier_scopes; DROP TABLE IF EXISTS git_head_scopes; DROP TABLE native_frontiers;DROP TABLE native_frontier_sources;PRAGMA user_version=3;`); err != nil {
 		t.Fatal(err)
 	}
 	if err := old.Close(); err != nil {
@@ -253,7 +341,7 @@ func TestFrontierVersionThreeMigrationAndFutureRefusal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := future.Exec(`PRAGMA user_version=6`); err != nil {
+	if _, err := future.Exec(`PRAGMA user_version=7`); err != nil {
 		t.Fatal(err)
 	}
 	if err := future.Close(); err != nil {

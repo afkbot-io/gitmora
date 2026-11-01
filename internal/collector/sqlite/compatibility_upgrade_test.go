@@ -40,7 +40,7 @@ func TestVersionFourOriginCapabilityUpgradePreservesNativeStateAndFrontiers(t *t
 	if err := legacy.QueryRow("SELECT state FROM recordings WHERE session_id=?", id).Scan(&state); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := legacy.Exec("PRAGMA user_version=4"); err != nil {
+	if _, err := legacy.Exec("DROP TABLE git_frontier_scopes; DROP TABLE git_head_scopes; PRAGMA user_version=4"); err != nil {
 		t.Fatal(err)
 	}
 	if err := legacy.Close(); err != nil {
@@ -62,7 +62,7 @@ func TestVersionFourOriginCapabilityUpgradePreservesNativeStateAndFrontiers(t *t
 	defer check.Close()
 	var version int
 	var unchanged []byte
-	if err := check.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != 5 {
+	if err := check.QueryRow("PRAGMA user_version").Scan(&version); err != nil || version != 6 {
 		t.Fatal("older clients can silently drop origin fields", version, err)
 	}
 	if err := check.QueryRow("SELECT state FROM recordings WHERE session_id=?", id).Scan(&unchanged); err != nil || string(unchanged) != string(state) {

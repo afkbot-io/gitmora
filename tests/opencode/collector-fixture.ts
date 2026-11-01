@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { frontierID } from "../../internal/agent/opencode/assets/workgraph/collector.js";
 import type {
   Collector,
   Frontier,
@@ -26,7 +28,11 @@ export function collectorFixture(
       const probe = await ports.probe(directory);
       if (!probe) throw new Error("Uninitialized");
       journal.set(key, {
-        id: (journal.size + 1).toString(16).padStart(64, "0"),
+        id: frontierID(
+          createHash("sha256").update(session).digest("hex"),
+          call,
+        ),
+        nativeKey: createHash("sha256").update(session).digest("hex"),
         sourceSessionID: session,
         before: probe.head,
         after: null,
@@ -46,7 +52,7 @@ export function collectorFixture(
     frontiers: async () => [...journal.values()],
     record: async (directory, observation, ids, deliver) => {
       const selected = [...journal.entries()].filter(([, value]) =>
-        ids?.includes(value.id),
+        ids?.some((binding) => binding.id === value.id),
       );
       const ok = await ports.record(
         directory,

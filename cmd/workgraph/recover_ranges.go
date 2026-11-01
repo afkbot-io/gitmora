@@ -31,7 +31,7 @@ func recoverRanges(parent context.Context, args []string, out io.Writer) error {
 	}
 	ctx, cancel := context.WithTimeout(parent, 60*time.Second)
 	defer cancel()
-	repo, err := gitrepo.Discover(ctx, ".")
+	repo, err := gitrepo.DiscoverLocal(ctx, ".")
 	if err != nil {
 		return err
 	}
@@ -83,17 +83,22 @@ func recoverRanges(parent context.Context, args []string, out io.Writer) error {
 			return err
 		}
 	}
-	head, err := repo.HeadID(ctx)
+	service := application.NewService(ledger, nil, time.Now)
+	prefixes, err := service.RecoveryPrefixes(ctx, repo.WorktreeKey(), *id)
 	if err != nil {
 		return err
 	}
-	commits, err := repo.HeadWindow(ctx, "", head)
+	commits, err := repo.ResolveCommitPrefixes(ctx, prefixes)
 	if err != nil {
 		return err
 	}
-	count, err := application.NewService(ledger, nil, time.Now).RecoverCommitRanges(ctx, repo.WorktreeKey(), *id, commits)
+	report, err := service.RecoverCommitRanges(ctx, repo.WorktreeKey(), *id, commits)
 	if err != nil {
 		return err
 	}
-	return json.NewEncoder(out).Encode(map[string]any{"ranges": count, "basis": "recovered_git_output", "status": "queued"})
+	status := "unchanged"
+	if report.UpdatedWindows > 0 {
+		status = "queued"
+	}
+	return json.NewEncoder(out).Encode(map[string]any{"ranges": report.Ranges, "updated_windows": report.UpdatedWindows, "basis": "recovered_git_output", "status": status})
 }

@@ -3,7 +3,6 @@
 import datetime as dt
 import json
 import os
-import shutil
 from pathlib import Path
 import socket
 import subprocess
@@ -27,19 +26,9 @@ def main():
             assert result.returncode == 0, "Deployment CLI command failed"
             return json.loads(result.stdout) if result.stdout.strip() else None
 
-        profile = os.environ.get("GITMORA_DEPLOYMENT_TEST_PROFILE") == "tasktopia"
-        if profile:
-            # Distinct from the selected server's subnet and existing personal development projects.
-            os.environ.setdefault("GITMORA_PRIVATE_SUBNET", "10.249.88.0/24")
-            os.environ.setdefault("GITMORA_PRIVATE_GATEWAY", "10.249.88.1")
-        overlay_args = ["--overlay", str(ROOT / "deploy/compose.tasktopia.yaml")] if profile else []
-        installation = cli(["init", "--directory", str(state), "--compose", str(ROOT / "compose.yaml"), "--port", str(port), "--image", os.environ.get("GITMORA_DEPLOYMENT_TEST_IMAGE", "gitmora:local"), *overlay_args])
-        if profile:
-            shutil.copyfile(ROOT / "deploy/gitmora.runtime.env.example", state / "runtime.env")
+        installation = cli(["init", "--directory", str(state), "--compose", str(ROOT / "compose.yaml"), "--port", str(port), "--image", os.environ.get("GITMORA_DEPLOYMENT_TEST_IMAGE", "gitmora:local")])
         environment = {**os.environ, "WORKGRAPH_STATE_DIR": str(state), "WORKGRAPH_HTTP_PORT": str(port), "WORKGRAPH_IMAGE": installation["image"]}
         prefix = ["docker", "compose", "--project-name", "gitmora-" + installation["id"].replace("-", ""), "--project-directory", str(ROOT), "--file", str(ROOT / "compose.yaml")]
-        if profile:
-            prefix += ["--file", str(ROOT / "deploy/compose.tasktopia.yaml")]
 
         def compose(args, data=None, check=True, timeout=120):
             result = subprocess.run([*prefix, *args], env=environment, cwd=ROOT, input=data, capture_output=True, timeout=timeout)

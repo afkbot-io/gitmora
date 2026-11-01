@@ -1,5 +1,9 @@
-import { normalizePages, object } from "./normalize.js";
-import type { Collector } from "./collector.js";
+import { normalizeWindows, object } from "./normalize.js";
+import {
+  frontierID,
+  type CheckpointBinding,
+  type Collector,
+} from "./collector.js";
 import {
   readHistory,
   type HistoryQuery,
@@ -67,7 +71,7 @@ export class Coordinator {
       sessionID,
       this.directory,
     );
-    const pages = normalizePages(
+    const pages = normalizeWindows(
       session.data,
       messages,
       probe.root,
@@ -75,20 +79,32 @@ export class Coordinator {
       this.sourceRoot,
     );
     if (!pages.length) return probe.head;
-    for (const [i, observation] of pages.entries()) {
-      const last = i === pages.length - 1;
+    const matched = new Set<string>();
+    for (const [i, window] of pages.entries()) {
+      const bindings: CheckpointBinding[] = [];
+      for (const [callID, messageEnd] of window.toolEnds) {
+        const entry = selected.find(
+          (entry) => entry.id === frontierID(entry.nativeKey, callID),
+        );
+        if (entry) {
+          bindings.push({ id: entry.id, messageEnd });
+          matched.add(entry.id);
+        }
+      }
+      bindings.sort((a, b) => a.messageEnd - b.messageEnd);
       if (
         !(await this.collector.record(
           this.directory,
-          observation,
-          last ? selected.map((entry) => entry.id) : [],
-          last,
+          window.observation,
+          bindings,
+          i === pages.length - 1,
         ))
       )
         throw new Error("Collector rejected observation");
+      for (const binding of bindings)
+        await this.collector.apply(this.directory, binding.id);
     }
-    for (const entry of selected)
-      await this.collector.apply(this.directory, entry.id);
+    if (selected.some((entry) => !matched.has(entry.id))) this.report();
     this.active.add(sessionID);
     return probe.head;
   }
