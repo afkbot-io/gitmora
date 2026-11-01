@@ -87,3 +87,33 @@ func TestProviderTokenSuffixesAreCompletelyRemoved(t *testing.T) {
 		}
 	}
 }
+
+func TestConversationCredentialsAndLegacyCanonicalPolicy(t *testing.T) {
+	for _, prefix := range []string{"пароль пока сделай ", "пароль поставь ", "пароль: ", "**Пароль:** ", "password is ", "set the password "} {
+		input := prefix + "unitSecret71!" + ", потом поменяю"
+		got := redact.Conversation(input)
+		if strings.Contains(got, "unitSecret71!") || !strings.HasSuffix(got, ", потом поменяю") || redact.Conversation(got) != got {
+			t.Fatal("conversation credential retained or unstable", prefix)
+		}
+	}
+	legacy := "пароль пока сделай unitSecret71!"
+	if redact.Text(legacy) != legacy {
+		t.Fatal("historical canonical policy changed")
+	}
+	ordinary := "Пароль вводится скрыто. Configure password fields."
+	if redact.Conversation(ordinary) != ordinary {
+		t.Fatal("ordinary explanatory text changed")
+	}
+}
+
+func FuzzConversationProjectionIdempotence(f *testing.F) {
+	for _, s := range []string{"пароль пока сделай synthetic71!, потом поменяю", `**Password:** "synthetic value")`, `пароль: "one"password="two"`, `set the password synthetic71!`} {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, s string) {
+		v := redact.Conversation(s)
+		if redact.Conversation(v) != v {
+			t.Fatal("conversation projection changed on replay")
+		}
+	})
+}

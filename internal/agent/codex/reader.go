@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"os/exec"
 	"path/filepath"
@@ -73,9 +75,25 @@ func (p *protocol) call(method string, params any, destination any) error {
 	return ErrProtocol
 }
 
+var errHistoryChanged = fmt.Errorf("Codex history changed during pagination: %w", ErrProtocol)
+
+// Read retries a changing source up to three times within the same total metadata deadline.
+// Each attempt discards its incomplete view; mixed pagination snapshots are never accepted.
+func (r Reader) Read(parent context.Context, threadID, root string) (Thread, []Entry, error) {
+	ctx, cancel := context.WithTimeout(parent, 12*time.Second)
+	defer cancel()
+	for attempt := 0; attempt < 3; attempt++ {
+		t, entries, err := r.readOnce(ctx, threadID, root)
+		if !errors.Is(err, errHistoryChanged) || ctx.Err() != nil {
+			return t, entries, err
+		}
+	}
+	return Thread{}, nil, errHistoryChanged
+}
+
 // Read acquires a bounded ascending history, fenced by metadata before and after pagination.
 // Callers must check repository consent before invoking it.
-func (r Reader) Read(parent context.Context, threadID, root string) (thread Thread, entries []Entry, err error) {
+func (r Reader) readOnce(parent context.Context, threadID, root string) (thread Thread, entries []Entry, err error) {
 	if !filepath.IsAbs(r.Executable) || !filepath.IsAbs(root) || !locator(threadID) ||
 		(r.Socket != "" && !filepath.IsAbs(r.Socket)) {
 		return thread, nil, ErrProtocol
@@ -173,7 +191,7 @@ func (r Reader) Read(parent context.Context, threadID, root string) (thread Thre
 		if err = p.call("thread/items/list", params, &response); err != nil {
 			return thread, nil, err
 		}
-		if response.Data == nil || len(response.Data) > 100 || len(entries)+len(response.Data) > 10000 {
+		if response.Data == nil || len(response.Data) > 100 || len(entries)+len(response.Data) > maxHistoryItems {
 			return thread, nil, ErrProtocol
 		}
 		entries = append(entries, response.Data...)
@@ -183,6 +201,9 @@ func (r Reader) Read(parent context.Context, threadID, root string) (thread Thre
 				return thread, nil, e
 			}
 			if final != thread {
+				if final.ID == thread.ID && final.CWD == thread.CWD && final.CreatedAt == thread.CreatedAt {
+					return thread, nil, errHistoryChanged
+				}
 				return thread, nil, ErrProtocol
 			}
 			return thread, entries, nil

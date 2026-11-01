@@ -88,3 +88,23 @@ func TestUserFragmentsRemainDistinctWithoutInventedSeparators(t *testing.T) {
 		t.Fatal("native fragment boundaries changed", messages)
 	}
 }
+
+func TestConversationPasswordIsMaskedBeforeNativeFragmentation(t *testing.T) {
+	thread := codex.Thread{ID: "thread", CWD: "/workspace/repo", CreatedAt: 1793318400}
+	text := strings.Repeat("x", 65520) + " пароль пока сделай unitSecret71!, потом поменяю"
+	h, e := codex.Normalize(thread, []codex.Entry{item("user", "userMessage", map[string]any{"content": []any{map[string]any{"type": "text", "text": text}}})}, "unknown", "unknown", thread.CWD)
+	if e != nil {
+		t.Fatal(e)
+	}
+	var joined strings.Builder
+	count := 0
+	for _, w := range h.Windows {
+		for _, m := range w.Observation.Messages {
+			joined.WriteString(m.Text)
+			count++
+		}
+	}
+	if count < 2 || strings.Contains(joined.String(), "unitSecret71!") || !strings.Contains(joined.String(), "[REDACTED], потом поменяю") {
+		t.Fatal("password split across exposed fragments")
+	}
+}
