@@ -11,6 +11,14 @@ import time
 ROOT = Path(__file__).resolve().parent.parent
 
 
+def owned_http_paths(folder):
+    """Keep packaged nginx log/temp defaults inside the unprivileged fixture prefix."""
+    paths = "access_log off;\n"
+    for kind in ["client_body", "proxy", "fastcgi", "uwsgi", "scgi"]:
+        paths += kind + "_temp_path " + json.dumps(str(folder / (kind + "-temp"))) + ";\n"
+    return paths
+
+
 @contextmanager
 def loopback_proxy(folder, public_port, api_port, identity_port, *, download_root=None):
     """Run only an owned nginx process; preserve the production route policy for same-origin browser acceptance."""
@@ -34,10 +42,10 @@ def loopback_proxy(folder, public_port, api_port, identity_port, *, download_roo
         source = source.replace("root /srv/gitmora-public;", "root " + json.dumps(str(download_root)) + ";")
     config = folder / "edge-nginx.conf"
     user = "user root;\n" if os.geteuid() == 0 else ""
-    config.write_text(user + "worker_processes 1;\npid " + str(folder / "edge-nginx.pid") + ";\nerror_log " + str(folder / "edge-bootstrap.log") + " warn;\nevents { worker_connections 128; }\nhttp {\n" + source + "\n}\n")
-    checked = subprocess.run([nginx, "-p", str(folder), "-c", str(config), "-t"], capture_output=True, timeout=10)
-    assert checked.returncode == 0, "Shared-origin fixture nginx configuration invalid"
-    process = subprocess.Popen([nginx, "-p", str(folder), "-c", str(config), "-g", "daemon off;"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    config.write_text(user + "worker_processes 1;\npid " + str(folder / "edge-nginx.pid") + ";\nerror_log " + str(folder / "edge-bootstrap.log") + " warn;\nevents { worker_connections 128; }\nhttp {\n" + owned_http_paths(folder) + source + "\n}\n")
+    checked = subprocess.run([nginx, "-e", "stderr", "-p", str(folder), "-c", str(config), "-t"], capture_output=True, timeout=10)
+    assert checked.returncode == 0, "Shared-origin fixture nginx configuration invalid: " + checked.stderr.decode(errors="replace")[-2000:]
+    process = subprocess.Popen([nginx, "-e", "stderr", "-p", str(folder), "-c", str(config), "-g", "daemon off;"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
         for _ in range(100):
             assert process.poll() is None, "Owned shared-origin nginx exited"

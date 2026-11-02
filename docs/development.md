@@ -1,6 +1,6 @@
 # Development and verification
 
-Use the Go toolchain selected by `go.mod`, Node.js 22.22+, npm, Python 3.12+ and Docker Compose. Native/provider proxy gates also use nginx/OpenSSL. Confirm `python3 --version`: some macOS installations select an obsolete framework interpreter. Put the supported interpreter on PATH before running the make targets. Install dependencies and the pinned browser engines:
+Use the Go toolchain selected by `go.mod`, Node.js 22.22+, npm, Python 3.12+ and Docker Compose. Use GNU make; Go race tests require a C compiler (GCC/Clang and CGO enabled). Native/provider proxy gates also use nginx/OpenSSL. Confirm `python3 --version`: some macOS installations select an obsolete framework interpreter. Put the supported interpreter on PATH before running the make targets. Install dependencies and the pinned browser engines:
 
 ```sh
 npm ci

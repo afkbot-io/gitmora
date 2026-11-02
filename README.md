@@ -19,7 +19,7 @@
 ## Развернуть свой сервер с нуля
 
 Понадобятся Linux, домен с A-записью на ваш сервер, открытые 80/443,
-Docker Engine с Compose v2, nginx, Certbot, Git 2.43+, Python 3.12+,
+Docker Engine с Compose v2, nginx, Certbot, make, curl, Git 2.43+, Python 3.12+,
 Node.js 22.22+/npm и Go из `go.mod`. GPU и ключ модели серверу не нужны.
 Порты БД, API и сервиса входа остаются закрыты снаружи. Требования к памяти
 и сети приведены в [подготовке сервера](docs/deployment.md#1-подготовить-сервер-и-dns).
@@ -102,7 +102,7 @@ gitmora status
 ## Разработка и проверки
 
 Клиент поддерживает macOS и Linux. Для работы с Git нужен Git 2.43+;
-интеграционные проверки требуют Docker Compose и Python 3.12+. Для хранения
+интеграционные проверки требуют Docker Compose, Python 3.12+ и C-компилятор для Go race. Для хранения
 учётных данных CLI нужен Keychain в macOS или разблокированный Secret Service
 в Linux.
 
