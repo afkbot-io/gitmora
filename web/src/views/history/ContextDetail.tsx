@@ -32,14 +32,12 @@ export function ContextDetail({
   selection,
   provider,
   onNavigate,
-  onOpenEvidence,
   onBack,
 }: {
   client: ApiClient;
   selection: Selection;
   provider: "github" | "gitlab";
   onNavigate: (q: Selection, fromMR?: number) => void;
-  onOpenEvidence: (hit: Hit) => void;
   onBack: () => void;
 }) {
   const heading = useRef<HTMLHeadingElement>(null);
@@ -445,14 +443,7 @@ export function ContextDetail({
                       </button>
                     ))}
                 </div>
-                {code && (
-                  <Evidence
-                    key={code.id}
-                    client={client}
-                    hit={code}
-                    onOpen={onOpenEvidence}
-                  />
-                )}
+                {code && <Evidence key={code.id} client={client} hit={code} />}
               </section>
             )}
           {!selection.session_id &&

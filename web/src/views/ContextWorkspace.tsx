@@ -233,18 +233,6 @@ export function ContextWorkspace({
             : "gitlab"
         }
         onNavigate={(q, fromMR) => open(q, undefined, fromMR)}
-        onOpenEvidence={(source) => {
-          if (source.source.repository_id && source.source.session_id)
-            open(
-              {
-                project_id: project.id,
-                repository_id: source.source.repository_id,
-                session_id: source.source.session_id,
-              },
-              source,
-              selection.merge_request_iid,
-            );
-        }}
         onBack={() => {
           location.hash = new URLSearchParams({
             view: "context",

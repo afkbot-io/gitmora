@@ -16,7 +16,7 @@ export function Evidence({
 }: {
   client: ApiClient;
   hit: Hit;
-  onOpen: (hit: Hit) => void;
+  onOpen?: (hit: Hit) => void;
 }) {
   const [expanded, setExpanded] = useState<Expanded | null>(null);
   const [offset, setOffset] = useState(0);
@@ -158,7 +158,8 @@ export function Evidence({
           <dd>{date(hit.observed_at)}</dd>
         </dl>
       </details>
-      {hit.kind === "code" &&
+      {onOpen &&
+        hit.kind === "code" &&
         source.repository_id &&
         source.commit_sha &&
         source.file_path && (
