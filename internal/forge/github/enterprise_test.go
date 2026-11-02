@@ -26,7 +26,7 @@ func TestEnterpriseTokenLookupIdentityAndPrefixedPagination(t *testing.T) {
 	}))
 	defer server.Close()
 	web = server.URL + "/forge"
-	router, e := NewRouter("https://api.github.com", "", []string{web}, true)
+	router, e := NewRouterWithEnterpriseProxy("https://api.github.com", "", "", []string{web}, true)
 	if e != nil {
 		t.Fatal(e)
 	}

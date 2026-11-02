@@ -2,7 +2,7 @@
 # Certbot deploy hook: reload only after this installation's successful renewal.
 set -eu
 
-if [ "${RENEWED_LINEAGE:-}" = /etc/letsencrypt/live/gitmora.tasktopia.online ]; then
+if [ "${RENEWED_LINEAGE:-}" = /etc/letsencrypt/live/gitmora.example.com ]; then
     /usr/sbin/nginx -t
     /usr/bin/systemctl reload nginx
 fi

@@ -23,14 +23,23 @@ func nativeWindow(event, page, text string) domain.Observation {
 	return o
 }
 
-func TestLateHeadAssociationSealsOtherAuthorizedDirtyWindows(t *testing.T) {
+func TestLateCheckpointSealsOtherAuthorizedDirtyWindows(t *testing.T) {
 	ctx := context.Background()
 	store := open(t, filepath.Join(t.TempDir(), "state.sqlite"))
 	if err := store.Configure(ctx, config); err != nil {
 		t.Fatal(err)
 	}
 	service := application.NewService(store, nil, time.Now)
-	root, err := service.RecordNative(ctx, "tree", nativeWindow("root", "a", "Earlier window"))
+	source := domain.NativeSource{Worktree: "tree", Agent: "local-agent", SessionID: "native"}
+	before, sha := strings.Repeat("b", 40), strings.Repeat("a", 40)
+	frontier, err := service.BeginFrontierWithHeads(ctx, source, "late-checkpoint", before, []string{before})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.EndFrontier(ctx, source, "late-checkpoint", sha); err != nil {
+		t.Fatal(err)
+	}
+	root, err := service.RecordNativeCheckpoints(ctx, "tree", nativeWindow("root", "a", "Earlier window"), []domain.CheckpointBinding{{ID: frontier.ID, MessageEnd: 1}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,11 +47,14 @@ func TestLateHeadAssociationSealsOtherAuthorizedDirtyWindows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sha := strings.Repeat("a", 40)
 	if err := service.PreparePush(ctx, []string{sha}); err != nil {
 		t.Fatal(err)
 	}
-	if err := service.AssociateSession(ctx, "tree", root, []string{sha}); err != nil {
+	frontier, err = service.EndFrontier(ctx, source, "late-checkpoint", sha)
+	if err != nil || frontier.TargetSessionID != root {
+		t.Fatal("late checkpoint moved to another source window", err)
+	}
+	if err := service.ApplyFrontier(ctx, "tree", frontier, []string{sha}); err != nil {
 		t.Fatal(err)
 	}
 	queue, err := store.Pending(ctx, time.Now(), 64)
@@ -54,7 +66,7 @@ func TestLateHeadAssociationSealsOtherAuthorizedDirtyWindows(t *testing.T) {
 			return
 		}
 	}
-	t.Fatal("late association left another authorized window unsealed")
+	t.Fatal("late checkpoint left another authorized window unsealed")
 }
 
 func TestVersionTwoNativePinContinuesWithOriginalTaskAndConsent(t *testing.T) {

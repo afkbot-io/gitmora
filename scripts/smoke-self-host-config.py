@@ -103,6 +103,19 @@ def main():
                 "WORKGRAPH_IMAGE": "gitmora:configuration-fixture",
                 "WORKGRAPH_HTTP_PORT": str(18080 + number),
             }
+            empty_policy = folder / "empty.env"
+            empty_policy.write_text("")
+            missing_host = subprocess.run(
+                ["docker", "compose", "--env-file", str(empty_policy),
+                 "-f", str(ROOT / "compose.yaml"),
+                 "-f", str(ROOT / "deploy/compose.identity.yaml"),
+                 "-f", str(ROOT / "deploy/compose.identity-auth.yaml"),
+                 "config", "--quiet"],
+                env=config_env, capture_output=True, text=True, timeout=30,
+            )
+            assert missing_host.returncode != 0 and "GITMORA_PUBLIC_HOST" in missing_host.stderr, (
+                "Missing domain silently selected another installation"
+            )
             profile = json.loads(
                 subprocess.check_output(
                     [*command, "config", "--format", "json"],

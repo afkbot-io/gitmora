@@ -4,7 +4,7 @@ The web application, hosted password forms under `/auth/`, and CLI consent use o
 
 ## Registration policy
 
-Public registration is enabled on the selected `gitmora.tasktopia.online` installation at the user's request. Use “Создать аккаунт” on the public page. This creates an ordinary account; a user can create their own project or receive an invitation to an existing one. New installations still default to closed registration.
+New installations default to closed registration. When the operator enables it, “Создать аккаунт” appears on the public page and creates an ordinary account. The user can then create a project or join an existing one.
 
 Set `WORKGRAPH_REGISTRATION_ENABLED=false` in the private application `runtime.env` to close registration. The default is `false`; only literal `true` opens it. Invalid values stop startup. Restart the selected API so it applies the policy, then apply the same value to the hosted provider:
 

@@ -17,8 +17,10 @@ import threading
 import time
 import uuid
 
+from identity_proxy_fixture import owned_http_paths
+
 ROOT = Path(__file__).resolve().parent.parent
-HOST = "gitmora.tasktopia.online"
+HOST = "gitmora.example.test"
 PG_IMAGE = "gitmora-postgres:18.6-security1"
 
 
@@ -150,7 +152,7 @@ def request(port, path, *, tls=None, hostname=HOST, method="GET", body=None, hea
 def main():
     nginx = shutil.which(os.environ.get("GITMORA_NGINX", "nginx"))
     assert nginx, "Install native nginx or set GITMORA_NGINX to its explicit binary"
-    source = (ROOT / "deploy/nginx/gitmora.https.conf").read_text()
+    source = (ROOT / "deploy/nginx/gitmora.https.conf").read_text().replace("gitmora.example.com", HOST)
     with tempfile.TemporaryDirectory(prefix="gitmora-identity-proxy-") as temporary, private_network() as private, ExitStack() as resources:
         folder = Path(temporary)
         certificates(folder)
@@ -211,9 +213,9 @@ def main():
                 source = source.replace(before, after)
             config = folder / "nginx.conf"
             user = "user root;\n" if os.geteuid() == 0 else ""
-            config.write_text(user + "worker_processes 1;\npid " + str(folder / "nginx.pid") + ";\nerror_log " + str(folder / "error.log") + " warn;\nevents { worker_connections 128; }\nhttp {\n" + source + "\n}\n")
-            execute([nginx, "-p", str(folder), "-c", str(config), "-t"])
-            process = subprocess.Popen([nginx, "-p", str(folder), "-c", str(config), "-g", "daemon off;"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            config.write_text(user + "worker_processes 1;\npid " + str(folder / "nginx.pid") + ";\nerror_log " + str(folder / "error.log") + " warn;\nevents { worker_connections 128; }\nhttp {\n" + owned_http_paths(folder) + source + "\n}\n")
+            execute([nginx, "-e", "stderr", "-p", str(folder), "-c", str(config), "-t"])
+            process = subprocess.Popen([nginx, "-e", "stderr", "-p", str(folder), "-c", str(config), "-g", "daemon off;"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             for _ in range(100):
                 assert process.poll() is None, "Owned nginx exited"
                 try:

@@ -3,7 +3,7 @@
 services:
   api:
     extra_hosts:
-      - "${GITMORA_PUBLIC_HOST:-gitmora.tasktopia.online}:${GITMORA_PRIVATE_GATEWAY:-172.30.88.1}"
+      - "${GITMORA_PUBLIC_HOST:?Set GITMORA_PUBLIC_HOST in the private compose.env}:${GITMORA_PRIVATE_GATEWAY:-172.30.88.1}"
 
 # The identity route works on its own private subnet.
 networks:

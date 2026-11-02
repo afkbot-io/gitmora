@@ -20,7 +20,7 @@ var contentTypes = map[string]string{
 	".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
 	".woff": "font/woff", ".woff2": "font/woff2", ".svg": "image/svg+xml",
 	".txt": "text/plain; charset=utf-8",
-	".sh": "text/plain; charset=utf-8",
+	".sh":  "text/plain; charset=utf-8",
 }
 
 // Embedded returns application bytes built before the Go binary is compiled.

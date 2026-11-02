@@ -65,7 +65,21 @@ class Stack:
             return response.status, json.load(response)
 
     def up(self):
-        self.cli(["up", "--directory", str(self.state)])
+        try:
+            self.cli(["up", "--directory", str(self.state)])
+        except Exception:
+            # Retain this owned synthetic stack's failure before finally removes it.
+            diagnostic = self.compose(["logs", "--no-color", "--tail", "30"], check=False).stdout.decode(errors="replace")
+            diagnostic += self.compose(["ps", "--all"], check=False).stdout.decode(errors="replace")
+            for secret in (self.state / "secrets").iterdir():
+                value = secret.read_text().strip()
+                if value:
+                    diagnostic = diagnostic.replace(value, "[redacted]")
+            path = ROOT / "build/recovery-debug.log"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(diagnostic)
+            path.chmod(0o600)
+            raise
 
     def close(self):
         result = self.compose(["down", "--volumes", "--remove-orphans"], check=False)

@@ -20,6 +20,8 @@ import urllib.error
 import urllib.request
 import uuid
 
+from identity_proxy_fixture import owned_http_paths
+
 ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -161,16 +163,18 @@ def main():
                 + ";\nerror_log "
                 + str(folder / "error.log")
                 + ";\nevents {worker_connections 128;}\nhttp {\n"
+                + owned_http_paths(folder)
                 + conf
                 + "\n}\n"
             )
-            subprocess.run(
-                [nginx, "-p", str(folder), "-c", str(config), "-t"],
-                check=True,
+            checked = subprocess.run(
+                [nginx, "-e", "stderr", "-p", str(folder), "-c", str(config), "-t"],
                 capture_output=True,
+                timeout=10,
             )
+            assert checked.returncode == 0, "Owned nginx configuration invalid: " + checked.stderr.decode(errors="replace")[-2000:]
             proxy = subprocess.Popen(
-                [nginx, "-p", str(folder), "-c", str(config), "-g", "daemon off;"],
+                [nginx, "-e", "stderr", "-p", str(folder), "-c", str(config), "-g", "daemon off;"],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
@@ -303,7 +307,8 @@ def main():
                 raw = bridge.stdout.readline()
                 if not raw:
                     diagnostic = bridge.stderr.read().replace(token, "[redacted]")
-                    target = ROOT / "build/live-review/self-host-mcp-diagnostic.log"
+                    target = ROOT / "build/custom-server/mcp-diagnostic.log"
+                    target.parent.mkdir(parents=True, exist_ok=True)
                     target.write_text(diagnostic)
                     target.chmod(0o600)
                     raise AssertionError(
@@ -423,7 +428,8 @@ def main():
         except Exception:
             trace = folder / "access.log"
             if trace.exists():
-                diagnostic = ROOT / "build/live-review/self-host-custom-tls-access.log"
+                diagnostic = ROOT / "build/custom-server/tls-access.log"
+                diagnostic.parent.mkdir(parents=True, exist_ok=True)
                 diagnostic.write_text(trace.read_text().replace(token, "[redacted]"))
                 diagnostic.chmod(0o600)
             raise

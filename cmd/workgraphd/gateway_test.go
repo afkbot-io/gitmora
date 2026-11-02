@@ -32,7 +32,7 @@ func TestGatewayAlwaysUsesFixedBackendAndDoesNotNeedDatabaseSecrets(t *testing.T
 	}))
 	defer backend.Close()
 	target, _ := url.Parse(backend.URL)
-	proxy := httptest.NewServer(gatewayHandler(target))
+	proxy := httptest.NewServer(gatewayHandlerWithIdentity(target, nil, ""))
 	defer proxy.Close()
 	r, _ := http.NewRequest("POST", proxy.URL+"/v1/captures", strings.NewReader("payload"))
 	r.Host = "external.invalid"
@@ -62,7 +62,7 @@ func TestGatewayExplicitPublicOriginOverwritesUntrustedProxyAuthority(t *testing
 	defer backend.Close()
 	target, _ := url.Parse(backend.URL)
 	origin, _ := url.Parse("https://identity.internal:8443")
-	proxy := httptest.NewServer(gatewayHandlerWithOrigin(target, origin))
+	proxy := httptest.NewServer(gatewayHandlerWithIdentity(target, origin, ""))
 	defer proxy.Close()
 	req, _ := http.NewRequest("GET", proxy.URL+"/realms/gitmora", nil)
 	req.Host = "forged.invalid"

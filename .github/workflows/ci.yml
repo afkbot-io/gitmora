@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  checks:
+    name: Source checks (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22.22.2'
+          cache: npm
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+      - run: npm ci
+      - name: TypeScript, interface copy, agent contracts and format
+        run: |
+          npm run check:format:web
+          npm run test:web
+          npm run test:agents
+      - name: Build, Go format, vet, unit tests and configuration
+        run: |
+          make build
+          mkdir -p build
+          gofmt -l cmd internal > build/gofmt.txt
+          cat build/gofmt.txt
+          test ! -s build/gofmt.txt
+          make vet test check-config
+      - name: Scan Git history for secrets
+        if: runner.os == 'Linux'
+        run: go run github.com/zricethezav/gitleaks/v8@v8.30.1 git --redact --no-banner --log-opts='--all'
+
+  release:
+    name: Linux release verification
+    needs: checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22.22.2'
+          cache: npm
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.13'
+      - name: Install native verification prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y nginx openssl libsecret-tools gnome-keyring dbus-x11
+          npm ci
+          npx playwright install --with-deps chromium webkit firefox
+          npm install --prefix "$RUNNER_TEMP/gitmora-codex" --ignore-scripts --no-audit --no-fund @openai/codex@0.164.0-alpha.11.1
+          "$RUNNER_TEMP/gitmora-codex/node_modules/.bin/codex" --version
+          echo "GITMORA_TEST_CODEX=$RUNNER_TEMP/gitmora-codex/node_modules/.bin/codex" >> "$GITHUB_ENV"
+      - name: Full release gates and separate bounded load check
+        run: bash .github/scripts/verify-linux.sh
+      - name: Load measurements
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: load-measurements
+          path: build/load/report.json
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Stop the owned test database
+        if: always()
+        run: docker compose -f compose.test.yaml down

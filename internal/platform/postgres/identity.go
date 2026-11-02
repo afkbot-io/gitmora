@@ -292,6 +292,7 @@ func closeIdentityBinding(ctx context.Context, tx pgx.Tx, id string) error {
 }
 
 // OpenSession checks the exact mapping edition/current deployment immediately before committing its credential.
+// Its returned expiry uses the database's stored precision, matching subsequent session reads.
 func (s *IdentityStore) OpenSession(ctx context.Context, seed domain.SessionSeed) (domain.Session, error) {
 	if !identifier.Valid(seed.ID) || len(seed.CookieHash) != 64 || len(seed.CSRFHash) != 64 || seed.Credential.UserID != seed.Binding.UserID || seed.Credential.CreatedAt.Before(time.Now().Add(-time.Minute)) || seed.Credential.ExpiresAt.After(time.Now().Add(8*time.Hour+time.Minute)) {
 		return domain.Session{}, domain.ErrInvalid
@@ -375,7 +376,8 @@ func (s *IdentityStore) OpenSession(ctx context.Context, seed domain.SessionSeed
 	if _, e = tx.Exec(ctx, `UPDATE api_tokens SET auth_kind='browser'WHERE id=$1`, seed.Credential.ID); e != nil {
 		return domain.Session{}, e
 	}
-	_, e = tx.Exec(ctx, `INSERT INTO identity_sessions(id,user_id,binding_id,binding_version,token_id,cookie_hash,csrf_hash,configuration,expires_at)VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`, seed.ID, b.UserID, b.ID, b.Version, seed.Credential.ID, seed.CookieHash, seed.CSRFHash, seed.Configuration, seed.Credential.ExpiresAt)
+	var expires time.Time
+	e = tx.QueryRow(ctx, `INSERT INTO identity_sessions(id,user_id,binding_id,binding_version,token_id,cookie_hash,csrf_hash,configuration,expires_at)VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING expires_at`, seed.ID, b.UserID, b.ID, b.Version, seed.Credential.ID, seed.CookieHash, seed.CSRFHash, seed.Configuration, seed.Credential.ExpiresAt).Scan(&expires)
 	if e != nil {
 		return domain.Session{}, e
 	}
@@ -391,7 +393,7 @@ func (s *IdentityStore) OpenSession(ctx context.Context, seed domain.SessionSeed
 	if _, e = directorySaveReceipt(ctx, tx, r, seed.Credential.ID, "oidc", directoryFingerprint([]byte("login:"+seed.ID))); e != nil {
 		return domain.Session{}, e
 	}
-	session := domain.Session{ID: seed.ID, BindingID: b.ID, Principal: access.Principal{UserID: b.UserID, TokenID: seed.Credential.ID, Scopes: seed.Credential.Scopes}, CSRFHash: seed.CSRFHash, ExpiresAt: seed.Credential.ExpiresAt}
+	session := domain.Session{ID: seed.ID, BindingID: b.ID, Principal: access.Principal{UserID: b.UserID, TokenID: seed.Credential.ID, Scopes: seed.Credential.Scopes}, CSRFHash: seed.CSRFHash, ExpiresAt: expires}
 	return session, tx.Commit(ctx)
 }
 

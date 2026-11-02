@@ -199,12 +199,6 @@ func (s *RetrievalStore) Finish(ctx context.Context, lease application.Lease, ch
 	}
 	return tx.Commit(ctx)
 }
-func nullString(s string) any {
-	if s == "" {
-		return nil
-	}
-	return s
-}
 
 // enqueueCodeIndex records a verified sanitized file projection in its persistence transaction.
 func enqueueCodeIndex(ctx context.Context, tx pgx.Tx, repo, sha, path, digest string) error {
