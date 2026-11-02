@@ -123,7 +123,7 @@ smoke-forge-subpath: build build-postgres-image
 smoke-onboarding: build test-web
 	python3 scripts/smoke-onboarding.py
 
-smoke-gitlab-profile:
+smoke-gitlab-profile: build-postgres-image
 	python3 scripts/smoke-gitlab-profile.py
 
 smoke-context: build
