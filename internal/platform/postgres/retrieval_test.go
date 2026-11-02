@@ -260,7 +260,11 @@ func TestRetrievalProjectionFailureNeverAcknowledgesPartialSource(t *testing.T) 
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM outbox_events WHERE completed_at IS NOT NULL`).Scan(&done); err != nil || done != 0 {
 		t.Fatal("failed projection acknowledged its outbox", err)
 	}
-	if _, err := pool.Exec(ctx, `ALTER TABLE retrieval_chunks DROP CONSTRAINT simulated_chunk_failure; UPDATE retrieval_jobs SET lease_until=now()-interval '1 second'`); err != nil {
+	var writeFailure bool
+	if err := pool.QueryRow(ctx, `SELECT last_error_code='index_write_failed' AND attempts=1 AND completed_at IS NULL AND lease_owner IS NULL FROM retrieval_jobs`).Scan(&writeFailure); err != nil || !writeFailure {
+		t.Fatal("failed projection write did not expose durable retry health", writeFailure, err)
+	}
+	if _, err := pool.Exec(ctx, `ALTER TABLE retrieval_chunks DROP CONSTRAINT simulated_chunk_failure; UPDATE retrieval_jobs SET available_at=now()`); err != nil {
 		t.Fatal(err)
 	}
 	if worked, err := application.NewIndexer(postgres.NewRetrievalStore(pool)).ReconcileOnce(ctx); err != nil || !worked {

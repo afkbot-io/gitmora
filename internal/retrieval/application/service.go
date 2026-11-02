@@ -148,7 +148,17 @@ func (w *Indexer) ReconcileOnce(parent context.Context) (bool, error) {
 		}
 		chunks = nil
 	}
-	finish, cancelFinish := context.WithTimeout(context.WithoutCancel(parent), 5*time.Second)
+	// Bulk text/vector writes need a separate bounded budget on smaller hosts.
+	// The source lease covers both the read and this transaction.
+	finish, cancelFinish := context.WithTimeout(context.WithoutCancel(parent), 30*time.Second)
 	defer cancelFinish()
-	return true, w.store.Finish(finish, lease, chunks, code)
+	if err := w.store.Finish(finish, lease, chunks, code); err != nil {
+		// Preserve the old projection and expose retry health without acknowledging
+		// an uncertain write. A committed/lost lease rejects this fenced update.
+		retry, cancelRetry := context.WithTimeout(context.WithoutCancel(parent), 5*time.Second)
+		defer cancelRetry()
+		_ = w.store.Finish(retry, lease, nil, "index_write_failed")
+		return true, err
+	}
+	return true, nil
 }

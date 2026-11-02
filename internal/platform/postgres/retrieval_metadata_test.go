@@ -163,6 +163,12 @@ func TestSearchProjectionUpgradeKeepsOldEvidenceReadable(t *testing.T) {
 	if err != nil || len(discovered.Items) != 1 || discovered.PendingSources != 1 {
 		t.Fatal("new capture waited behind metadata backfill", discovered, err)
 	}
+	// A slow durable write must still atomically replace the old readable projection.
+	// COPY fires this once per statement, independently of machine speed or record count.
+	if _, err = pool.Exec(ctx, `CREATE FUNCTION slow_metadata_write() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN PERFORM pg_sleep(6); RETURN NULL; END$$;
+CREATE TRIGGER slow_metadata_write BEFORE INSERT ON retrieval_chunks FOR EACH STATEMENT EXECUTE FUNCTION slow_metadata_write()`); err != nil {
+		t.Fatal(err)
+	}
 	if worked, err := indexer.ReconcileOnce(ctx); err != nil || !worked {
 		t.Fatal(worked, err)
 	}

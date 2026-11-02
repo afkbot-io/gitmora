@@ -60,7 +60,7 @@ func (s *RetrievalStore) Claim(ctx context.Context) (application.Lease, bool, er
 	if err != nil {
 		return lease, false, err
 	}
-	if _, err = tx.Exec(ctx, `UPDATE retrieval_jobs SET lease_owner=$2,lease_until=now()+interval '60 seconds' WHERE id=$1`, lease.ID, lease.Owner); err != nil {
+	if _, err = tx.Exec(ctx, `UPDATE retrieval_jobs SET lease_owner=$2,lease_until=now()+interval '120 seconds' WHERE id=$1`, lease.ID, lease.Owner); err != nil {
 		return lease, false, err
 	}
 	err = tx.Commit(ctx)
@@ -177,7 +177,7 @@ func (s *RetrievalStore) Finish(ctx context.Context, lease application.Lease, ch
 		return domain.ErrLease
 	}
 	if code != "" {
-		if code != "index_source_invalid" && code != "index_source_unavailable" {
+		if code != "index_source_invalid" && code != "index_source_unavailable" && code != "index_write_failed" {
 			return domain.ErrInvalid
 		}
 		_, err = tx.Exec(ctx, `UPDATE retrieval_jobs SET attempts=attempts+1,last_error_code=$2,lease_owner=NULL,lease_until=NULL,available_at=now()+LEAST(900,power(2,LEAST(attempts,8))*5)*interval '1 second' WHERE id=$1`, lease.ID, code)
