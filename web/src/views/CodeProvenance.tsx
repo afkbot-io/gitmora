@@ -136,7 +136,7 @@ export function CodeProvenance({
                   key={item.id}
                   onClick={() => onOpen(item)}
                 >
-                  <span>
+                  <span className="min-w-0 wrap-anywhere">
                     {item.metadata?.relation === "git_ai_reported"
                       ? t("Отчёт Git AI")
                       : item.metadata?.tool || t("Изменение файла")}

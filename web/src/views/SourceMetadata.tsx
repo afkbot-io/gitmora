@@ -27,7 +27,7 @@ export function SourceMetadata({
       title={metadata.model ? basis : undefined}
     >
       {metadata.agent && (
-        <span>
+        <span className="wrap-anywhere">
           {agentNames[metadata.agent.toLowerCase()] ?? metadata.agent}
         </span>
       )}
