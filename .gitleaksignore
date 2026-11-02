@@ -1,0 +1,4 @@
+# Historical synthetic inputs in redaction tests, since replaced by constructed fixtures.
+# Exact commit/file/rule/line fingerprints only; new findings remain failures.
+24ea41781c6cc110aa13a3230af4563061309889:internal/compatibility/domain/parsers_test.go:gitlab-pat:168
+3861966610d012fe15ac3dcf11c4d69f5c771d9c:internal/redact/text_test.go:gitlab-pat:12

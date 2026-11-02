@@ -1,14 +1,29 @@
 # Development and verification
 
-Use the Go toolchain selected by `go.mod`, Node.js 22.22+, npm, Python 3.11+ and Docker Compose. Native/provider proxy gates also use nginx/OpenSSL. Confirm `python3 --version`: some macOS installations select an obsolete framework interpreter. Put the supported interpreter on PATH before running the make targets. Install dependencies and the pinned browser engines:
+Use the Go toolchain selected by `go.mod`, Node.js 22.22+, npm, Python 3.12+ and Docker Compose. Native/provider proxy gates also use nginx/OpenSSL. Confirm `python3 --version`: some macOS installations select an obsolete framework interpreter. Put the supported interpreter on PATH before running the make targets. Install dependencies and the pinned browser engines:
 
 ```sh
 npm ci
-npx playwright install chromium webkit firefox
+npx playwright install --with-deps chromium webkit firefox
 make build
 ```
 
 On Linux, Playwright may additionally need its documented system libraries. The Go toolchain can be downloaded automatically when required. Never supply production credentials to automated tests.
+
+## GitHub Actions
+
+The [CI workflow](../.github/workflows/ci.yml) runs on pull requests, pushes to `main` and manual dispatch. Linux/macOS source jobs build the application, check format, run Go vet/unit and TypeScript/agent tests, and validate configuration/docs. The Linux source job scans Git history with pinned Gitleaks. `.gitleaksignore` contains only two exact historical redaction-test fixture fingerprints; new findings still fail.
+
+After source checks pass, the Linux release job runs `make verify-release`, then the separate `make smoke-load`. It provides nginx/OpenSSL, the pinned Playwright engines, Docker Compose and an unlocked isolated Secret Service for native CLI account tests. Its Codex fixture uses the published `@openai/codex@0.164.0-alpha.11.1`; OpenCode comes from `package-lock.json`. Agent prompts and provider responses are deterministic loopback fixtures; no model key or production credential is supplied. CI uses read-only repository permissions and commit-pinned official actions; it never deploys or publishes a release. Only the bounded load report is uploaded.
+
+For the same complete local gate, install the prerequisites above and make the tested Codex executable available as `codex` or set `GITMORA_TEST_CODEX` to its absolute path. On macOS the installed app bundle is also detected. On Linux, `bash .github/scripts/verify-linux.sh` sets up an ephemeral D-Bus/keyring session after nginx/OpenSSL, `libsecret-tools`, `gnome-keyring` and `dbus-x11` have been installed. It does not use a personal keyring. On macOS run the following in the normal unlocked user session:
+
+```sh
+make verify-release
+make smoke-load
+```
+
+A failed or skipped CI job is not a successful release gate. Inspect the actual workflow run for the source revision being reviewed. Public cloud-provider integration and physical-device acceptance remain separate from protocol/browser fixtures.
 
 ## Fast checks
 

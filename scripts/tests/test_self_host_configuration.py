@@ -17,6 +17,32 @@ def module(name, path):
 
 publish = module("publisher", "scripts/publish-cli.py")
 renderer = module("renderer", "scripts/render-nginx.py")
+configuration = module("configuration", "scripts/check-configuration.py")
+
+
+class InstructionLinks(unittest.TestCase):
+    def test_unicode_duplicates_and_fenced_example_headings(self):
+        text = "# Вход: CLI/MCP\n## Повтор\n## Повтор\n```sh\n# Не заголовок\n```\n"
+        self.assertEqual(configuration.heading_anchors(text), {"вход-climcp", "повтор", "повтор-1"})
+
+    def test_missing_heading_file_and_outside_symlink_are_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "repo"
+            root.mkdir()
+            (root / "docs").mkdir()
+            (root / "docs/guide.md").write_text("## Запустить вход\n")
+            outside = Path(temporary) / "outside.md"
+            outside.write_text("# Private\n")
+            (root / "linked.md").symlink_to(outside)
+            (root / "README.md").write_text(
+                "[ok](docs/guide.md#запустить-вход)\n"
+                "[broken](docs/guide.md#не-существует)\n"
+                "[missing](docs/missing.md)\n"
+                "[outside](linked.md)\n"
+            )
+            self.assertEqual(configuration.broken_instruction_links(root), [
+                "README.md: docs/guide.md#не-существует", "README.md: docs/missing.md", "README.md: linked.md",
+            ])
 
 
 class Publication(unittest.TestCase):

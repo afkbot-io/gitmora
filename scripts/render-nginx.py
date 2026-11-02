@@ -60,7 +60,7 @@ def render(
     for name in ["gitmora.http.conf", "gitmora.https.conf", "20-gitmora-reload"]:
         text = (ROOT / "deploy/nginx" / name).read_text()
         replacements = {
-            "gitmora.tasktopia.online": domain,
+            "gitmora.example.com": domain,
             "127.0.0.1:8080": f"127.0.0.1:{api_port}",
             "127.0.0.1:18081": f"127.0.0.1:{identity_port}",
             "/srv/gitmora/acme": acme,

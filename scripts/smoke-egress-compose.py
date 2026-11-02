@@ -36,17 +36,17 @@ def main():
         installation = json.loads(run(args).stdout)
         shutil.copyfile(ROOT / "deploy/gitmora.runtime.env.example", state / "runtime.env")
         project = "gitmora-" + installation["id"].replace("-", "")
-        environment = {**os.environ, "WORKGRAPH_STATE_DIR": str(state), "WORKGRAPH_HTTP_PORT": str(port), "WORKGRAPH_IMAGE": installation["image"], "GITMORA_PRIVATE_SUBNET": "10.249.88.0/24", "GITMORA_PRIVATE_GATEWAY": "10.249.88.1"}
+        environment = {**os.environ, "WORKGRAPH_STATE_DIR": str(state), "WORKGRAPH_HTTP_PORT": str(port), "WORKGRAPH_IMAGE": installation["image"], "GITMORA_PUBLIC_HOST": "gitmora.example.test", "GITMORA_PRIVATE_SUBNET": "10.249.88.0/24", "GITMORA_PRIVATE_GATEWAY": "10.249.88.1"}
         prefix = ["docker", "compose", "--project-name", project, "--project-directory", str(ROOT), "--file", str(ROOT / "compose.yaml")]
         for path in overlays:
             prefix += ["--file", str(path)]
         manifest = json.loads(run([*prefix, "config", "--format", "json"], environment).stdout)
         services = manifest["services"]
         assert manifest["networks"]["private"]["internal"]
-        assert "gitmora.tasktopia.online=10.249.88.1" in services["api"].get("extra_hosts", []), "Private RP has no selected identity host mapping"
-        assert not any(value.startswith("gitmora.tasktopia.online=") for value in services["worker"].get("extra_hosts", [])), "Ordinary worker received an unnecessary IdP route"
+        assert "gitmora.example.test=10.249.88.1" in services["api"].get("extra_hosts", []), "Private RP has no selected identity host mapping"
+        assert not any(value.startswith("gitmora.example.test=") for value in services["worker"].get("extra_hosts", [])), "Ordinary worker received an unnecessary IdP route"
         activated = json.loads(run([*prefix, "--file", str(ROOT / "deploy/compose.identity-auth.yaml"), "config", "--format", "json"], environment).stdout)["services"]
-        assert activated["api"]["environment"]["WORKGRAPH_OIDC_ISSUER"] == "https://gitmora.tasktopia.online/auth/realms/gitmora"
+        assert activated["api"]["environment"]["WORKGRAPH_OIDC_ISSUER"] == "https://gitmora.example.test/auth/realms/gitmora"
         assert activated["api"]["environment"]["WORKGRAPH_OIDC_CLIENT_ID"] == "gitmora"
         assert activated["api"]["environment"]["WORKGRAPH_OIDC_CLIENT_SECRET_FILE"] == "/run/secrets/oidc_client_secret"
         assert not any(key.startswith("WORKGRAPH_OIDC_") for key in activated["worker"]["environment"]), "Provider authentication policy leaked into ordinary worker"

@@ -26,8 +26,8 @@ def loopback_proxy(folder, public_port, api_port, identity_port, *, download_roo
             continue
         lines.append(line.replace("listen 443 ssl http2;", f"listen 127.0.0.1:{public_port};"))
     source = "\n".join(lines)
-    source = source.replace("https://gitmora.tasktopia.online", f"http://127.0.0.1:{public_port}")
-    source = source.replace("gitmora.tasktopia.online", "127.0.0.1")
+    source = source.replace("https://gitmora.example.com", f"http://127.0.0.1:{public_port}")
+    source = source.replace("gitmora.example.com", "127.0.0.1")
     source = source.replace("127.0.0.1:8080", f"127.0.0.1:{api_port}").replace("127.0.0.1:18081", f"127.0.0.1:{identity_port}")
     source = source.replace("/var/log/nginx/gitmora.access.log", str(folder / "edge-access.log")).replace("/var/log/nginx/gitmora.error.log", str(folder / "edge-error.log"))
     if download_root is not None:

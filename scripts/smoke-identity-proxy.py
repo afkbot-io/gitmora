@@ -18,7 +18,7 @@ import time
 import uuid
 
 ROOT = Path(__file__).resolve().parent.parent
-HOST = "gitmora.tasktopia.online"
+HOST = "gitmora.example.test"
 PG_IMAGE = "gitmora-postgres:18.6-security1"
 
 
@@ -150,7 +150,7 @@ def request(port, path, *, tls=None, hostname=HOST, method="GET", body=None, hea
 def main():
     nginx = shutil.which(os.environ.get("GITMORA_NGINX", "nginx"))
     assert nginx, "Install native nginx or set GITMORA_NGINX to its explicit binary"
-    source = (ROOT / "deploy/nginx/gitmora.https.conf").read_text()
+    source = (ROOT / "deploy/nginx/gitmora.https.conf").read_text().replace("gitmora.example.com", HOST)
     with tempfile.TemporaryDirectory(prefix="gitmora-identity-proxy-") as temporary, private_network() as private, ExitStack() as resources:
         folder = Path(temporary)
         certificates(folder)

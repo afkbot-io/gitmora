@@ -69,7 +69,7 @@ Without an OIDC configuration, capture/API/MCP bearer operations can be used for
 | Variable | Source / example |
 | --- | --- |
 | `WORKGRAPH_STATE_DIR`, `WORKGRAPH_IMAGE`, `WORKGRAPH_HTTP_PORT` | Supplied by `deployment` from `--directory`, `--image`, `--port`; do not try to override pinned metadata in `compose.env`. For a deliberate raw Compose command, supply these yourself. |
-| `GITMORA_PUBLIC_HOST` | `gitmora.example.com`, hostname only. Shared-domain API public origin, issuer and private host mapping derive from it. |
+| `GITMORA_PUBLIC_HOST` | Required for the identity overlays; hostname only, e.g. `gitmora.example.com`. There is no default public server. Shared-domain API public origin, issuer and private host mapping derive from it. |
 | `GITMORA_REALM`, `GITMORA_CLIENT_ID` | `gitmora`; match `identity-server init --realm/--client-id` and nginx realm route. |
 | `GITMORA_POSTGRES_IMAGE` | `gitmora-postgres:18.6-security1`; prebuild the pinned image. Identity uses its own default unless explicitly exported during identity operations. |
 | `GITMORA_PRIVATE_SUBNET`, `GITMORA_PRIVATE_GATEWAY` | `172.30.88.0/24`, `172.30.88.1`; choose an unused range before the first start. Used by same-host identity profiles. |
