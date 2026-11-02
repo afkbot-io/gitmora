@@ -2,7 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { t } from "../domain/locale.js";
 import { LatestRequest } from "../application/latest.js";
-import { readableError, searchQuery, sourceNames } from "../domain/context.js";
+import {
+  isMergeRequestURL,
+  readableError,
+  searchQuery,
+  sourceNames,
+} from "../domain/context.js";
 import type {
   Hit,
   Me,
@@ -121,7 +126,7 @@ export function ContextWorkspace({
     const request = requests.begin();
     setLoading(true);
     try {
-      if (/^https?:\/\//i.test(text.trim())) {
+      if (isMergeRequestURL(text)) {
         const resolved = await client.request<{ query: Selection }>(
           "/v1/context/resolve",
           { project_id: project.id, url: text.trim() },
@@ -168,7 +173,7 @@ export function ContextWorkspace({
               ? t("Коммит не найден.")
               : e instanceof ApiError &&
                   e.status === 404 &&
-                  /^https?:\/\//i.test(text.trim())
+                  isMergeRequestURL(text)
                 ? t(
                     "MR/PR ещё не синхронизирован. Проверьте подключение репозитория.",
                   )

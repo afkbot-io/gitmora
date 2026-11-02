@@ -6,7 +6,30 @@ import {
   csrfCookie,
 } from "../../web/src/transport/api.js";
 import { LatestRequest } from "../../web/src/application/latest.js";
-import { searchQuery, safeExternalURL } from "../../web/src/domain/context.js";
+import {
+  isMergeRequestURL,
+  searchQuery,
+  safeExternalURL,
+} from "../../web/src/domain/context.js";
+
+test("ordinary URLs remain searchable text while MR/PR links select context", () => {
+  assert(
+    isMergeRequestURL(
+      "https://github.example/team/repo/pull/4?tab=files#discussion",
+    ),
+  );
+  assert(
+    isMergeRequestURL("https://gitlab.example/team/repo/-/merge_requests/12/"),
+  );
+  for (const value of [
+    "https://docs.example/installation",
+    "https://github.example/team/repo/commit/abc1234",
+    "https://github.example/team/repo/pull/4/files",
+    "https://user@github.example/team/repo/pull/4",
+    "not a URL",
+  ])
+    assert.equal(isMergeRequestURL(value), false);
+});
 
 test("a stalled request produces a retryable timeout instead of leaving the screen busy", async () => {
   const client = new ApiClient(

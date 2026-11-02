@@ -39,7 +39,7 @@ It reports sequential p50/p95 HTTP latency and response bytes, never response te
 
 ## Search examples
 
-The web field accepts text, a Gitmora session UUID, a full SHA, a unique abbreviation of at least seven hexadecimal characters, or a registered MR/PR URL. A short hex value with no available confirmed commit is searched as text; ambiguous commit abbreviations require more characters. Explicit `commit_prefix` requests never silently become text searches. A session UUID is scoped by project and may be narrowed to a repository. Native agent thread IDs and Gitmora session IDs are different identities.
+Ordinary documentation/source URLs are searched as message text; only MR/PR-shaped URLs select provider context. The web field accepts text, a Gitmora session UUID, a full SHA, a unique abbreviation of at least seven hexadecimal characters, or a registered MR/PR URL. A short hex value with no available confirmed commit is searched as text; ambiguous commit abbreviations require more characters. Explicit `commit_prefix` requests never silently become text searches. A session UUID is scoped by project and may be narrowed to a repository. Native agent thread IDs and Gitmora session IDs are different identities.
 
 Use these JSON objects with `POST /v1/context/search`, CLI `gitmora api post /v1/context/search --input query.json`, or MCP `context.search`:
 

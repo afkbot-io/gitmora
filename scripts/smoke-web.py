@@ -124,6 +124,7 @@ def main():
                     message.update(role="tool",tool_name="write",changes=[dict(path="src/search.ts" if index<25 else "src/other.ts")])
                 messages.append(message)
             messages[5]["text"]="SearchScenarioMarker "+"long exposed text "*300+" SearchScenarioTail"
+            messages[0]["text"]+=" https://docs.example.test/installation"
             tracked=dict(schema_version=1,repository_id=repo,session_id=search_session,revision=1,started_at="2026-11-03T10:00:00Z",agent=dict(name="opencode",model="model-beta",model_basis="message_metadata"),messages=messages,files=["src/search.ts","src/other.ts"],commits=["a"*40,"b"*40],commit_ranges=[dict(commit_sha="a"*40,start=0,end=25,basis="observed_checkpoint"),dict(commit_sha="b"*40,start=25,end=45,basis="observed_checkpoint")])
             assert call("/v1/captures",tracked)[0]==201
             code_text="export function SearchScenarioCode() { return true; }\n"

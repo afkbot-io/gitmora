@@ -211,3 +211,18 @@ export function readableError(error: unknown): string {
     ? error.message
     : "Не удалось выполнить запрос. Повторите попытку.";
 }
+
+/** Only MR/PR-shaped links select provider context; other URLs remain searchable message text. */
+export function isMergeRequestURL(text: string): boolean {
+  try {
+    const url = new URL(text.trim());
+    return (
+      ["http:", "https:"].includes(url.protocol) &&
+      !url.username &&
+      !url.password &&
+      /\/(?:pull|-\/merge_requests)\/[1-9][0-9]*\/?$/.test(url.pathname)
+    );
+  } catch {
+    return false;
+  }
+}

@@ -69,6 +69,9 @@ try {
     fixture.project,
   );
   await page.getByRole("searchbox").waitFor();
+  const documentLink = await search("https://docs.example.test/installation");
+  assert.equal(documentLink.items.length, 1);
+  await rows(1);
   const first = await search("SearchScenarioMarker");
   assert.equal(first.items.length, 20);
   assert(first.next);
