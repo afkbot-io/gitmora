@@ -4,6 +4,7 @@ import type { Hit, Source } from "./context.js";
 export type SourceKind = "session" | "merge_request";
 export interface Selection {
   message_view?: "compact" | "full";
+  message_limit?: number;
   project_id: string;
   repository_id?: string;
   session_id?: string;
@@ -222,7 +223,14 @@ export interface SessionRevision {
       tool_name?: string;
       kind?: string;
     }[];
-    continuation?: { segment: number };
+    continuation?: {
+      root_session_id: string;
+      previous_session_id: string;
+      previous_revision: number;
+      previous_digest: string;
+      segment: number;
+      reason: string;
+    };
     files: string[];
     commits: string[];
     origin?: ImportOrigin;
@@ -255,6 +263,10 @@ export function packQuery(q: Selection): Selection {
   );
   if (
     !id(q.project_id) ||
+    (q.message_limit !== undefined &&
+      (!Number.isInteger(q.message_limit) ||
+        q.message_limit < 1 ||
+        q.message_limit > 20)) ||
     (q.repository_id !== undefined && !id(q.repository_id)) ||
     selectors.length !== 1 ||
     (q.session_id && (!id(q.session_id) || !q.repository_id)) ||

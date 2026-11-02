@@ -94,6 +94,15 @@ func TestPRContextReturnsOnlyItsRecordedMessageIntervals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if len(preview.Transcript.Items) != 20 || preview.Transcript.Items[0].TextTruncated || !preview.Transcript.Items[0].TextPreview || preview.Transcript.Items[0].FullTextAfter == nil {
+		t.Fatal("long user record consumed the compact page", len(preview.Transcript.Items))
+	}
+	smallQuery := compactQuery
+	smallQuery.MessageLimit = 7
+	small, err := store.Read(ctx, principal, smallQuery)
+	if err != nil || len(small.Transcript.Items) != 7 || small.Transcript.Next == nil || small.Transcript.Next.Offset != 7 {
+		t.Fatal("message batch remainder ignored", err)
+	}
 	var detail *pack.MessageCursor
 	for _, item := range preview.Transcript.Items {
 		if item.Index == 5 {
@@ -103,7 +112,7 @@ func TestPRContextReturnsOnlyItsRecordedMessageIntervals(t *testing.T) {
 			detail = item.FullTextAfter
 		}
 	}
-	// The first page can end in the long user message; compact tools follow its cursor.
+	// A byte-bounded compact page always preserves exact expansion cursors.
 	for tries := 0; tries < 10 && detail == nil && preview.Transcript.Next != nil; tries++ {
 		compactQuery.MessageAfter = preview.Transcript.Next
 		preview, err = store.Read(ctx, principal, compactQuery)

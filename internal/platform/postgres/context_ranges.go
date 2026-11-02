@@ -40,6 +40,10 @@ func readContextMessages(ctx context.Context, tx pgx.Tx, q domain.Query, page *d
 	}
 	defer rows.Close()
 	bytes := 0
+	limit := q.MessageLimit
+	if limit == 0 {
+		limit = 20
+	}
 	after := q.MessageAfter
 	seenCursor := after == nil
 	for rows.Next() {
@@ -82,15 +86,19 @@ func readContextMessages(ctx context.Context, tx pgx.Tx, q domain.Query, page *d
 			if !included {
 				continue
 			}
-			preview := q.MessageView == "compact" && message.Role == "tool" && len([]rune(message.Text)) > 1200
+			preview := q.MessageView == "compact" && len([]rune(message.Text)) > 1200
 			if preview {
 				if after != nil && repo == after.RepositoryID && id == after.SessionID && index == after.Offset && after.RuneOffset != 0 {
 					return domain.ErrInvalid
 				}
-				message.Text = compactToolText(message.Text)
+				if message.Role == "tool" {
+					message.Text = compactToolText(message.Text)
+				} else {
+					message.Text = domain.Clip(message.Text, 1200).Text
+				}
 			}
 			// Page before the next item; callers can use the same validated cursor to retry.
-			if len(page.Items) >= 20 || bytes+len(message.Text) > 24000 && len(page.Items) > 0 {
+			if len(page.Items) >= limit || bytes+len(message.Text) > 24000 && len(page.Items) > 0 {
 				page.Next = &domain.MessageCursor{RepositoryID: repo, SessionID: id, Revision: rev, Digest: digest, Segment: segment, Offset: index, Head: q.ExpectedHead, ScopeKey: q.MRReadKey}
 				page.HasMore = true
 				return nil
@@ -138,7 +146,7 @@ func readContextMessages(ctx context.Context, tx pgx.Tx, q domain.Query, page *d
 	return nil
 }
 
-// Compact previews avoid paging through long hidden outputs. Exact originals
+// Compact previews avoid paging through long hidden records. Exact originals
 // remain available through the same authorized, revision-pinned scope.
 func compactToolText(text string) string {
 	var value map[string]any

@@ -157,7 +157,7 @@ export const english: Readonly<Record<string, string>> = {
   "Загрузить ещё": "Load more",
   "Загрузить ещё ключи": "Load more keys",
   "Загрузить ещё репозитории": "Load more repositories",
-  "Загрузить ещё сообщения": "Load more messages",
+  "Загрузить ещё 20 сообщений": "Load 20 more messages",
   "Загрузить ещё участников": "Load more members",
   "Загрузка подтверждения CLI…": "Loading CLI confirmation…",
   "Загрузка полной записи…": "Loading full record…",
@@ -243,7 +243,6 @@ export const english: Readonly<Record<string, string>> = {
   "Найдено фрагментов: {0}": "Excerpts found: {0}",
   Найти: "Search",
   "Найти в загруженных сообщениях": "Find in loaded messages",
-  "Найти в загруженных частях": "Find in loaded parts",
   "Например, alex…": "For example, alex…",
   "Например, локальный сборщик": "For example, local collector",
   "Например, платформа или продукт…": "For example, a platform or product…",
@@ -608,4 +607,8 @@ export const english: Readonly<Record<string, string>> = {
   "корневой ключ": "root key",
   "полных минут. Браузерная сессия ограничивает срок её дочерних ключей; более долгий корневой ключ выдаётся отдельной доверенной процедурой.":
     "whole minutes. A browser session limits its child keys' lifetime; longer-lived root keys require trusted server administration.",
+  "Предыдущие сообщения сессии": "Earlier session messages",
+  "Загрузить предыдущие 20 сообщений": "Load previous 20 messages",
+  "Выше — предыдущая переписка, вне выбранного изменения":
+    "Earlier session history above is outside this change",
 };

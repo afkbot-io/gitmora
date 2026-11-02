@@ -2,9 +2,11 @@ import type {
   CaptureWindow,
   SessionRevision,
   MessageCursor,
+  ScopedMessage,
 } from "./history.js";
 
 export type Message = SessionRevision["snapshot"]["messages"][number];
+export const messageBatchSize = 20;
 export interface IndexedMessage {
   preview?: boolean;
   fullTextAfter?: MessageCursor;
@@ -14,6 +16,43 @@ export interface IndexedMessage {
 export type ConversationItem =
   | { kind: "message"; key: number; entry: IndexedMessage }
   | { kind: "tools"; key: number; entries: IndexedMessage[] };
+
+/** Render one source window without changing original message positions or preview provenance. */
+export function scopedConversationItems(
+  items: ScopedMessage[],
+  onlyDialogue: boolean,
+  query: string,
+): ConversationItem[] {
+  const result: ConversationItem[] = [];
+  const term = query.trim().toLocaleLowerCase();
+  for (const item of items) {
+    if (onlyDialogue && !["user", "assistant"].includes(item.message.role))
+      continue;
+    if (
+      term &&
+      !(item.message.text + " " + (item.message.tool_name ?? ""))
+        .toLocaleLowerCase()
+        .includes(term)
+    )
+      continue;
+    const entry: IndexedMessage = {
+      message: item.message,
+      index: item.index,
+      ...(item.text_preview ? { preview: true } : {}),
+      ...(item.full_text_after ? { fullTextAfter: item.full_text_after } : {}),
+    };
+    const previous = result.at(-1);
+    if (item.message.role === "tool") {
+      if (
+        previous?.kind === "tools" &&
+        previous.entries.length < messageBatchSize
+      )
+        previous.entries.push(entry);
+      else result.push({ kind: "tools", key: item.index, entries: [entry] });
+    } else result.push({ kind: "message", key: item.index, entry });
+  }
+  return result;
+}
 
 /** Filtering keeps original source positions; grouping never reorders tool activity. */
 export function conversationItems(
@@ -37,7 +76,11 @@ export function conversationItems(
     const entry = { message, index };
     const previous = result.at(-1);
     if (message.role === "tool") {
-      if (previous?.kind === "tools") previous.entries.push(entry);
+      if (
+        previous?.kind === "tools" &&
+        previous.entries.length < messageBatchSize
+      )
+        previous.entries.push(entry);
       else result.push({ kind: "tools", key: index, entries: [entry] });
     } else result.push({ kind: "message", key: index, entry });
   });

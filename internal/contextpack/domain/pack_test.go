@@ -38,3 +38,18 @@ func TestPipelineSuccessNeverAppliesToAnotherHeadOrProviderProject(t *testing.T)
 		t.Fatal("historical success attached")
 	}
 }
+
+func TestMessageBatchSizeIsIndependentAndBounded(t *testing.T) {
+	for _, size := range []int{0, 1, 7, 20} {
+		q := domain.Query{ProjectID: project, RepositoryID: repository, MR: 7, MessageLimit: size}
+		got, err := domain.Normalize(q)
+		if err != nil || got.MessageLimit != size || got.Limit != 6 {
+			t.Fatal("message size changed capture pagination", got, err)
+		}
+	}
+	for _, size := range []int{-1, 21, 1000000} {
+		if _, err := domain.Normalize(domain.Query{ProjectID: project, RepositoryID: repository, MR: 7, MessageLimit: size}); err == nil {
+			t.Fatal("accepted unbounded message size", size)
+		}
+	}
+}

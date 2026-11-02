@@ -228,18 +228,22 @@ try {
     .locator(".transcript-message")
     .first()
     .elementHandle();
-  for (const end of [40, 60, 65]) {
+  for (const end of [40, 60, 80]) {
     const more = transcript.getByRole("button", {
-      name: "Загрузить ещё сообщения",
+      name: "Загрузить ещё 20 сообщений",
       exact: true,
     });
     await more.scrollIntoViewIfNeeded();
     const before = await page.evaluate(() => scrollY);
     await more.click();
-    assert.equal(
-      await transcript.locator(`[data-message-index="${end}"]`).count(),
-      1,
+    await visible(
+      transcript.getByText(`Загружено сообщений: ${end}`, { exact: true }),
     );
+    if (end <= 65)
+      assert.equal(
+        await transcript.locator(`[data-message-index="${end}"]`).count(),
+        1,
+      );
     assert(await firstNode.evaluate((node) => node.isConnected));
     assert(
       Math.abs((await page.evaluate(() => scrollY)) - before) < 4,
@@ -272,19 +276,76 @@ try {
   await visible(transcript.getByText("<img src=x", { exact: false }));
   await transcript.getByLabel("Только переписка", { exact: true }).check();
   assert.equal(await transcript.locator(".tool-activity").count(), 0);
-  // Dialogue-only skips tool pages; the next verified part appends directly.
-  for (let i = 0; i < 7; i++)
+  // Every click consumes 20 source records, including across one-message continuations.
+  for (const end of [40, 60, 80]) {
     await transcript
-      .getByRole("button", { name: "Загрузить ещё сообщения", exact: true })
+      .getByRole("button", { name: "Загрузить ещё 20 сообщений", exact: true })
       .click();
-  await visible(transcript.getByText("Archive marker 7", { exact: true }));
-  assert.equal(await transcript.locator(".conversation-part").count(), 8);
+    await visible(
+      transcript.getByText(`Загружено сообщений: ${end}`, { exact: true }),
+    );
+  }
+  await visible(transcript.getByText("Archive marker 15", { exact: true }));
+  assert.equal(
+    await transcript.getByText("Archive marker 16", { exact: true }).count(),
+    0,
+  );
+  assert.equal(await transcript.locator(".conversation-part").count(), 16);
   await transcript.getByLabel("Только переписка", { exact: true }).uncheck();
   await auditUI(page, "history-session", { enabled: true });
   await page.screenshot({
     path: "output/playwright/history-conversation.png",
     fullPage: false,
   });
+  // A short continuation initially fills 20 records; previous history follows exact parent edges.
+  await openSession("eeeeeeee-eeee-4eee-8eee-000000000005");
+  await visible(
+    transcript.getByText("Загружено сообщений: 20", { exact: true }),
+  );
+  await visible(transcript.getByText("Archive marker 24", { exact: true }));
+  assert.equal(
+    await transcript.getByText("Archive marker 25", { exact: true }).count(),
+    0,
+  );
+  assert.equal(
+    await transcript.getByText("Archive marker 4", { exact: true }).count(),
+    0,
+  );
+  const previousHistory = transcript.getByRole("region", {
+    name: "Предыдущие сообщения сессии",
+    exact: true,
+  });
+  const precedingButton = previousHistory.getByRole("button", {
+    name: "Загрузить предыдущие 20 сообщений",
+    exact: true,
+  });
+  await precedingButton.scrollIntoViewIfNeeded();
+  const continuationMarker = transcript.getByText("Archive marker 5", {
+    exact: true,
+  });
+  const continuationTop = await continuationMarker.evaluate(
+    (node) => node.getBoundingClientRect().top,
+  );
+  await precedingButton.click();
+  await poll(
+    async () =>
+      (await previousHistory.locator("[data-message-index]").count()) === 20,
+  );
+  await visible(previousHistory.getByText("Archive marker 4", { exact: true }));
+  assert(
+    Math.abs(
+      (await continuationMarker.evaluate(
+        (node) => node.getBoundingClientRect().top,
+      )) - continuationTop,
+    ) < 4,
+    `earlier continuation moved the current message: before=${continuationTop}, after=${await continuationMarker.evaluate((node) => node.getBoundingClientRect().top)}, scroll=${JSON.stringify(await page.evaluate(() => ({ y: scrollY, max: document.documentElement.scrollHeight - innerHeight })))}`,
+  );
+  assert.equal(
+    await previousHistory
+      .locator('[data-message-session="eeeeeeee-eeee-4eee-8eee-000000000005"]')
+      .count(),
+    0,
+  );
   // A PR with one conversation gets only its own commit interval.
   await page.goto(
     fixture.url +
@@ -311,10 +372,11 @@ try {
     exact: true,
   });
   await visible(
-    scoped.getByText(
-      "PR4BoundaryMarker: обнови поиск только для этого изменения",
-      { exact: true },
-    ),
+    scoped
+      .locator(
+        '.scoped-current [data-message-index="21"] .long-message > summary',
+      )
+      .filter({ hasText: "PR4BoundaryMarker" }),
   );
   assert(
     new URLSearchParams(new URL(page.url()).hash.slice(1)).get("mr") === "4",
@@ -326,16 +388,16 @@ try {
     0,
   );
   assert.equal(await page.locator(".mr-context").count(), 0);
-  for (let i = 0; i < 2; i++) {
+  for (const count of [40, 45]) {
     const more = scoped.getByRole("button", {
-      name: "Загрузить ещё сообщения",
+      name: "Загрузить ещё 20 сообщений",
       exact: true,
     });
     await more.scrollIntoViewIfNeeded();
     const y = await page.evaluate(() => scrollY);
     await more.click();
-    await page.waitForFunction(
-      () => !document.querySelector(".scoped-transcript button:disabled"),
+    await visible(
+      scoped.getByText(`Загружено сообщений: ${count}`, { exact: true }),
     );
     assert(
       Math.abs((await page.evaluate(() => scrollY)) - y) < 4,
@@ -351,8 +413,67 @@ try {
     "visible",
   );
   await auditUI(page, "history-pr-scoped", { enabled: true });
+  const longUser = scoped.locator(
+    '.scoped-current .transcript-message[data-message-index="21"] .long-message',
+  );
+  assert.equal(
+    await longUser.getByText("FullUserTailMarker", { exact: false }).count(),
+    0,
+  );
+  await longUser.locator(":scope > summary").click();
+  await visible(longUser.getByText("FullUserTailMarker", { exact: false }));
+  assert((await longUser.innerText()).length > 30000);
+  await longUser.locator(":scope > summary").click();
+  const earlier = scoped.getByRole("region", {
+    name: "Предыдущие сообщения сессии",
+    exact: true,
+  });
+  const previousButton = earlier.getByRole("button", {
+    name: "Загрузить предыдущие 20 сообщений",
+    exact: true,
+  });
+  await previousButton.scrollIntoViewIfNeeded();
+  const currentMarker = scoped.locator(
+    '.scoped-current [data-message-index="21"]',
+  );
+  const markerTop = await currentMarker.evaluate(
+    (node) => node.getBoundingClientRect().top,
+  );
+  await previousButton.click();
+  await poll(
+    async () => (await earlier.locator("[data-message-index]").count()) === 20,
+  );
+  const afterTop = await currentMarker.evaluate(
+    (node) => node.getBoundingClientRect().top,
+  );
+  const scrollState = await page.evaluate(() => ({
+    y: scrollY,
+    max: document.documentElement.scrollHeight - innerHeight,
+  }));
+  assert(
+    Math.abs(afterTop - markerTop) < 4 ||
+      (Math.abs(scrollState.y - scrollState.max) < 2 && afterTop > markerTop),
+    `prepend did not preserve the anchor within the document limit: before=${markerTop}, after=${afterTop}, scroll=${JSON.stringify(scrollState)}`,
+  );
+  assert.equal(
+    await scoped.locator('.scoped-current [data-message-index="1"]').count(),
+    0,
+  );
+  await visible(
+    earlier.getByText("Выше — предыдущая переписка, вне выбранного изменения", {
+      exact: true,
+    }),
+  );
+  assert.equal(
+    new URLSearchParams(new URL(page.url()).hash.slice(1)).get("mr"),
+    "4",
+  );
+  assert.equal(await page.evaluate(() => window.untrustedExecuted), undefined);
   // The same scoped cursor path is read through the real HTTP MCP adapter.
-  await scoped.locator(".tool-activity > summary").click();
+  await scoped
+    .locator(".scoped-current .tool-activity > summary")
+    .first()
+    .click();
   const expandedTool = scoped.locator('.tool-entry[data-message-index="23"]');
   await expandedTool.locator(":scope > summary").click();
   await visible(

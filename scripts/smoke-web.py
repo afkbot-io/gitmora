@@ -93,7 +93,7 @@ def main():
         if args.history:
             capture["commits"]=["a"*40,"b"*40]
             capture["commit_ranges"]=[dict(commit_sha="a"*40,start=0,end=20,basis="observed_checkpoint"),dict(commit_sha="b"*40,start=20,end=65,basis="observed_checkpoint")]
-            capture["messages"][20]=dict(role="user",text="PR4BoundaryMarker: обнови поиск только для этого изменения")
+            capture["messages"][20]=dict(role="user",text="PR4BoundaryMarker: обнови поиск только для этого изменения\n" + "Условия проверки 🧪 "*1800 + "FullUserTailMarker")
             capture["messages"][21]=dict(role="assistant",text="Обновлю поиск и проверю границы PR 4.")
             capture["messages"][22]=dict(role="tool",tool_name="Bash",text=json.dumps(dict(command="git diff --stat",output="x"*50000+"FullToolTailMarker",exit_code=0)))
         assert call("/v1/captures", capture)[0] == 201
@@ -101,16 +101,16 @@ def main():
             digest = call(f'/v1/repositories/{identity["repository_id"]}/sessions/{session}')[1]["digest"]
             previous_session = session
             previous_revision = 2
-            for index in range(1, 22):
+            for index in range(1, 42):
                 extra = {**capture, "revision": 1, "session_id": f"eeeeeeee-eeee-4eee-8eee-{index:012x}", "messages": [dict(role="assistant", text=f"Archive marker {index}")]}
                 extra.pop("commit_ranges",None)
-                if index <= 10:
+                if index <= 30:
                     extra["continuation"] = dict(root_session_id=session, previous_session_id=previous_session, previous_revision=previous_revision, previous_digest=digest, segment=index+1, reason="window")
                 else:
                     extra["agent"] = dict(name=f"Archive window {index}", model="synthetic-local")
                 status, accepted = call("/v1/captures", extra)
                 assert status == 201
-                if index <= 10:
+                if index <= 30:
                     previous_session, previous_revision, digest = extra["session_id"], 1, accepted["digest"]
         for _ in range(30):
             indexed = api.command(["worker", "--once"], environment)
