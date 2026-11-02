@@ -34,7 +34,9 @@ func cliBrowser(t *testing.T, pool *pgxpool.Pool, store *postgres.IdentityStore,
 	}
 	cookie, _ := domain.NewSecret(domain.SessionPrefix)
 	csrf, _ := domain.NewSecret(domain.CSRFPrefix)
-	issued, e := access.IssueCredential(user, "Browser", domain.InteractiveScopes(), time.Now(), 8*time.Hour)
+	// Exercise storage precision even on hosts whose wall clock is microsecond-based.
+	now := time.Now().Truncate(time.Microsecond).Add(123 * time.Nanosecond)
+	issued, e := access.IssueCredential(user, "Browser", domain.InteractiveScopes(), now, 8*time.Hour)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -384,7 +386,7 @@ func TestCLIReauthenticationKeepsTheBrowserRootAndExpiryAndRequiresItsExactBindi
 	}
 	fresh, e := store.ReauthenticateSession(ctx, domain.SecretHash(domain.SessionPrefix, cookie), cfg.Fingerprint(), binding)
 	if e != nil || fresh.ID != browser.ID || fresh.Principal.TokenID != browser.Principal.TokenID || !fresh.ExpiresAt.Equal(browser.ExpiresAt) {
-		t.Fatal("reauthentication replaced or extended browser", e)
+		t.Fatalf("reauthentication changed browser authority: error=%v same_session=%t same_root=%t expiry_delta=%v", e, fresh.ID == browser.ID, fresh.Principal.TokenID == browser.Principal.TokenID, fresh.ExpiresAt.Sub(browser.ExpiresAt))
 	}
 	if _, e = store.DecideCLIEnrollment(ctx, fresh, cfg.Fingerprint(), i.CodeHash, flow.Fingerprint(), true); e != nil {
 		t.Fatal("fresh OIDC did not permit explicit consent", e)

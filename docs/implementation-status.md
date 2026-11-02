@@ -1,6 +1,6 @@
 # Supported core scope
 
-The current product is development context, described by [requirements C01–C18](requirements.md) and the [architecture](system-analysis.md). Source/server version is 0.7.2; the standalone client is 0.7.2.
+The current product is development context, described by [requirements C01–C18](requirements.md) and the [architecture](system-analysis.md). The latest released server and standalone client are 0.7.2; subsequent source changes are listed under Unreleased in [the changelog](../CHANGELOG.md).
 
 | Area | Delivered behavior |
 | --- | --- |
