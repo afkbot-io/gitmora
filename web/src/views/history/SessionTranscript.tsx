@@ -268,7 +268,10 @@ export function SessionTranscript({
         <div>
           <h2 className="mb-1">{t("Диалог с агентом")}</h2>
           {first && (
-            <p className="mb-0 text-xs text-muted">
+            <p
+              className="mb-0 text-xs text-muted"
+              title={t("Настройка модели сессии")}
+            >
               {first.snapshot.agent.name} · {date(first.snapshot.started_at)}
               {first.snapshot.agent.model &&
               !["unknown", "unreported", "no-model-needed"].includes(

@@ -5,13 +5,24 @@ export interface Observation {
   schema_version: 1;
   source_session_id: string;
   event_id: string;
-  agent: { name: string; version: string; model: string };
+  agent: {
+    name: string;
+    version: string;
+    model: string;
+    provider?: string;
+    model_basis?: string;
+  };
   started_at: string;
   messages: Array<{
     role: "user" | "assistant" | "tool";
     text: string;
     tool_name?: string;
     kind?: "agent_summary";
+    model?: string;
+    provider?: string;
+    agent_profile?: string;
+    native_id?: string;
+    changes?: Array<{ path: string }>;
   }>;
   changed_files: string[];
   file_events: Array<{ id: string; path: string }>;
@@ -132,7 +143,16 @@ export function normalizeWindows(
     file?: Observation["file_events"][number],
     pruned = false,
   ): void {
-    const size = Buffer.byteLength(JSON.stringify(message ?? file)) + 192;
+    // Keep the pre-metadata window partition stable across a collector upgrade.
+    const legacyMessage = message
+      ? {
+          role: message.role,
+          text: message.text,
+          ...(message.tool_name ? { tool_name: message.tool_name } : {}),
+          ...(message.kind ? { kind: message.kind } : {}),
+        }
+      : undefined;
+    const size = Buffer.byteLength(JSON.stringify(legacyMessage ?? file)) + 192;
     total += size;
     if (total > 64 * 1024 * 1024)
       throw new Error("Native history exceeds exposed-byte budget");
@@ -239,7 +259,7 @@ export function normalizeWindows(
             event_id: "",
             agent: last?.model ?? {
               name: "opencode",
-              version: "workgraph-opencode/3",
+              version: "workgraph-opencode/4",
               model: "unknown",
             },
             started_at: new Date(
@@ -251,7 +271,7 @@ export function normalizeWindows(
           };
       }
       if (!basis) continue;
-      basis.agent.version = "workgraph-opencode/3";
+      basis.agent.version = "workgraph-opencode/4";
       const pruned =
         part.type === "tool" &&
         state?.status === "completed" &&
@@ -259,6 +279,13 @@ export function normalizeWindows(
           typeof object(state.time)?.pruned === "number");
       for (const original of basis.messages) {
         const message = { ...original };
+        if (message.role === "tool" && basis.file_events.length) {
+          message.changes = [
+            ...new Set(basis.file_events.map((file) => file.path)),
+          ]
+            .slice(0, 256)
+            .map((path) => ({ path }));
+        }
         if (pruned)
           message.text =
             "[Workgraph: source tool output was pruned before this observation]";
@@ -349,6 +376,7 @@ export function normalize(
   const files: Observation["file_events"] = [];
   const seen = new Set<string>();
   let model = "unknown";
+  let modelBasis: "message_metadata" | "thread_configuration" | undefined;
   let partsSeen = 0;
   function file(eventID: unknown, candidate: unknown): void {
     const value = scopedFile(eventID, candidate, directory, sourceRoot);
@@ -371,7 +399,12 @@ export function normalize(
     const configured = object(info.model);
     const modelID = text(info.modelID) ?? text(configured?.modelID);
     const providerID = text(info.providerID) ?? text(configured?.providerID);
-    if (modelID) model = providerID ? providerID + "/" + modelID : modelID;
+    const profile = text(info.agent);
+    if (modelID) {
+      model = providerID ? providerID + "/" + modelID : modelID;
+      modelBasis =
+        info.role === "assistant" ? "message_metadata" : "thread_configuration";
+    }
     for (const value of row.parts) {
       if (++partsSeen > 15000)
         throw new Error("Native conversation exceeds part limit");
@@ -387,7 +420,18 @@ export function normalize(
           break outer;
         if (typeof part.text !== "string")
           throw new Error("Invalid native text");
-        messages.push({ role: info.role, text: clipped(part.text) });
+        messages.push({
+          role: info.role,
+          text: clipped(part.text),
+          ...(typeof part.id === "string" ? { native_id: part.id } : {}),
+          ...(info.role === "assistant"
+            ? {
+                ...(modelID ? { model: modelID } : {}),
+                ...(providerID ? { provider: providerID } : {}),
+                ...(profile ? { agent_profile: profile } : {}),
+              }
+            : {}),
+        });
       } else if (part.type === "tool") {
         const state = object(part.state);
         if (
@@ -403,6 +447,10 @@ export function normalize(
         messages.push({
           role: "tool",
           tool_name: tool,
+          ...(typeof part.id === "string" ? { native_id: part.id } : {}),
+          ...(modelID ? { model: modelID } : {}),
+          ...(providerID ? { provider: providerID } : {}),
+          ...(profile ? { agent_profile: profile } : {}),
           text: clipped(
             "Input:\n" +
               clipped(JSON.stringify(canonical(state.input ?? {})), 48 * 1024) +
@@ -433,7 +481,12 @@ export function normalize(
     schema_version: 1,
     source_session_id: "opencode:" + id,
     event_id: "",
-    agent: { name: "opencode", version: "workgraph-opencode/1", model },
+    agent: {
+      name: "opencode",
+      version: "workgraph-opencode/4",
+      model,
+      ...(modelBasis ? { model_basis: modelBasis } : {}),
+    },
     started_at: started.toISOString(),
     messages,
     changed_files: [],

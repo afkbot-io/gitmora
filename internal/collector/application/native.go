@@ -107,7 +107,12 @@ func (s *Service) recordNativePage(ctx context.Context, worktree string, input d
 		}
 		reason := input.History.Reason
 		if known {
-			if err = recording.ObserveNative(effective); err != nil {
+			if key != stream.ActiveKey {
+				if !recording.CompatibleSealedWindow(effective) {
+					known = false
+					reason = "history_replacement"
+				}
+			} else if err = recording.ObserveNative(effective); err != nil {
 				if !errors.Is(err, domain.ErrConflict) {
 					return err
 				}

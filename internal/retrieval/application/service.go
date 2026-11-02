@@ -43,7 +43,11 @@ func (s *Service) Search(ctx context.Context, p access.Principal, q domain.Query
 	}
 	for i := range result.Items {
 		hit := &result.Items[i]
-		text, offset := domain.Snippet(hit.Content, q.Terms, 500)
+		terms := q.Terms
+		if terms == "" && q.PrefixText != "" {
+			terms = q.PrefixText
+		}
+		text, offset := domain.Snippet(hit.Content, terms, 500)
 		excerpt, e := domain.Expand(hit.Chunk, domain.Expansion{EvidenceID: hit.ID, Offset: offset, Limit: len([]rune(text))})
 		if e != nil {
 			return domain.Result{}, e
@@ -88,7 +92,11 @@ type Lease struct {
 }
 
 // Part is a sanitized source part prepared by the persistence anti-corruption adapter.
-type Part struct{ Kind, Name, Title, Content string }
+type Part struct {
+	Kind, Name, Title, Content string
+	Metadata                   domain.Metadata
+	FilePaths                  []string
+}
 
 // IndexStore atomically claims sources and persists chunks with their durable acknowledgment.
 type IndexStore interface {
@@ -119,6 +127,13 @@ func (w *Indexer) ReconcileOnce(parent context.Context) (bool, error) {
 		}
 		var group []domain.Chunk
 		group, err = domain.Chunks(lease.Source, part.Kind, part.Name, part.Title, part.Content)
+		for i := range group {
+			group[i].Metadata = part.Metadata
+			if i == 0 {
+				group[i].FilePaths = part.FilePaths
+				group[i].FilePathCount = len(part.FilePaths)
+			}
+		}
 		chunks = append(chunks, group...)
 		if len(chunks) > 8192 {
 			err = domain.ErrInvalid

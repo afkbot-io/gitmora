@@ -34,9 +34,16 @@ func ValidCommit(sha string) bool {
 
 // Agent identifies the client integration and locally configured model.
 type Agent struct {
-	Name    string `json:"name"`
-	Version string `json:"version,omitempty"`
-	Model   string `json:"model"`
+	Name       string `json:"name"`
+	Version    string `json:"version,omitempty"`
+	Model      string `json:"model"`
+	Provider   string `json:"provider,omitempty"`
+	ModelBasis string `json:"model_basis,omitempty"`
+}
+
+// FileChange is a successful native tool's repository-relative path report, not line authorship.
+type FileChange struct {
+	Path string `json:"path"`
 }
 
 // TaskRef retains the legacy namespace in immutable version-1 captures. It has no remote task operations.
@@ -47,10 +54,44 @@ type TaskRef struct {
 
 // Message is exposed conversation or tool evidence, not hidden model reasoning.
 type Message struct {
-	Role     string `json:"role"`
-	Text     string `json:"text"`
-	ToolName string `json:"tool_name,omitempty"`
-	Kind     string `json:"kind,omitempty"`
+	Role         string       `json:"role"`
+	Text         string       `json:"text"`
+	ToolName     string       `json:"tool_name,omitempty"`
+	Kind         string       `json:"kind,omitempty"`
+	Model        string       `json:"model,omitempty"`
+	Provider     string       `json:"provider,omitempty"`
+	AgentProfile string       `json:"agent_profile,omitempty"`
+	TurnID       string       `json:"turn_id,omitempty"`
+	NativeID     string       `json:"native_id,omitempty"`
+	Changes      []FileChange `json:"changes,omitempty"`
+}
+
+// Equal includes exposed metadata and detaches equality from slice allocation identity.
+func (m Message) Equal(other Message) bool {
+	return m.Role == other.Role && m.Text == other.Text && m.ToolName == other.ToolName && m.Kind == other.Kind && m.Model == other.Model && m.Provider == other.Provider && m.AgentProfile == other.AgentProfile && m.TurnID == other.TurnID && m.NativeID == other.NativeID && slices.Equal(m.Changes, other.Changes)
+}
+
+// MessagesEqual compares ordered immutable source records, including optional attribution.
+func MessagesEqual(a, b []Message) bool { return slices.EqualFunc(a, b, Message.Equal) }
+
+// Enriches permits an older collector's missing metadata to be filled without rewriting known facts.
+func (m Message) Enriches(old Message) bool {
+	core := m
+	core.Model = old.Model
+	core.Provider = old.Provider
+	core.AgentProfile = old.AgentProfile
+	core.TurnID = old.TurnID
+	core.NativeID = old.NativeID
+	core.Changes = old.Changes
+	if !core.Equal(old) {
+		return false
+	}
+	for _, pair := range [][2]string{{old.Model, m.Model}, {old.Provider, m.Provider}, {old.AgentProfile, m.AgentProfile}, {old.TurnID, m.TurnID}, {old.NativeID, m.NativeID}} {
+		if pair[0] != "" && pair[0] != pair[1] {
+			return false
+		}
+	}
+	return len(old.Changes) == 0 || slices.Equal(old.Changes, m.Changes)
 }
 
 // Snapshot is the versioned ingestion DTO; NewSession validates and takes ownership of a copy.
@@ -96,6 +137,9 @@ func NewSession(input Snapshot) (Session, error) {
 	if !boundedText(input.Agent.Name, 120, true) || !boundedText(input.Agent.Model, 240, true) || !boundedText(input.Agent.Version, 120, false) {
 		return invalid("agent")
 	}
+	if !boundedText(input.Agent.Provider, 120, false) || !slices.Contains([]string{"", "thread_configuration", "hook_configuration", "message_metadata", "import_report"}, input.Agent.ModelBasis) {
+		return invalid("agent metadata")
+	}
 	if input.StartedAt.IsZero() {
 		return invalid("started_at")
 	}
@@ -112,6 +156,19 @@ func NewSession(input Snapshot) (Session, error) {
 		return invalid("messages count")
 	}
 	for _, message := range input.Messages {
+		if !boundedText(message.Model, 240, false) || !boundedText(message.Provider, 120, false) || !boundedText(message.AgentProfile, 120, false) || !boundedText(message.TurnID, 200, false) || !boundedText(message.NativeID, 200, false) || len(message.Changes) > 256 {
+			return invalid("message metadata")
+		}
+		if message.Role == "user" && (message.Model != "" || message.Provider != "" || message.AgentProfile != "" || len(message.Changes) > 0) {
+			return invalid("user attribution")
+		}
+		seen := map[string]bool{}
+		for _, change := range message.Changes {
+			if message.Role != "tool" || !ValidFilePath(change.Path) || seen[change.Path] {
+				return invalid("message file change")
+			}
+			seen[change.Path] = true
+		}
 		if message.Kind != "" && !((message.Kind == "agent_summary" && message.Role == "assistant") ||
 			(message.Kind == "import_notice" && message.Role == "system" && input.Origin != nil) ||
 			(message.Kind == "provenance_report" && message.Role == "system" && input.Origin != nil && input.Origin.System == "git-ai")) {
@@ -201,6 +258,9 @@ func cloneSnapshot(s Snapshot) Snapshot {
 		s.Continuation = &copy
 	}
 	s.Messages = slices.Clone(s.Messages)
+	for i := range s.Messages {
+		s.Messages[i].Changes = slices.Clone(s.Messages[i].Changes)
+	}
 	s.Files = slices.Clone(s.Files)
 	s.Commits = slices.Clone(s.Commits)
 	s.CommitRanges = slices.Clone(s.CommitRanges)

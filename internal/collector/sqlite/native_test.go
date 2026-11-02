@@ -3,6 +3,7 @@ package sqlite_test
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"path/filepath"
 	"strings"
@@ -289,4 +290,75 @@ func TestHumanPushSealsAnUncommittedTailWindowInTheSameAuthorizedStream(t *testi
 		}
 	}
 	t.Fatal("authorized dirty tail never entered the delivery queue")
+}
+
+func TestMetadataUpgradeKeepsSealedParentReferencesAndEnrichesOnlyActiveWindow(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "state.sqlite")
+	store := open(t, path)
+	if err := store.Configure(ctx, config); err != nil {
+		t.Fatal(err)
+	}
+	service := application.NewService(store, nil, time.Now)
+	first := nativeWindow("old-root", "a", "Original parent")
+	root, err := service.RecordNative(ctx, "tree", first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tailInput := nativeWindow("old-tail", "b", "Original tail")
+	tail, err := service.RecordNative(ctx, "tree", tailInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	database, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+	var before []byte
+	if err = database.QueryRow(`SELECT state FROM recordings WHERE session_id=?`, root).Scan(&before); err != nil {
+		t.Fatal(err)
+	}
+	first.EventID = "metadata-root"
+	first.Agent.Model = "configured-now"
+	first.Messages[0].Model = "recorded-model"
+	first.Messages[0].NativeID = "root-item"
+	got, err := service.RecordNative(ctx, "tree", first)
+	if err != nil || got != root {
+		t.Fatal("parent replay created a replacement", got, err)
+	}
+	var after []byte
+	var count int
+	if err = database.QueryRow(`SELECT state FROM recordings WHERE session_id=?`, root).Scan(&after); err != nil || string(before) != string(after) {
+		t.Fatal("pinned parent bytes changed on metadata-only upgrade", err)
+	}
+	if err = database.QueryRow(`SELECT count(*) FROM recordings`).Scan(&count); err != nil || count != 2 {
+		t.Fatal("duplicate history introduced", count, err)
+	}
+	tailInput.EventID = "metadata-tail"
+	tailInput.Messages[0].Model = "new-active-model"
+	tailInput.Messages[0].NativeID = "tail-item"
+	got, err = service.RecordNative(ctx, "tree", tailInput)
+	if err != nil || got != tail {
+		t.Fatal("active metadata did not enrich in place", got, err)
+	}
+	var raw []byte
+	if err = database.QueryRow(`SELECT state FROM recordings WHERE session_id=?`, tail).Scan(&raw); err != nil {
+		t.Fatal(err)
+	}
+	var state domain.State
+	if err = json.Unmarshal(raw, &state); err != nil || state.Snapshot.Messages[0].Model != "new-active-model" {
+		t.Fatal("active model missing", err)
+	}
+	var parent domain.State
+	if err = json.Unmarshal(before, &parent); err != nil {
+		t.Fatal(err)
+	}
+	canonical, err := capture.NewSession(parent.Snapshot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Snapshot.Continuation.PreviousRevision != parent.LastRevision || state.Snapshot.Continuation.PreviousDigest != canonical.Digest() {
+		t.Fatal("continuation no longer points to the displayed parent")
+	}
 }

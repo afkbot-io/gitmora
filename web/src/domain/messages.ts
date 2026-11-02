@@ -1,5 +1,6 @@
 /** Authored UI translations. Source text and user content are never translated. */
 export const english: Readonly<Record<string, string>> = {
+  "Коммит {0}": "Commit {0}",
   " — недоступно родителю": " — unavailable to this connection",
   "(пустое сообщение)": "(empty message)",
   ". Родитель:": ". Parent:",
@@ -56,12 +57,11 @@ export const english: Readonly<Record<string, string>> = {
   "В этой части совпадений нет.": "No matches in this part.",
   "В этой части только действия инструментов.":
     "This part only contains tool activity.",
+  "Введите запрос или выберите фильтр.": "Enter a query or choose a filter.",
   "Введите название ключа длиной до 120 байт UTF-8.":
     "Enter a key name of up to 120 UTF-8 bytes.",
   "Введите номер ревизии от 1 до 1000000000.":
     "Enter a revision number from 1 to 1000000000.",
-  "Введите поисковый запрос или полный SHA коммита.":
-    "Enter a search query or the full commit SHA.",
   "Введите полный код из терминала: XXXX-XXXX.":
     "Enter the complete code from your terminal: XXXX-XXXX.",
   "Введите срок целым положительным числом минут.":
@@ -71,6 +71,7 @@ export const english: Readonly<Record<string, string>> = {
   Версия: "Version",
   "Версия или идентификатор операции изменились. Обновите данные перед новым изменением.":
     "The version or operation ID changed. Refresh the data before editing.",
+  "Версия интеграции": "Integration version",
   "Включите запись сессий в CLI": "Enable session recording in the CLI",
   Войти: "Sign in",
   "Войти через организацию заново": "Sign in again",
@@ -79,7 +80,6 @@ export const english: Readonly<Record<string, string>> = {
   "Все доступные коммиты": "All available commits",
   "Все источники": "All sources",
   "Все репозитории": "All repositories",
-  "Вставьте полный SHA коммита.": "Paste the full commit SHA.",
   "Вставьте ссылку на репозиторий. Адрес сервера и ID определим автоматически.":
     "Paste a repository URL. We will detect its server and ID.",
   "Вход CLI через организацию не настроен на этом сервере.":
@@ -94,8 +94,11 @@ export const english: Readonly<Record<string, string>> = {
   "Выберите проект": "Choose a project",
   "Выберите проект, к которому у вас есть доступ.":
     "Choose a project you can access.",
+  "Выберите репозиторий": "Choose a repository",
   "Выберите репозиторий в разделе «Репозитории», чтобы получить команду подключения.":
     "Choose a repository under Repositories to get its connection command.",
+  "Выберите репозиторий для поиска по файлу.":
+    "Choose a repository to search by file.",
   "Выберите хотя бы одно разрешение.": "Select at least one permission.",
   "Выданный ключ истёк или был отозван. Результат выпуска скрыт.":
     "The issued key expired or was revoked. Its secret has been hidden.",
@@ -107,6 +110,8 @@ export const english: Readonly<Record<string, string>> = {
   "Выпускать и отзывать свои ключи": "Issue and revoke your keys",
   "Выпустить ключ": "Issue key",
   "Выпустить личный ключ": "Issue personal key",
+  "Выше — предыдущая переписка, вне выбранного изменения":
+    "Earlier session history above is outside this change",
   "Готово к проверке": "Ready for review",
   "Данные изменились. Обновите страницу и повторите действие.":
     "The data has changed. Refresh and try again.",
@@ -155,14 +160,16 @@ export const english: Readonly<Record<string, string>> = {
   "Загружаем фрагмент…": "Loading fragment…",
   "Загружено сообщений: {0}": "Messages loaded: {0}",
   "Загрузить ещё": "Load more",
+  "Загрузить ещё 20 сообщений": "Load 20 more messages",
   "Загрузить ещё ключи": "Load more keys",
   "Загрузить ещё репозитории": "Load more repositories",
-  "Загрузить ещё 20 сообщений": "Load 20 more messages",
   "Загрузить ещё участников": "Load more members",
+  "Загрузить предыдущие 20 сообщений": "Load previous 20 messages",
   "Загрузка подтверждения CLI…": "Loading CLI confirmation…",
   "Загрузка полной записи…": "Loading full record…",
   "Загрузка…": "Loading…",
   Закрыт: "Closed",
+  "Записей об изменении файла пока нет.": "No recorded file changes yet.",
   "Запись не найдена или больше недоступна.":
     "The record was not found or is no longer available.",
   "Запись сессии": "Session record",
@@ -182,14 +189,18 @@ export const english: Readonly<Record<string, string>> = {
   "Запрос превышает допустимый размер.": "The request exceeds the size limit.",
   "Запрошенный срок превышает 90 дней или оставшийся срок текущего ключа или сессии.":
     "The requested lifetime exceeds 90 days or the remaining connection lifetime.",
+  "Заявленные строки {0}–{1}": "Reported lines {0}–{1}",
   Идентификатор: "Identifier",
   "Идентификатор проекта": "Project ID",
   "Идентификаторы источника": "Source identifiers",
+  "Изменение файла": "File change",
   "Изменения в коде": "Code changes",
   "Изменить доступ": "Edit access",
   "Импорт:": "Import:",
+  "Импортированный отчёт": "Imported report",
   "Индекс обновляется": "Index updating",
   "Инструкция сервиса": "Provider instructions",
+  Инструмент: "Tool",
   "Историческая версия": "Historical version",
   "Исторические версии": "Historical versions",
   "История Gitmora будет удалена. Репозитории в GitHub и GitLab сохранятся.":
@@ -223,6 +234,7 @@ export const english: Readonly<Record<string, string>> = {
   "Команда / входные данные": "Command / input",
   Коммит: "Commit",
   "Коммит ещё не проверен": "Commit not verified yet",
+  "Коммит не найден.": "Commit not found.",
   "Коммит репозитория": "Repository commit",
   Коммиты: "Commits",
   "Коммиты, указанные агентом:": "Agent-reported commits:",
@@ -234,13 +246,16 @@ export const english: Readonly<Record<string, string>> = {
   "Корневой ключ": "Root key",
   "Личные ключи": "Personal keys",
   "Личные настройки": "Personal settings",
+  Любой: "Any",
+  Модель: "Model",
+  "Модель из отчёта": "Reported model",
+  "Модель сообщения": "Message model",
   Навигация: "Navigation",
   "Название в Gitmora": "Name in Gitmora",
   "Название и удаление": "Name and deletion",
   "Название ключа": "Key name",
   "Название проекта": "Project name",
   "Название сохранено.": "Name saved.",
-  "Найдено фрагментов: {0}": "Excerpts found: {0}",
   Найти: "Search",
   "Найти в загруженных сообщениях": "Find in loaded messages",
   "Например, alex…": "For example, alex…",
@@ -249,6 +264,7 @@ export const english: Readonly<Record<string, string>> = {
   "Настраивать интеграции проекта": "Configure project integrations",
   Настроить: "Configure",
   "Настроить CLI и MCP": "Set up CLI and MCP",
+  "Настройка модели сессии": "Session model configuration",
   "Настройки проекта": "Project settings",
   "Не удалось войти. Повторите попытку или обратитесь к администратору.":
     "Could not sign in. Try again or contact your administrator.",
@@ -332,6 +348,7 @@ export const english: Readonly<Record<string, string>> = {
   "Отозвать ключ и потомков": "Revoke key and child keys",
   "Отозвать этот выданный ключ": "Revoke this issued key",
   "Отправлять сессии агента": "Upload agent sessions",
+  "Отчёт Git AI": "Git AI report",
   Оформление: "Appearance",
   Ошибка: "Failed",
   "Ошибка в записи": "Recorded error",
@@ -375,6 +392,7 @@ export const english: Readonly<Record<string, string>> = {
   "Показать ещё": "Show more",
   "Полная история": "Full history",
   "Полная история диалога": "Full conversation history",
+  Пользователь: "User",
   "Попробовать ещё раз": "Try again",
   "Попробуйте другие слова или полный SHA коммита.":
     "Try other words or a full commit SHA.",
@@ -384,11 +402,13 @@ export const english: Readonly<Record<string, string>> = {
     "Key permissions and lifetime are limited by this session. Signing out revokes keys issued through it.",
   "Права токена": "Token permissions",
   "Предыдущие диапазоны": "Previous ranges",
+  "Предыдущие сообщения сессии": "Earlier session messages",
   "Привязка уже существует или её версия изменилась. Обновите OIDC-привязки перед новым изменением.":
     "The binding already exists or has changed. Refresh the list before editing.",
   "Пример: проект, сессия агента, коммит и merge request":
     "Example: project, agent session, commit and merge request",
   "Пример: работа над входом": "Example: updating sign-in",
+  Провайдер: "Provider",
   "Проверить подключение": "Check connection",
   "Проверки CI": "CI checks",
   "Проверьте введённые данные и параметры запроса.":
@@ -404,9 +424,11 @@ export const english: Readonly<Record<string, string>> = {
   "Происхождение импорта": "Import provenance",
   Пропущено: "Skipped",
   Профиль: "Profile",
+  "Профиль агента": "Agent profile",
   "Профиль сохранён.": "Profile saved.",
   "Публичный репозиторий без токена": "Public repository without a token",
   "Пути, указанные агентом:": "Agent-reported paths:",
+  "Путь к файлу": "File path",
   "Работайте как обычно: git commit и git push отправят историю в Gitmora.":
     "Work as usual: git commit and git push will send your history to Gitmora.",
   "Развернуть сообщение": "Expand message",
@@ -421,6 +443,7 @@ export const english: Readonly<Record<string, string>> = {
   Результат: "Result",
   "Результат выпуска ключа": "Key issuance result",
   "Результаты поиска": "Search results",
+  "Результаты: {0}": "Results: {0}",
   "Резюме агента": "Agent summary",
   Репозитории: "Repositories",
   Репозиторий: "Repository",
@@ -432,10 +455,12 @@ export const english: Readonly<Record<string, string>> = {
   Роль: "Role",
   "Роль нового участника": "New member role",
   Русский: "Русский",
+  "Сбросить фильтры": "Reset filters",
   "Сведения об источнике": "Source details",
   Свернуть: "Collapse",
   "Сверьте этот код с кодом в вашем терминале. Подтверждайте только вход, который начали сами.":
     "Compare this code with your terminal. Approve only a sign-in you started yourself.",
+  "Связанные изменения": "Related changes",
   "Связанные сессии": "Linked sessions",
   "Сейчас доступно не более": "Available now: up to",
   "Секрет вебхука": "Webhook secret",
@@ -518,19 +543,21 @@ export const english: Readonly<Record<string, string>> = {
   "Способ проверки": "Verification method",
   "Срок в минутах": "Lifetime in minutes",
   "Срок ключа": "Key lifetime",
-  "Ссылка на MR/PR, полный SHA или текст…": "MR/PR URL, full SHA or text…",
   "Ссылка на код": "Code reference",
   "Ссылка на репозиторий": "Repository URL",
   "Ссылка относится к другому репозиторию. Смените фильтр.":
     "This URL belongs to another repository. Change the filter.",
   "Статус и отключение": "Status and disabling capture",
   "Строки {0}–{1}": "Lines {0}–{1}",
+  "Текст, SHA, UUID сессии или ссылка на PR…":
+    "Text, SHA, session UUID or PR link…",
   "Текущая сессия не предоставляет все запрошенные права. Можно отклонить запрос.":
     "Your session does not have all requested permissions. You can deny the request.",
   "Текущее подключение": "Current connection",
   "Текущее подключение завершится.": "Your current connection will end.",
   "Терминал получит перечисленные права на указанный срок. Ключ останется отдельным от браузерной сессии.":
     "The terminal will receive these permissions for the stated lifetime, independently of your browser session.",
+  "Тип сообщения": "Message type",
   "Токен не принят. Проверьте его срок действия и сохраните новый.":
     "The token was rejected. Check its expiry and save a new one.",
   "Токен чтения": "Read token",
@@ -559,8 +586,8 @@ export const english: Readonly<Record<string, string>> = {
     "Manage Gitmora with an administrator role",
   Успешно: "Succeeded",
   "Устройство:": "Device:",
-  "Уточните запрос, чтобы увидеть нужный результат.":
-    "Refine your query to find the right result.",
+  "Уточните SHA: найдено несколько коммитов.":
+    "Use a longer SHA: multiple commits match.",
   Участник: "Contributor",
   "Участник добавлен.": "Member added.",
   Участники: "Members",
@@ -570,11 +597,13 @@ export const english: Readonly<Record<string, string>> = {
   "Учётная запись выключена": "Account disabled",
   "Учётная запись:": "Account:",
   Файл: "File",
+  Фильтры: "Filters",
   Формат: "Format",
   "Фрагмент SHA-256": "Fragment SHA-256",
   "Фрагмент источника": "Source fragment",
   "Фрагмент прочитан до конца": "End of fragment",
   "Часть {0}": "Part {0}",
+  Человек: "Human",
   "Читаем запись сессии…": "Loading session…",
   "Читаем условия подключения…": "Loading connection details…",
   "Читать данные репозиториев": "Read repository data",
@@ -607,8 +636,4 @@ export const english: Readonly<Record<string, string>> = {
   "корневой ключ": "root key",
   "полных минут. Браузерная сессия ограничивает срок её дочерних ключей; более долгий корневой ключ выдаётся отдельной доверенной процедурой.":
     "whole minutes. A browser session limits its child keys' lifetime; longer-lived root keys require trusted server administration.",
-  "Предыдущие сообщения сессии": "Earlier session messages",
-  "Загрузить предыдущие 20 сообщений": "Load previous 20 messages",
-  "Выше — предыдущая переписка, вне выбранного изменения":
-    "Earlier session history above is outside this change",
 };

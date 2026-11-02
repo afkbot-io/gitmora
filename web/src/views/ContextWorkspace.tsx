@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { t } from "../domain/locale.js";
 import { LatestRequest } from "../application/latest.js";
@@ -9,6 +9,7 @@ import type {
   Project,
   Repository,
   SearchResult,
+  SearchQuery,
 } from "../domain/context.js";
 import type {
   BrowseCursor,
@@ -23,6 +24,8 @@ import { Evidence } from "./Evidence.js";
 import { ContextDetail } from "./history/ContextDetail.js";
 import { buttonStyles } from "./ui.js";
 import { Icon } from "./Icon.js";
+import { SourceMetadata } from "./SourceMetadata.js";
+import { SearchFilters } from "./SearchFilters.js";
 
 function selectionFromHash(project: string): Selection | null {
   const p = new URLSearchParams(location.hash.slice(1));
@@ -61,6 +64,14 @@ export function ContextWorkspace({
   const [repository, setRepository] = useState("");
   const [kind, setKind] = useState("");
   const [history, setHistory] = useState(false);
+  const [filters, setFilters] = useState({
+    agent: "",
+    model: "",
+    role: "",
+    file_path: "",
+  });
+  const [submitted, setSubmitted] = useState<SearchQuery | null>(null);
+  const inspector = useRef<HTMLElement>(null);
   const [result, setResult] = useState<SearchResult | null>(null);
   const [hit, setHit] = useState<Hit | null>(null);
   const [selection, setSelection] = useState<Selection | null>(() =>
@@ -99,6 +110,7 @@ export function ContextWorkspace({
   function clearResults() {
     requests.cancel();
     setResult(null);
+    setSubmitted(null);
     setHit(null);
     setError("");
     setLoading(false);
@@ -126,27 +138,79 @@ export function ContextWorkspace({
         open(resolved.query);
         return;
       }
-      if (/^[0-9a-f]{7,39}$/i.test(text.trim()))
-        throw new Error("Вставьте полный SHA коммита.");
+      const query = searchQuery(
+        project.id,
+        repository,
+        text,
+        kind,
+        history,
+        filters,
+      );
       const found = await client.request<SearchResult>(
         "/v1/context/search",
-        searchQuery(project.id, repository, text, kind, history),
+        query,
         request.signal,
       );
       if (!request.current()) return;
       if (found.items.some((item) => item.source.project_id !== project.id))
         throw new Error("Сервер вернул источники другого проекта.");
+      setSubmitted(query);
       setResult(found);
       setHit(found.items[0] ?? null);
     } catch (e) {
       if (!aborted(e) && request.current())
         setError(
-          e instanceof ApiError && e.status === 404
-            ? t(
-                "MR/PR ещё не синхронизирован. Проверьте подключение репозитория.",
-              )
-            : readableError(e),
+          e instanceof ApiError && e.code === "ambiguous_commit"
+            ? t("Уточните SHA: найдено несколько коммитов.")
+            : e instanceof ApiError &&
+                e.status === 404 &&
+                /^[0-9a-f]{7,64}$/i.test(text.trim())
+              ? t("Коммит не найден.")
+              : e instanceof ApiError &&
+                  e.status === 404 &&
+                  /^https?:\/\//i.test(text.trim())
+                ? t(
+                    "MR/PR ещё не синхронизирован. Проверьте подключение репозитория.",
+                  )
+                : readableError(e),
         );
+    } finally {
+      if (request.current()) setLoading(false);
+    }
+  }
+  async function more() {
+    if (loading || !submitted || !result?.next) return;
+    const request = requests.begin();
+    setLoading(true);
+    setError("");
+    try {
+      const found = await client.request<SearchResult>(
+        "/v1/context/search",
+        { ...submitted, after: result.next },
+        request.signal,
+      );
+      if (!request.current()) return;
+      if (
+        found.items.some(
+          (item) =>
+            item.source.project_id !== project.id ||
+            (submitted.repository_id &&
+              item.source.repository_id !== submitted.repository_id),
+        )
+      )
+        throw new Error("Сервер вернул источники другого проекта.");
+      setResult((previous) => {
+        const seen = new Set(previous?.items.map((item) => item.id));
+        return {
+          ...found,
+          items: [
+            ...(previous?.items ?? []),
+            ...found.items.filter((item) => !seen.has(item.id)),
+          ],
+        };
+      });
+    } catch (e) {
+      if (request.current() && !aborted(e)) setError(readableError(e));
     } finally {
       if (request.current()) setLoading(false);
     }
@@ -164,6 +228,18 @@ export function ContextWorkspace({
             : "gitlab"
         }
         onNavigate={(q, fromMR) => open(q, undefined, fromMR)}
+        onOpenEvidence={(source) => {
+          if (source.source.repository_id && source.source.session_id)
+            open(
+              {
+                project_id: project.id,
+                repository_id: source.source.repository_id,
+                session_id: source.source.session_id,
+              },
+              source,
+              selection.merge_request_iid,
+            );
+        }}
         onBack={() => {
           location.hash = new URLSearchParams({
             view: "context",
@@ -201,7 +277,7 @@ export function ContextWorkspace({
               autoComplete="off"
               value={text}
               maxLength={2000}
-              placeholder={t("Ссылка на MR/PR, полный SHA или текст…")}
+              placeholder={t("Текст, SHA, UUID сессии или ссылка на PR…")}
               onChange={(e) => {
                 setText(e.target.value);
                 clearResults();
@@ -210,7 +286,11 @@ export function ContextWorkspace({
           </div>
           <button
             className={buttonStyles.primary + " min-w-28"}
-            disabled={loading || !text.trim()}
+            disabled={
+              loading ||
+              (!text.trim() &&
+                !Object.values(filters).some((value) => value.trim()))
+            }
           >
             {loading ? t("Ищем…") : t("Найти")}
           </button>
@@ -224,6 +304,8 @@ export function ContextWorkspace({
               value={repository}
               onChange={(e) => {
                 setRepository(e.target.value);
+                if (!e.target.value)
+                  setFilters((current) => ({ ...current, file_path: "" }));
                 clearResults();
               }}
             >
@@ -266,6 +348,14 @@ export function ContextWorkspace({
             {t("Исторические версии")}
           </label>
         </div>
+        <SearchFilters
+          value={filters}
+          repository={repository}
+          onChange={(value) => {
+            setFilters(value);
+            clearResults();
+          }}
+        />
       </form>
       <ErrorNotice>{error}</ErrorNotice>
       {loading && (
@@ -279,12 +369,7 @@ export function ContextWorkspace({
             className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm text-muted"
             role="status"
           >
-            <span>{t("Найдено фрагментов: {0}", result.items.length)}</span>
-            {result.has_more && (
-              <span>
-                {t("Уточните запрос, чтобы увидеть нужный результат.")}
-              </span>
-            )}
+            <span>{t("Результаты: {0}", result.items.length)}</span>
             {result.pending_sources_in_project > 0 && (
               <span>{t("Индекс обновляется")}</span>
             )}
@@ -308,10 +393,33 @@ export function ContextWorkspace({
                     key={item.id}
                     className={`result-row block w-full rounded-none border-0 border-b border-l-2 border-b-line px-4 py-4 text-left font-normal ${hit?.id === item.id ? "selected border-l-accent bg-accent-soft" : "border-l-transparent bg-paper hover:bg-canvas"}`}
                     aria-pressed={hit?.id === item.id}
-                    onClick={() => setHit(item)}
+                    onClick={() => {
+                      setHit(item);
+                      const panel = inspector.current;
+                      const layout = panel?.parentElement;
+                      if (
+                        panel &&
+                        layout &&
+                        getComputedStyle(layout)
+                          .gridTemplateColumns.trim()
+                          .split(/\s+/).length === 1
+                      ) {
+                        panel.scrollIntoView({
+                          block: "start",
+                          behavior: "instant",
+                        });
+                        panel.focus({ preventScroll: true });
+                      }
+                    }}
                   >
                     <span className="mb-2 flex flex-wrap justify-between gap-2 text-xs text-muted">
-                      <span>{t(sourceNames[item.kind] ?? item.kind)}</span>
+                      <span>
+                        {item.metadata?.agent ? (
+                          <SourceMetadata metadata={item.metadata} />
+                        ) : (
+                          t(sourceNames[item.kind] ?? item.kind)
+                        )}
+                      </span>
                       <span>{date(item.observed_at)}</span>
                     </span>
                     <span className="mb-2 block wrap-anywhere text-sm font-medium">
@@ -322,8 +430,21 @@ export function ContextWorkspace({
                     </span>
                   </button>
                 ))}
+                {result.next && (
+                  <div className="p-4">
+                    <button
+                      className={buttonStyles.secondary + " w-full"}
+                      disabled={loading}
+                      onClick={() => void more()}
+                    >
+                      {loading ? t("Загрузка…") : t("Показать ещё")}
+                    </button>
+                  </div>
+                )}
               </div>
               <aside
+                ref={inspector}
+                tabIndex={-1}
                 className="inspector min-w-0 border-l border-line compact:border-l-0 compact:border-t"
                 aria-label={t("Точный источник")}
               >
@@ -356,7 +477,25 @@ export function ContextWorkspace({
                         {t("Открыть контекст")}
                       </button>
                     </div>
-                    <Evidence key={hit.id} client={client} hit={hit} />
+                    <Evidence
+                      key={hit.id}
+                      client={client}
+                      hit={hit}
+                      onOpen={(source) => {
+                        if (
+                          source.source.repository_id &&
+                          source.source.session_id
+                        )
+                          open(
+                            {
+                              project_id: project.id,
+                              repository_id: source.source.repository_id,
+                              session_id: source.source.session_id,
+                            },
+                            source,
+                          );
+                      }}
+                    />
                   </>
                 )}
               </aside>

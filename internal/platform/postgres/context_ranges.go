@@ -72,6 +72,19 @@ func readContextMessages(ctx context.Context, tx pgx.Tx, q domain.Query, page *d
 			continue
 		}
 		for index, message := range snapshot.Messages {
+			changeCount := len(message.Changes)
+			// Path reports are metadata, not unbounded transcript payload. Keep complete paths;
+			// the canonical session revision retains every change for an explicit source read.
+			changeBytes, shown := 0, 0
+			for _, change := range message.Changes {
+				raw, _ := json.Marshal(change)
+				if shown >= 4 || changeBytes+len(raw) > 2048 {
+					break
+				}
+				changeBytes += len(raw)
+				shown++
+			}
+			message.Changes = message.Changes[:shown]
 			if after != nil && repo == after.RepositoryID && id == after.SessionID && index < after.Offset {
 				continue
 			}
@@ -104,7 +117,7 @@ func readContextMessages(ctx context.Context, tx pgx.Tx, q domain.Query, page *d
 				return nil
 			}
 			slices.Sort(shas)
-			source := domain.ScopedMessage{Segment: segment, Index: index, Message: message, CommitSHAs: slices.Compact(shas)}
+			source := domain.ScopedMessage{Segment: segment, Index: index, Message: message, CommitSHAs: slices.Compact(shas), ChangeCount: changeCount, ChangesMore: shown < changeCount}
 			if preview {
 				source.TextPreview = true
 				source.FullTextAfter = &domain.MessageCursor{RepositoryID: repo, SessionID: id, Revision: rev, Digest: digest, Segment: segment, Offset: index, Head: q.ExpectedHead, ScopeKey: q.MRReadKey}

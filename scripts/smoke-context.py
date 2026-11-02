@@ -61,7 +61,7 @@ def main() -> None:
         assert indexed.returncode == 0 and json.loads(indexed.stdout)["worked"], "Provider-free index worker failed"
         process, address = api.start_api(environment)
         status, found = request("/v1/context/search", query)
-        assert status == 200 and len(found["items"]) >= 2 and found["pending_sources_in_project"] == 0
+        assert status == 200 and len(found["items"]) == 1 and found["pending_sources_in_project"] == 0
         hit = found["items"][0]
         assert hit["source"]["digest"] == accepted["digest"] and hit["source"]["revision"] == 1 and hit["current"]
         assert len(hit["content"]) <= 500
@@ -116,7 +116,7 @@ def main() -> None:
         status, narrow = rpc("tools/call", {"name": "context.search", "arguments": query}, scoped["token"])
         assert status == 200 and narrow["result"]["structuredContent"]["result"]["items"] == []
         snapshot["revision"] = 2
-        snapshot["messages"] = [{"role": "assistant", "text": "Current source has changed."}]
+        snapshot["messages"] = [{"role": "assistant", "text": "Current source has changed.", "model":"native-fixture-model", "provider":"fixture", "agent_profile":"build", "native_id":"native-item"}]
         assert request("/v1/captures", snapshot)[0] == 201
         assert api.command(["worker", "--once"], environment).returncode == 0
         assert request("/v1/context/search", query)[1]["items"] == []
@@ -129,8 +129,9 @@ def main() -> None:
         assert native_key.returncode == 0
         native_identity = json.loads(native_key.stdout)
         # The immutable historical source remains readable by explicit expansion; search the latest current revision.
-        native_query = dict(project_id=identity["project_id"], text="Current source")
+        native_query = dict(project_id=identity["project_id"], text="Current source", model="native-fixture-model", role="assistant")
         native_hit = request("/v1/context/search", native_query)[1]["items"][0]
+        assert native_hit["metadata"]["model_basis"]=="message_metadata" and native_hit["metadata"]["profile"]=="build"
         verify_native_context(ROOT, "http://" + address, native_identity["token"], native_query, native_hit["id"],
             lambda: api.sql(f'UPDATE "{schema}".api_tokens SET revoked_at=now() WHERE id=\'{native_identity["token_id"]}\''))
         print("Native CLI API/stdio MCP processes passed: explicit environment authority, six read tools, search, exact expansion, live revocation and no credential stdout.")

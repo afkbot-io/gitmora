@@ -135,8 +135,8 @@ func contextMCPServer(service RetrievalService, codeService CodeService, packs C
 		result, err := packs.Pack(ctx, p, input)
 		return mcpResult(result, err), nil
 	})
-	searchSchema := json.RawMessage(`{"type":"object","additionalProperties":false,"required":["project_id"],"properties":{"project_id":{"type":"string"},"repository_id":{"type":"string"},"session_id":{"type":"string"},"text":{"type":"string","maxLength":512},"commit_sha":{"type":"string"},"file_path":{"type":"string","maxLength":4096},"kinds":{"type":"array","items":{"type":"string"},"maxItems":6},"limit":{"type":"integer","minimum":0,"maximum":50},"history":{"type":"boolean"}}}`)
-	server.AddTool(&mcp.Tool{Name: "context.search", Description: "Search authorized session evidence, confirmed code references and verified commit-pinned code. Plain text, explicit project, bounded output with citations.", InputSchema: searchSchema, Annotations: readOnly}, func(ctx context.Context, r *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	searchSchema := json.RawMessage(`{"type":"object","additionalProperties":false,"required":["project_id"],"properties":{"project_id":{"type":"string"},"repository_id":{"type":"string"},"session_id":{"type":"string"},"text":{"type":"string","maxLength":512},"commit_sha":{"type":"string"},"commit_prefix":{"type":"string","minLength":7,"maxLength":63},"file_path":{"type":"string","maxLength":4096},"kinds":{"type":"array","items":{"type":"string"},"maxItems":6},"limit":{"type":"integer","minimum":0,"maximum":50},"history":{"type":"boolean"},"agent":{"type":"string","maxLength":120},"model":{"type":"string","maxLength":240},"role":{"type":"string","enum":["user","assistant","tool","system"]},"after":{"type":"object","additionalProperties":false,"required":["query_digest","indexed_before","score","observed_at","id"],"properties":{"query_digest":{"type":"string"},"indexed_before":{"type":"string"},"score":{"type":"number"},"observed_at":{"type":"string"},"id":{"type":"string"},"resolved_commit_sha":{"type":"string"},"literal":{"type":"boolean"}}}}}`)
+	server.AddTool(&mcp.Tool{Name: "context.search", Description: "Search authorized session evidence, confirmed code references and verified commit-pinned code. Plain text or session UUID, explicit project, bounded pages with citations. Filter agent/model/role and repository/file_path; commit_sha limits messages to recorded commit ranges. Pass next as after with the same query. metadata.model_basis distinguishes message metadata from a session configuration or imported report. metadata.relation=tool_reported connects a successful native tool record to its reported path; git_ai_reported retains an unverified imported line claim. Neither proves final line authorship.", InputSchema: searchSchema, Annotations: readOnly}, func(ctx context.Context, r *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		var input domain.Query
 		if jsonwire.DecodeObject(r.Params.Arguments, &input) != nil {
 			return mcpFailure(domain.ErrInvalid), nil
@@ -197,6 +197,8 @@ func mcpFailure(err error) *mcp.CallToolResult {
 		code = "forbidden"
 	case errors.Is(err, domain.ErrInvalid), errors.Is(err, pack.ErrInvalid):
 		code = "invalid_context_query"
+	case errors.Is(err, domain.ErrAmbiguous):
+		code = "ambiguous_commit"
 	case errors.Is(err, domain.ErrNotFound):
 		code = "evidence_unavailable"
 	}

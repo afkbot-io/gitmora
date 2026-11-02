@@ -148,3 +148,34 @@ test("queries preserve explicit scope, bound UTF-8 and allow safe external sourc
   ])
     assert.equal(safeExternalURL(value), null);
 });
+
+test("search filters support model-only discovery without changing the primary query", () => {
+  assert.deepEqual(
+    searchQuery("project", "repo", "", "", false, {
+      agent: " Codex ",
+      model: " model-alpha ",
+      role: "assistant",
+      file_path: "src/main.go",
+    }),
+    {
+      project_id: "project",
+      repository_id: "repo",
+      text: "",
+      history: false,
+      limit: 20,
+      agent: "Codex",
+      model: "model-alpha",
+      role: "assistant",
+      file_path: "src/main.go",
+    },
+  );
+  assert.throws(
+    () =>
+      searchQuery("project", "", "", "", false, { file_path: "src/main.go" }),
+    /репозиторий/,
+  );
+  assert.equal(
+    searchQuery("project", "", "abcdef0", "", false).text,
+    "abcdef0",
+  );
+});

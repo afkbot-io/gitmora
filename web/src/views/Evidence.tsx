@@ -6,8 +6,18 @@ import { readableError, sourceNames } from "../domain/context.js";
 import type { Expanded, Hit } from "../domain/context.js";
 import type { ApiClient } from "../transport/api.js";
 import { ErrorNotice, date, aborted } from "./shared.js";
+import { SourceMetadata } from "./SourceMetadata.js";
+import { CodeProvenance } from "./CodeProvenance.js";
 
-export function Evidence({ client, hit }: { client: ApiClient; hit: Hit }) {
+export function Evidence({
+  client,
+  hit,
+  onOpen,
+}: {
+  client: ApiClient;
+  hit: Hit;
+  onOpen: (hit: Hit) => void;
+}) {
   const [expanded, setExpanded] = useState<Expanded | null>(null);
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -67,15 +77,49 @@ export function Evidence({ client, hit }: { client: ApiClient; hit: Hit }) {
           {translate(sourceNames[hit.kind] ?? hit.kind)}
         </span>
         <h2>{hit.title}</h2>
+        <SourceMetadata metadata={current.metadata} />
         <p className="muted text-muted">
-          {current.current
-            ? translate("Последняя сохранённая версия")
-            : translate("Историческая версия")}
+          {source.commit_sha
+            ? translate("Коммит {0}", source.commit_sha.slice(0, 10))
+            : current.current
+              ? translate("Последняя сохранённая версия")
+              : translate("Историческая версия")}
         </p>
       </header>
       <details className="mt-4 text-sm text-muted">
         <summary className="py-2">{translate("Сведения об источнике")}</summary>
         <dl className={sharedStyles.sourceDetails}>
+          {current.metadata?.provider && (
+            <>
+              <dt>{translate("Провайдер")}</dt>
+              <dd>{current.metadata.provider}</dd>
+            </>
+          )}
+          {current.metadata?.version &&
+            current.metadata.version !== "unknown" && (
+              <>
+                <dt>{translate("Версия интеграции")}</dt>
+                <dd>{current.metadata.version}</dd>
+              </>
+            )}
+          {current.metadata?.profile && (
+            <>
+              <dt>{translate("Профиль агента")}</dt>
+              <dd>{current.metadata.profile}</dd>
+            </>
+          )}
+          {current.metadata?.model && (
+            <>
+              <dt>
+                {current.metadata.model_basis === "message_metadata"
+                  ? translate("Модель сообщения")
+                  : current.metadata.model_basis === "import_report"
+                    ? translate("Модель из отчёта")
+                    : translate("Настройка модели сессии")}
+              </dt>
+              <dd>{current.metadata.model}</dd>
+            </>
+          )}
           {source.session_id && (
             <>
               <dt>{translate("Сессия")}</dt>
@@ -114,6 +158,12 @@ export function Evidence({ client, hit }: { client: ApiClient; hit: Hit }) {
           <dd>{date(hit.observed_at)}</dd>
         </dl>
       </details>
+      {hit.kind === "code" &&
+        source.repository_id &&
+        source.commit_sha &&
+        source.file_path && (
+          <CodeProvenance client={client} hit={hit} onOpen={onOpen} />
+        )}
       {current.confirmed_count > 0 && (
         <details
           className={`

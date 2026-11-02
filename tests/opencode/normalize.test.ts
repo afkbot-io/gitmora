@@ -210,3 +210,120 @@ test("windowed patch-only parts keep file evidence and pruned tools have stable 
   assert.deepEqual(pages[0]?.native_history?.pruned, [1]);
   assert(!JSON.stringify(pages).includes("old bytes"));
 });
+
+test("model switches and successful file changes remain attached to their own native records", () => {
+  const pages = normalizePages(
+    { ...session, version: "1.19.5" },
+    [
+      {
+        info: {
+          id: "u",
+          role: "user",
+          model: { modelID: "configured-only", providerID: "local" },
+        },
+        parts: [{ id: "up", type: "text", text: "Implement" }],
+      },
+      {
+        info: {
+          id: "a",
+          role: "assistant",
+          modelID: "alpha",
+          providerID: "provider-a",
+          agent: "build",
+          time: { completed: 1 },
+        },
+        parts: [{ id: "ap", type: "text", text: "First answer" }],
+      },
+      {
+        info: {
+          id: "b",
+          role: "assistant",
+          modelID: "beta",
+          providerID: "provider-b",
+          agent: "edit",
+          time: { completed: 2 },
+        },
+        parts: [
+          {
+            id: "bp",
+            type: "tool",
+            tool: "write",
+            state: {
+              status: "completed",
+              input: { filePath: "/repo/src/b.ts" },
+              output: "done",
+              metadata: { filepath: "/repo/src/b.ts" },
+            },
+          },
+        ],
+      },
+      {
+        info: {
+          id: "c",
+          role: "assistant",
+          modelID: "gamma",
+          providerID: "provider-c",
+          time: { completed: 3 },
+        },
+        parts: [
+          {
+            id: "cp",
+            type: "tool",
+            tool: "write",
+            state: {
+              status: "error",
+              input: { filePath: "/repo/src/fail.ts" },
+              error: "failed",
+            },
+          },
+        ],
+      },
+    ],
+    "/repo",
+    "/repo",
+  );
+  const messages = pages.flatMap((page) => page.messages);
+  assert.equal(messages[0]?.model, undefined);
+  assert.equal(messages[1]?.model, "alpha");
+  assert.equal(messages[1]?.provider, "provider-a");
+  assert.equal(messages[1]?.agent_profile, "build");
+  assert.equal(messages[2]?.model, "beta");
+  assert.equal(messages[2]?.native_id, "bp");
+  assert.deepEqual(messages[2]?.changes, [{ path: "src/b.ts" }]);
+  assert.equal(messages[3]?.model, "gamma");
+  assert.equal(messages[3]?.changes, undefined);
+});
+
+test("adding producer metadata never moves existing native window boundaries", () => {
+  const rows = Array.from({ length: 700 }, (_, index) => ({
+    info: { id: `m-${index}`, role: "assistant", time: { completed: 1 } },
+    parts: [
+      { id: `p-${index}`, type: "text", text: "Visible text ".repeat(200) },
+    ],
+  }));
+  const before = normalizePages(session, rows, "/repo", "/repo");
+  const enriched = rows.map((row) => ({
+    ...row,
+    info: {
+      ...row.info,
+      modelID: "recorded-model",
+      providerID: "provider",
+      agent: "build",
+    },
+  }));
+  const after = normalizePages(session, enriched, "/repo", "/repo");
+  assert(before.length > 1);
+  assert.deepEqual(
+    after.map((page) => page.native_history?.page_id),
+    before.map((page) => page.native_history?.page_id),
+  );
+  assert.deepEqual(
+    after.map((page) => page.native_history?.message_ids),
+    before.map((page) => page.native_history?.message_ids),
+  );
+  assert(
+    after.every((page) =>
+      page.messages.every((message) => message.model === "recorded-model"),
+    ),
+  );
+});

@@ -16,9 +16,10 @@ import (
 )
 
 var (
-	ErrInvalid  = errors.New("invalid retrieval input")
-	ErrNotFound = errors.New("evidence not found or unavailable")
-	ErrLease    = errors.New("retrieval lease lost")
+	ErrInvalid   = errors.New("invalid retrieval input")
+	ErrNotFound  = errors.New("evidence not found or unavailable")
+	ErrLease     = errors.New("retrieval lease lost")
+	ErrAmbiguous = errors.New("commit prefix matches multiple confirmed commits; provide a longer SHA")
 )
 
 // Source identifies original immutable evidence independently of indexing time or ranking.
@@ -56,17 +57,20 @@ func (s Source) Validate() error {
 
 // Chunk is an exact Unicode-rune range in one source part, not a model interpretation.
 type Chunk struct {
-	ID            string `json:"id"`
-	Source        Source `json:"source"`
-	Kind          string `json:"kind"`
-	Part          string `json:"part"`
-	Start         int    `json:"start"`
-	End           int    `json:"end"`
-	Title         string `json:"title"`
-	Content       string `json:"content"`
-	ContentDigest string `json:"content_digest"`
-	LineStart     int    `json:"line_start,omitempty"`
-	LineEnd       int    `json:"line_end,omitempty"`
+	ID            string   `json:"id"`
+	Source        Source   `json:"source"`
+	Kind          string   `json:"kind"`
+	Part          string   `json:"part"`
+	Start         int      `json:"start"`
+	End           int      `json:"end"`
+	Title         string   `json:"title"`
+	Content       string   `json:"content"`
+	ContentDigest string   `json:"content_digest"`
+	LineStart     int      `json:"line_start,omitempty"`
+	LineEnd       int      `json:"line_end,omitempty"`
+	Metadata      Metadata `json:"metadata"`
+	FilePaths     []string `json:"file_paths,omitempty"`
+	FilePathCount int      `json:"file_path_count,omitempty"`
 }
 
 const chunkRunes = 2048
@@ -128,40 +132,81 @@ func validText(s string, max int, required bool) bool {
 	return len(s) <= max && utf8.ValidString(s) && !strings.ContainsRune(s, 0) && (!required || strings.TrimSpace(s) != "")
 }
 
-// Query combines plain lexical terms with explicit project/repository/task/verified-commit filters.
+// Query combines plain lexical terms with explicit scope and source-reported metadata filters.
 type Query struct {
-	ProjectID    string   `json:"project_id"`
-	RepositoryID string   `json:"repository_id,omitempty"`
-	SessionID    string   `json:"session_id,omitempty"`
-	Text         string   `json:"text,omitempty"`
-	CommitSHA    string   `json:"commit_sha,omitempty"`
-	FilePath     string   `json:"file_path,omitempty"`
-	Kinds        []string `json:"kinds,omitempty"`
-	Limit        int      `json:"limit,omitempty"`
-	History      bool     `json:"history,omitempty"`
-	Terms        string   `json:"-"`
+	ProjectID    string        `json:"project_id"`
+	RepositoryID string        `json:"repository_id,omitempty"`
+	SessionID    string        `json:"session_id,omitempty"`
+	Text         string        `json:"text,omitempty"`
+	CommitSHA    string        `json:"commit_sha,omitempty"`
+	CommitPrefix string        `json:"commit_prefix,omitempty"`
+	FilePath     string        `json:"file_path,omitempty"`
+	Kinds        []string      `json:"kinds,omitempty"`
+	Limit        int           `json:"limit,omitempty"`
+	History      bool          `json:"history,omitempty"`
+	Terms        string        `json:"-"`
+	Agent        string        `json:"agent,omitempty"`
+	Model        string        `json:"model,omitempty"`
+	Role         string        `json:"role,omitempty"`
+	After        *SearchCursor `json:"after,omitempty"`
+	ReadAt       time.Time     `json:"-"`
+	PrefixText   string        `json:"-"`
 }
 
 // NormalizeQuery bounds work and treats a full SHA as an exact confirmed-relation filter.
 func NormalizeQuery(q Query) (Query, error) {
-	if q.SessionID != "" && (!identifier.Valid(q.SessionID) || q.RepositoryID == "") {
+	if q.SessionID != "" && !identifier.Valid(q.SessionID) {
 		return Query{}, ErrInvalid
 	}
 	if !identifier.Valid(q.ProjectID) || q.RepositoryID != "" && !identifier.Valid(q.RepositoryID) || !validText(q.Text, 512, false) || q.Limit < 0 || q.Limit > 50 || q.CommitSHA != "" && !identifier.ValidCommit(q.CommitSHA) || len(q.Kinds) > 6 {
 		return Query{}, ErrInvalid
 	}
 	q.Text = strings.TrimSpace(q.Text)
-	if identifier.ValidCommit(q.Text) {
+	q.CommitPrefix = strings.ToLower(strings.TrimSpace(q.CommitPrefix))
+	if q.CommitPrefix != "" && (q.CommitSHA != "" || !CommitPrefix(q.CommitPrefix)) {
+		return Query{}, ErrInvalid
+	}
+	var err error
+	if q.Agent, err = cleanFilter(q.Agent, 120); err != nil {
+		return Query{}, err
+	}
+	if q.Model, err = cleanFilter(q.Model, 240); err != nil {
+		return Query{}, err
+	}
+	if !slices.Contains([]string{"", "user", "assistant", "tool", "system"}, q.Role) {
+		return Query{}, ErrInvalid
+	}
+	if identifier.Valid(strings.ToLower(q.Text)) {
+		q.Text = strings.ToLower(q.Text)
+		if q.SessionID != "" && q.SessionID != q.Text {
+			return Query{}, ErrInvalid
+		}
+		q.SessionID = q.Text
+		q.Text = ""
+	}
+	if identifier.ValidCommit(strings.ToLower(q.Text)) {
+		q.Text = strings.ToLower(q.Text)
+		if q.CommitPrefix != "" {
+			return Query{}, ErrInvalid
+		}
 		if q.CommitSHA != "" && q.CommitSHA != q.Text {
 			return Query{}, ErrInvalid
 		}
 		q.CommitSHA = q.Text
 		q.Text = ""
 	}
-	if q.Text == "" && q.CommitSHA == "" && q.SessionID == "" {
+	if CommitPrefix(strings.ToLower(q.Text)) {
+		if q.CommitSHA != "" || (q.CommitPrefix != "" && q.CommitPrefix != strings.ToLower(q.Text)) {
+			return Query{}, ErrInvalid
+		}
+		q.CommitPrefix = strings.ToLower(q.Text)
+		q.PrefixText = q.CommitPrefix
+		q.Text = ""
+	}
+	if q.Text == "" && q.CommitSHA == "" && q.CommitPrefix == "" && q.SessionID == "" && q.Agent == "" && q.Model == "" && q.Role == "" && q.FilePath == "" {
 		return Query{}, ErrInvalid
 	}
-	if q.FilePath != "" && (!identifier.ValidGitPath(q.FilePath) || q.RepositoryID == "" || q.CommitSHA == "") {
+	if q.FilePath != "" && (!identifier.ValidGitPath(q.FilePath) || q.RepositoryID == "") {
 		return Query{}, ErrInvalid
 	}
 	q.Kinds = slices.Clone(q.Kinds)
@@ -176,7 +221,10 @@ func NormalizeQuery(q Query) (Query, error) {
 		q.Limit = 12
 	}
 	q.Terms = Terms(q.Text)
-	if q.Terms == "" && q.CommitSHA == "" && q.SessionID == "" {
+	if q.Terms == "" && q.CommitSHA == "" && q.CommitPrefix == "" && q.SessionID == "" && q.Agent == "" && q.Model == "" && q.Role == "" && q.FilePath == "" {
+		return Query{}, ErrInvalid
+	}
+	if q.After != nil && q.After.Validate(q) != nil {
 		return Query{}, ErrInvalid
 	}
 	return q, nil
@@ -212,10 +260,12 @@ type Hit struct {
 
 // Result bounds retrieval without implying stable pagination while indexing changes.
 type Result struct {
-	Items          []Hit `json:"items"`
-	HasMore        bool  `json:"has_more"`
-	PendingSources int   `json:"pending_sources_in_project"`
-	FailedSources  int   `json:"failed_sources_in_project"`
+	Items             []Hit         `json:"items"`
+	HasMore           bool          `json:"has_more"`
+	PendingSources    int           `json:"pending_sources_in_project"`
+	FailedSources     int           `json:"failed_sources_in_project"`
+	Next              *SearchCursor `json:"next,omitempty"`
+	ResolvedCommitSHA string        `json:"resolved_commit_sha,omitempty"`
 }
 
 // Expansion requests a bounded range inside an exactly identified evidence chunk.
@@ -289,4 +339,17 @@ func Snippet(content, terms string, maxRunes int) (string, int) {
 		start = len(runes) - maxRunes
 	}
 	return string(runes[start : start+maxRunes]), start
+}
+
+// CommitPrefix accepts bounded Git abbreviations; the store resolves only unique confirmed objects.
+func CommitPrefix(s string) bool {
+	if len(s) < 7 || len(s) > 63 {
+		return false
+	}
+	for _, r := range s {
+		if !(r >= '0' && r <= '9' || r >= 'a' && r <= 'f') {
+			return false
+		}
+	}
+	return true
 }

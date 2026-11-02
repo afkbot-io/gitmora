@@ -76,6 +76,8 @@ func retrievalError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, domain.ErrInvalid):
 		writeError(w, 422, "invalid_context_query", "Invalid or excessive context request")
+	case errors.Is(err, domain.ErrAmbiguous):
+		writeError(w, 409, "ambiguous_commit", "Provide a longer commit SHA")
 	case errors.Is(err, domain.ErrNotFound):
 		writeError(w, 404, "evidence_unavailable", "Evidence not found or unavailable")
 	default:
