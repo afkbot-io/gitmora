@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+## 0.7.3 — 2026-11-02
+
+- Fill conversation batches with 20 source messages across bounded pages and continuation windows. Expand long user/assistant records independently, cap collapsed tool groups, and allow explicit previous session history without broadening PR/MCP scope.
 - Remove unreachable constructors, handler wrappers and the obsolete direct session-association path. Collector tests exercise the same checkpoint/ref-scope path as native adapters.
 - Add Linux/macOS source CI and a complete Linux release/load pipeline with isolated native credentials and pinned verification tools.
 - Execute CI from a private script file so subprocess stdin cannot swallow the load command; require its report and cover the sequencing with a regression test.

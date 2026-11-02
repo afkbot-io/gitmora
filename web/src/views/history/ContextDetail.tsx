@@ -54,7 +54,6 @@ export function ContextDetail({
       capture_after?: CaptureCursor;
       merge_requests_after?: MRCursor;
     } = {},
-    propagateError = false,
   ) {
     const request = requests.begin();
     setLoading(true);
@@ -168,11 +167,8 @@ export function ContextDetail({
             }
           : result;
       setPack(merged);
-      return merged.captures.items;
     } catch (e) {
       if (!aborted(e) && request.current()) setError(readableError(e));
-      if (propagateError) throw e;
-      return pack?.captures.items ?? [];
     } finally {
       if (request.current()) setLoading(false);
     }
@@ -330,15 +326,9 @@ export function ContextDetail({
                 client={client}
                 selection={selection}
                 windows={pack.captures.items}
-                moreWindows={!!pack.captures.next}
-                onMoreWindows={async () =>
-                  pack.captures.next
-                    ? ((await load(
-                        { capture_after: pack.captures.next },
-                        true,
-                      )) ?? pack.captures.items)
-                    : pack.captures.items
-                }
+                {...(pack.captures.next
+                  ? { captureAfter: pack.captures.next }
+                  : {})}
                 onNavigate={onNavigate}
               />
             </Suspense>

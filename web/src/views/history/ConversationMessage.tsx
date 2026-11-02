@@ -21,13 +21,10 @@ const RawText = ({ text }: { text: string }) => (
   </pre>
 );
 
-function ToolEntry({
-  entry,
-  readFull,
-}: {
-  entry: IndexedMessage;
-  readFull?: (entry: IndexedMessage) => Promise<Message>;
-}) {
+function useFullMessage(
+  entry: IndexedMessage,
+  readFull?: (entry: IndexedMessage) => Promise<Message>,
+) {
   const [full, setFull] = useState<Message | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -43,6 +40,17 @@ function ToolEntry({
       setLoading(false);
     }
   }
+  return { full, loading, error, read };
+}
+
+function ToolEntry({
+  entry,
+  readFull,
+}: {
+  entry: IndexedMessage;
+  readFull?: (entry: IndexedMessage) => Promise<Message>;
+}) {
+  const { full, loading, error, read } = useFullMessage(entry, readFull);
   const view = toolPresentation(full ?? entry.message);
   return (
     <details
@@ -145,7 +153,21 @@ export const ConversationMessage = memo(function ConversationMessage({
         </div>
       </details>
     );
-  const { message, index } = item.entry;
+  return (
+    <MessageEntry entry={item.entry} {...(readFull ? { readFull } : {})} />
+  );
+});
+
+function MessageEntry({
+  entry,
+  readFull,
+}: {
+  entry: IndexedMessage;
+  readFull?: (entry: IndexedMessage) => Promise<Message>;
+}) {
+  const { full, loading, error, read } = useFullMessage(entry, readFull);
+  const { index } = entry;
+  const message = full ?? entry.message;
   const user = message.role === "user";
   const label = user
     ? t("Вы")
@@ -164,8 +186,21 @@ export const ConversationMessage = memo(function ConversationMessage({
         </span>
         <span className="text-muted">#{index + 1}</span>
       </header>
-      {message.text.length > 1800 || message.text.split("\n").length > 24 ? (
-        <details className="long-message">
+      {entry.preview ||
+      message.text.length > 1800 ||
+      message.text.split("\n").length > 24 ? (
+        <details
+          className="long-message"
+          onToggle={(event) => {
+            if (
+              event.target === event.currentTarget &&
+              event.currentTarget.open &&
+              entry.preview &&
+              !error
+            )
+              void read();
+          }}
+        >
           <summary className="cursor-pointer py-1 text-sm text-muted">
             <span className="block whitespace-pre-wrap line-clamp-4">
               {message.text.slice(0, 350)}
@@ -175,6 +210,17 @@ export const ConversationMessage = memo(function ConversationMessage({
             </span>
           </summary>
           <div className="mt-3">
+            {loading && (
+              <p role="status" className="text-xs text-muted">
+                {t("Загрузка полной записи…")}
+              </p>
+            )}
+            <ErrorNotice>{error}</ErrorNotice>
+            {error && (
+              <button className={buttonStyles.text} onClick={() => void read()}>
+                {t("Попробовать ещё раз")}
+              </button>
+            )}
             <MessageContent text={message.text} />
           </div>
         </details>
@@ -183,4 +229,4 @@ export const ConversationMessage = memo(function ConversationMessage({
       )}
     </article>
   );
-});
+}

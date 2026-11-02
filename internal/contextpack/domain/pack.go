@@ -33,13 +33,14 @@ type MessageView string
 const (
 	// FullMessages retains exact source text, with bounded Unicode pagination.
 	FullMessages MessageView = "full"
-	// CompactMessages shortens long tool outputs while retaining exact expansion cursors.
+	// CompactMessages shortens long records while retaining exact expansion cursors.
 	CompactMessages MessageView = "compact"
 )
 
 // Query selects an exact capture stream, confirmed commit or explicit MR in one local project.
 type Query struct {
 	MessageView        MessageView    `json:"message_view,omitempty"`
+	MessageLimit       int            `json:"message_limit,omitempty"`
 	MRReadKey          string         `json:"-"`
 	MRTargetRepository string         `json:"-"`
 	MRCodeKey          string         `json:"-"`
@@ -59,6 +60,9 @@ type Query struct {
 
 // Normalize owns cursor values and rejects ambiguous selectors before any source query.
 func Normalize(q Query) (Query, error) {
+	if q.MessageLimit < 0 || q.MessageLimit > 20 {
+		return Query{}, ErrInvalid
+	}
 	if q.MessageView != "" && q.MessageView != "full" && q.MessageView != "compact" {
 		return Query{}, ErrInvalid
 	}

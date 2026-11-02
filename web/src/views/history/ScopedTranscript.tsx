@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { t } from "../../domain/locale.js";
 import {
   packQuery,
@@ -7,45 +7,15 @@ import {
   type Selection,
   type ScopedMessage,
 } from "../../domain/history.js";
-import type {
-  ConversationItem,
-  IndexedMessage,
-  Message,
-} from "../../domain/conversation.js";
+import type { IndexedMessage, Message } from "../../domain/conversation.js";
+import { scopedConversationItems } from "../../domain/conversation.js";
+import { messageBatch } from "../../application/transcript.js";
+import { PreviousMessages } from "./PreviousMessages.js";
 import { readableError } from "../../domain/context.js";
 import type { ApiClient } from "../../transport/api.js";
 import { ConversationMessage } from "./ConversationMessage.js";
 import { ErrorNotice } from "../shared.js";
 import { buttonStyles } from "../ui.js";
-
-function group(
-  items: ScopedMessage[],
-  onlyDialogue: boolean,
-  query: string,
-): ConversationItem[] {
-  const result: ConversationItem[] = [];
-  for (const item of items) {
-    if (onlyDialogue && !["user", "assistant"].includes(item.message.role))
-      continue;
-    if (
-      query &&
-      !item.message.text.toLocaleLowerCase().includes(query.toLocaleLowerCase())
-    )
-      continue;
-    const entry = {
-      message: item.message,
-      index: item.index,
-      ...(item.text_preview ? { preview: true } : {}),
-      ...(item.full_text_after ? { fullTextAfter: item.full_text_after } : {}),
-    };
-    const previous = result.at(-1);
-    if (item.message.role === "tool") {
-      if (previous?.kind === "tools") previous.entries.push(entry);
-      else result.push({ kind: "tools", key: item.index, entries: [entry] });
-    } else result.push({ kind: "message", key: item.index, entry });
-  }
-  return result;
-}
 
 export function ScopedTranscript({
   client,
@@ -63,6 +33,8 @@ export function ScopedTranscript({
   const [onlyDialogue, setOnlyDialogue] = useState(false);
   const [query, setQuery] = useState("");
   const anchor = useRef<number | null>(null);
+  const busy = useRef(false);
+  const batchController = useRef<AbortController | null>(null);
   const mounted = useRef(true);
   const controllers = useRef(new Set<AbortController>());
   useLayoutEffect(() => {
@@ -90,6 +62,7 @@ export function ScopedTranscript({
         const query = {
           ...selection,
           message_view: "full" as const,
+          message_limit: 1,
           message_after: cursor,
         };
         const result = await client.request<ContextPack>(
@@ -123,51 +96,51 @@ export function ScopedTranscript({
       controllers.current.delete(controller);
     }
   }
-  async function append() {
-    if (!next || loading) return;
+  async function append(initialPage?: ContextPack) {
+    if (!initialPage && (!next || busy.current)) return;
+    if (initialPage) batchController.current?.abort();
+    busy.current = true;
     setLoading(true);
     setError("");
+    const controller = new AbortController();
+    batchController.current = controller;
+    controllers.current.add(controller);
     try {
-      const result = await client.request<ContextPack>(
-        "/v1/context/pack",
-        packQuery({ ...selection, message_after: next }),
+      const result = await messageBatch(
+        selection,
+        (query) =>
+          client.request<ContextPack>(
+            "/v1/context/pack",
+            query,
+            controller.signal,
+          ),
+        initialPage ? undefined : next,
+        initialPage,
       );
-      if (!mounted.current) return;
-      if (!sameSelection(selection, result.query))
-        throw new Error("Контекст не совпал с выбранным источником.");
-      anchor.current = window.scrollY;
-      setItems((current) => {
-        const merged = [...current];
-        for (const item of result.transcript?.items ?? []) {
-          const index = merged.findIndex(
-            (old) =>
-              old.source.session_id === item.source.session_id &&
-              old.index === item.index,
-          );
-          if (index < 0) merged.push(item);
-          else if (
-            (item.message_offset ?? 0) > 0 &&
-            Array.from(merged[index]!.message.text).length ===
-              item.message_offset
-          )
-            merged[index] = {
-              ...item,
-              message_offset: 0,
-              message: {
-                ...item.message,
-                text: merged[index]!.message.text + item.message.text,
-              },
-            };
-        }
-        return merged;
-      });
-      setNext(result.transcript?.next);
+      if (!mounted.current || batchController.current !== controller) return;
+      if (!initialPage) anchor.current = window.scrollY;
+      setItems((current) =>
+        initialPage ? result.items : [...current, ...result.items],
+      );
+      setNext(result.next);
     } catch (e) {
-      if (mounted.current) setError(readableError(e));
+      if (
+        mounted.current &&
+        batchController.current === controller &&
+        !(e instanceof DOMException && e.name === "AbortError")
+      )
+        setError(readableError(e));
     } finally {
-      if (mounted.current) setLoading(false);
+      controllers.current.delete(controller);
+      if (batchController.current === controller) {
+        busy.current = false;
+        if (mounted.current) setLoading(false);
+      }
     }
   }
+  useEffect(() => {
+    void append(initial);
+  }, [client, selection, initial]);
   const parts = new Map<string, ScopedMessage[]>();
   for (const item of items) {
     const key = `${item.source.repository_id}/${item.source.session_id}`;
@@ -200,16 +173,39 @@ export function ScopedTranscript({
           {t("Только переписка")}
         </label>
       </div>
-      <div className="mx-auto grid max-w-240 gap-4">
+      {items[0] && (
+        <PreviousMessages
+          key={`${items[0].source.session_id}/${items[0].source.revision}/${items[0].index}`}
+          client={client}
+          project={selection.project_id}
+          scoped
+          onlyDialogue={onlyDialogue}
+          query={query}
+          before={{
+            repository_id: items[0].source.repository_id!,
+            session_id: items[0].source.session_id!,
+            revision: items[0].source.revision!,
+            digest: items[0].source.digest,
+            segment: items[0].segment,
+            offset: items[0].index,
+          }}
+        />
+      )}
+      <div role="status" className="mx-auto mb-4 max-w-240 text-xs text-muted">
+        {t("Загружено сообщений: {0}", items.length)}
+      </div>
+      <div className="scoped-current mx-auto grid max-w-240 gap-4">
         {[...parts].map(([id, messages]) => (
           <section key={id} className="min-w-0 space-y-4">
-            {group(messages, onlyDialogue, query).map((item) => (
-              <ConversationMessage
-                key={item.key}
-                item={item}
-                readFull={readFull}
-              />
-            ))}
+            {scopedConversationItems(messages, onlyDialogue, query).map(
+              (item) => (
+                <ConversationMessage
+                  key={item.key}
+                  item={item}
+                  readFull={readFull}
+                />
+              ),
+            )}
             {messages.some((m) => m.text_truncated) && (
               <p className="text-xs text-muted">
                 {t("Продолжение длинной записи подгрузится ниже.")}
@@ -229,7 +225,7 @@ export function ScopedTranscript({
             disabled={loading}
             onClick={() => void append()}
           >
-            {loading ? t("Загрузка…") : t("Загрузить ещё сообщения")}
+            {loading ? t("Загрузка…") : t("Загрузить ещё 20 сообщений")}
           </button>
         )}
       </div>
