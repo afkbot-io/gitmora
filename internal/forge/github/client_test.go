@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -27,7 +28,7 @@ func TestPublicRepositoryIdentityCommitAndCredentialBoundaries(t *testing.T) {
 		switch r.URL.Path {
 		case "/repos/example/project", "/repositories/42":
 			json.NewEncoder(w).Encode(map[string]any{"id": 42, "private": private, "html_url": repositoryURL, "name": "project"})
-		case "/repos/example/project/commits/" + commitSHA:
+		case "/repos/example/project/git/commits/" + commitSHA:
 			json.NewEncoder(w).Encode(map[string]any{"sha": commitSHA})
 		default:
 			http.NotFound(w, r)
@@ -61,6 +62,53 @@ func TestPublicRepositoryIdentityCommitAndCredentialBoundaries(t *testing.T) {
 	}
 	if _, err = client.LookupRepository(context.Background(), "https://other.invalid/example/project"); err == nil {
 		t.Fatal("lookup selected an external destination")
+	}
+}
+
+func TestUnpublishedGitObjectDoesNotBecomeProviderFailure(t *testing.T) {
+	missing := strings.Repeat("b", 40)
+	status := http.StatusNotFound
+	returnedSHA := commitSHA
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer fixture-only-token" {
+			t.Error("lost provider credential")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/repos/example/project/git/commits/" + missing:
+			w.WriteHeader(status)
+			w.Write([]byte(`{}`))
+		case "/repos/example/project/git/commits/" + commitSHA:
+			json.NewEncoder(w).Encode(map[string]string{"sha": returnedSHA})
+		default:
+			// GitHub's diff-oriented endpoint returns 422 for an unknown ref.
+			// It must not be used to probe whether an exact Git object exists.
+			w.WriteHeader(http.StatusUnprocessableEntity)
+		}
+	}))
+	defer server.Close()
+	client, err := github.New(server.URL, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo := domain.Repository{Provider: "github", BaseURL: repositoryURL, ProjectID: 42}
+	found, err := client.ConfirmCommit(context.Background(), repo, "fixture-only-token", missing)
+	if err != nil || found {
+		t.Fatal("unpublished object blocked reconciliation", found, err)
+	}
+	found, err = client.ConfirmCommit(context.Background(), repo, "fixture-only-token", commitSHA)
+	if err != nil || !found {
+		t.Fatal("published object was not confirmed", found, err)
+	}
+	for _, code := range []int{401, 403, 422, 500} {
+		status = code
+		if found, err := client.ConfirmCommit(context.Background(), repo, "fixture-only-token", missing); err == nil || found {
+			t.Fatalf("HTTP %d silently became absence", code)
+		}
+	}
+	returnedSHA = missing
+	if found, err := client.ConfirmCommit(context.Background(), repo, "fixture-only-token", commitSHA); err == nil || found {
+		t.Fatal("different object accepted")
 	}
 }
 

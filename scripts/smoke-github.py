@@ -243,6 +243,21 @@ def main():
             assert fake_secret not in json.dumps(stored) and "[REDACTED]" in json.dumps(
                 stored
             )
+            # A locally created object that was never pushed must stay unconfirmed
+            # without stopping confirmation/indexing of the published review.
+            unpublished = git(
+                "commit-tree", git("rev-parse", "HEAD^{tree}"), "-p", sha,
+                "-m", "Local-only unpublished fixture",
+            )
+            unpublished_session = str(uuid.uuid4())
+            unpublished_capture = {
+                **stored["snapshot"], "session_id": unpublished_session,
+                "revision": 1, "commits": [unpublished],
+                "messages": [dict(role="user", text="Local-only object fixture")],
+            }
+            unpublished_capture.pop("commit_ranges", None)
+            unpublished_capture.pop("continuation", None)
+            assert request("/v1/captures", unpublished_capture)[0] == 201
             for _ in range(80):
                 result = api.command(["worker", "--once"], environment)
                 assert result.returncode == 0, "GitHub worker failed"
@@ -277,6 +292,15 @@ def main():
                 and mr["source_commits"] == [sha]
                 and mr["model"]["merge"] == ""
             )
+            assert request(
+                f"/v1/repositories/{repo}/sessions/{unpublished_session}"
+            )[1]["confirmed_commits"] == []
+            health = request(f"/v1/repositories/{repo}/forge")[1]
+            assert health.get("last_synced_at") and not health.get("last_error_code")
+            assert (
+                "/repos/example/gitmora-fixture/git/commits/" + unpublished
+                in github.GitHubFixture.requests
+            ), "Unpublished object was not checked"
             status, file = request(
                 f"/v1/repositories/{repo}/code/file",
                 dict(commit_sha=sha, file_path="review.txt"),
@@ -378,6 +402,7 @@ def main():
                         standalone_install=True,
                         offline_push=True,
                         exact_commit_confirmation=True,
+                        unpublished_object_does_not_block_sync=True,
                         raw_blob_hash=True,
                         source_index=True,
                         pull_request_context=True,

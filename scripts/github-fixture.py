@@ -108,7 +108,7 @@ class GitHubFixture(http.server.BaseHTTPRequestHandler):
             sha = match.group(1)
             result = self.git("cat-file", "-t", sha)
             if result.returncode or result.stdout.strip() != b"commit":
-                return self.respond({}, 404)
+                return self.respond({"message": "No commit found for SHA"}, 422)
             files = (
                 self.git(
                     "diff-tree", "--root", "--no-commit-id", "--name-only", "-r", sha
