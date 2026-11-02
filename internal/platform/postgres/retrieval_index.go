@@ -49,7 +49,7 @@ func (s *RetrievalStore) Claim(ctx context.Context) (application.Lease, bool, er
 	defer tx.Rollback(ctx)
 	dest := append([]any{&lease.ID}, sourceDest(&lease.Source)...)
 	dest = append(dest, &lease.ObservedAt, &lease.OutboxID)
-	err = tx.QueryRow(ctx, `SELECT j.id::text,`+sourceColumns+`,j.source_observed_at,COALESCE(j.outbox_id,0) FROM retrieval_jobs j WHERE (j.completed_at IS NULL OR j.projection_version<2) AND j.available_at<=now() AND (j.lease_until IS NULL OR j.lease_until<=now()) ORDER BY j.available_at,j.id LIMIT 1 FOR UPDATE SKIP LOCKED`).Scan(dest...)
+	err = tx.QueryRow(ctx, `SELECT j.id::text,`+sourceColumns+`,j.source_observed_at,COALESCE(j.outbox_id,0) FROM retrieval_jobs j WHERE (j.completed_at IS NULL OR j.projection_version<2) AND j.available_at<=now() AND (j.lease_until IS NULL OR j.lease_until<=now()) ORDER BY (j.completed_at IS NOT NULL),j.available_at,j.id LIMIT 1 FOR UPDATE SKIP LOCKED`).Scan(dest...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return lease, false, nil
 	}

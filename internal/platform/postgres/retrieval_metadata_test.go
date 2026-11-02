@@ -146,6 +146,23 @@ func TestSearchProjectionUpgradeKeepsOldEvidenceReadable(t *testing.T) {
 	if err != nil || len(pending.Items) != 1 || pending.PendingSources != 1 {
 		t.Fatal("upgrade hid acknowledged source", pending, err)
 	}
+	// Fresh captures must not wait behind a potentially large metadata backfill.
+	if _, err = pool.Exec(ctx, `UPDATE retrieval_jobs SET available_at=now()-interval '1 day'`); err != nil {
+		t.Fatal(err)
+	}
+	fresh := snap
+	fresh.SessionID = "33333333-3333-4333-8333-333333333333"
+	fresh.Messages = []capture.Message{{Role: "assistant", Text: "FreshBeforeBackfillMarker"}}
+	if _, err = captureapp.NewService(postgres.NewCaptureStore(pool)).Ingest(ctx, subject, fresh); err != nil {
+		t.Fatal(err)
+	}
+	if worked, err := indexer.ReconcileOnce(ctx); err != nil || !worked {
+		t.Fatal(worked, err)
+	}
+	discovered, err := service.Search(ctx, p, domain.Query{ProjectID: project, Text: "FreshBeforeBackfillMarker"})
+	if err != nil || len(discovered.Items) != 1 || discovered.PendingSources != 1 {
+		t.Fatal("new capture waited behind metadata backfill", discovered, err)
+	}
 	if worked, err := indexer.ReconcileOnce(ctx); err != nil || !worked {
 		t.Fatal(worked, err)
 	}
