@@ -7,21 +7,12 @@ import (
 	"workgraph.local/platform/internal/collector/domain"
 )
 
-// BeginFrontier durably pins the initial source scope and HEAD before native source reads.
-func (s *Service) BeginFrontier(ctx context.Context, source domain.NativeSource, call, before string) (domain.Frontier, error) {
-	return s.beginFrontier(ctx, source, call, before, nil)
-}
-
 // BeginFrontierWithHeads atomically retains pre-tool reachable tips for checkout-safe Git attribution.
 // The first scope wins on replay; these private Git IDs never enter capture snapshots.
 func (s *Service) BeginFrontierWithHeads(ctx context.Context, source domain.NativeSource, call, before string, heads []string) (domain.Frontier, error) {
 	if heads == nil {
 		heads = []string{}
 	}
-	return s.beginFrontier(ctx, source, call, before, heads)
-}
-
-func (s *Service) beginFrontier(ctx context.Context, source domain.NativeSource, call, before string, heads []string) (domain.Frontier, error) {
 	var result domain.Frontier
 	if source.Validate() != nil {
 		return result, domain.ErrInvalid
@@ -85,10 +76,7 @@ func (s *Service) beginFrontier(ctx context.Context, source domain.NativeSource,
 		if err := tx.SaveFrontier(result); err != nil {
 			return err
 		}
-		if heads != nil {
-			return tx.SaveHeadScope(result.ID, heads)
-		}
-		return nil
+		return tx.SaveHeadScope(result.ID, heads)
 	})
 	return result, err
 }

@@ -50,16 +50,7 @@ func gatewayCommand(ctx context.Context, args []string, output io.Writer) error 
 	return serve(ctx, *listen, gatewayHandlerWithIdentity(u, origin, *prefix))
 }
 
-// gatewayHandler forwards to one operator-selected backend, never an absolute URL or CONNECT destination from a caller.
-func gatewayHandler(target *url.URL) http.Handler {
-	return gatewayHandlerWithOrigin(target, nil)
-}
-
-// gatewayHandlerWithOrigin fixes proxy authority from operator configuration, never caller headers.
-func gatewayHandlerWithOrigin(target, origin *url.URL) http.Handler {
-	return gatewayHandlerWithIdentity(target, origin, "")
-}
-
+// gatewayHandlerWithIdentity forwards to one fixed backend with operator-selected authority and identity routing.
 func gatewayHandlerWithIdentity(target, origin *url.URL, prefix string) http.Handler {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.Proxy = nil

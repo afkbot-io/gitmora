@@ -193,24 +193,3 @@ func (s *Service) recordNativePage(ctx context.Context, worktree string, input d
 	})
 	return result, err
 }
-
-// AssociateSession links actual Git-resolved context to the exact successfully recorded local segment.
-func (s *Service) AssociateSession(ctx context.Context, worktree, id string, commits []string) error {
-	return s.ledger.Within(ctx, func(tx Transaction) error {
-		entry, found, err := tx.FindSession(id)
-		if err != nil {
-			return err
-		}
-		if !found || entry.Recording.State().Worktree != worktree {
-			return domain.ErrConflict
-		}
-		changed, err := entry.Recording.LinkObservedCommits(commits)
-		if err != nil || !changed {
-			return err
-		}
-		if err := seal(tx, entry); err != nil {
-			return err
-		}
-		return flushPublished(tx)
-	})
-}

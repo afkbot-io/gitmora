@@ -25,7 +25,7 @@ func TestVersionFourOriginCapabilityUpgradePreservesNativeStateAndFrontiers(t *t
 		t.Fatal(err)
 	}
 	source := domain.NativeSource{Worktree: "tree", Agent: "local-agent", SessionID: "native"}
-	before, err := service.BeginFrontier(ctx, source, "durable-call", strings.Repeat("a", 40))
+	before, err := service.BeginFrontierWithHeads(ctx, source, "durable-call", strings.Repeat("a", 40), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

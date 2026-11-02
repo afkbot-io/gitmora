@@ -26,14 +26,14 @@ func TestCheckpointRecoveryRejectsOutOfOrderApplication(t *testing.T) {
 	service := application.NewService(store, nil, time.Now)
 	source := domain.NativeSource{Worktree: "tree", Agent: "local-agent", SessionID: "native"}
 	a, b, c := strings.Repeat("a", 40), strings.Repeat("b", 40), strings.Repeat("c", 40)
-	first, err := service.BeginFrontier(ctx, source, "first", a)
+	first, err := service.BeginFrontierWithHeads(ctx, source, "first", a, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if _, err = service.EndFrontier(ctx, source, "first", b); err != nil {
 		t.Fatal(err)
 	}
-	second, err := service.BeginFrontier(ctx, source, "second", b)
+	second, err := service.BeginFrontierWithHeads(ctx, source, "second", b, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestFrontierRestartPinsTaskEndAndExactReplayTarget(t *testing.T) {
 	}
 	source := domain.NativeSource{Worktree: "tree", Agent: "local-agent", SessionID: "native"}
 	a, b, c := strings.Repeat("a", 40), strings.Repeat("b", 40), strings.Repeat("c", 40)
-	begin, err := service.BeginFrontier(ctx, source, "call", a)
+	begin, err := service.BeginFrontierWithHeads(ctx, source, "call", a, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +131,7 @@ func TestFrontierRestartPinsTaskEndAndExactReplayTarget(t *testing.T) {
 	}
 	store = open(t, path)
 	service = application.NewService(store, nil, time.Now)
-	again, err := service.BeginFrontier(ctx, source, "call", c)
+	again, err := service.BeginFrontierWithHeads(ctx, source, "call", c, nil)
 	if err != nil || again.Before != a || again.ID != begin.ID {
 		t.Fatal("begin replay changed", err)
 	}
@@ -192,7 +192,7 @@ func TestFrontierScopeFailuresRollbackCaptureAndUnknownEndStaysOpen(t *testing.T
 	}
 	service := application.NewService(store, nil, time.Now)
 	source := domain.NativeSource{Worktree: "tree", Agent: "local-agent", SessionID: "native"}
-	f, err := service.BeginFrontier(ctx, source, "call", "")
+	f, err := service.BeginFrontierWithHeads(ctx, source, "call", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -260,7 +260,7 @@ func TestFrontierConcurrentReplayCapacityAndRelease(t *testing.T) {
 			}
 			defer other.Close()
 			service := application.NewService(other, nil, time.Now)
-			if _, err := service.BeginFrontier(ctx, source, "same-call", strings.Repeat("a", 40)); err != nil {
+			if _, err := service.BeginFrontierWithHeads(ctx, source, "same-call", strings.Repeat("a", 40), nil); err != nil {
 				failures <- err
 			}
 		}()
@@ -276,20 +276,20 @@ func TestFrontierConcurrentReplayCapacityAndRelease(t *testing.T) {
 		t.Fatal("duplicate admission", err)
 	}
 	for i := 1; i < domain.MaxPendingFrontiers; i++ {
-		if _, err := service.BeginFrontier(ctx, source, fmt.Sprintf("call-%d", i), ""); err != nil {
+		if _, err := service.BeginFrontierWithHeads(ctx, source, fmt.Sprintf("call-%d", i), "", nil); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if _, err := service.BeginFrontier(ctx, source, "overflow", ""); !errors.Is(err, domain.ErrConflict) {
+	if _, err := service.BeginFrontierWithHeads(ctx, source, "overflow", "", nil); !errors.Is(err, domain.ErrConflict) {
 		t.Fatal("unbounded admission", err)
 	}
 	if err := service.AbandonFrontier(ctx, "tree", list[0].ID, "explicitly closed"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.BeginFrontier(ctx, source, "overflow", ""); err != nil {
+	if _, err := service.BeginFrontierWithHeads(ctx, source, "overflow", "", nil); err != nil {
 		t.Fatal(err)
 	}
-	if replay, err := service.BeginFrontier(ctx, source, "same-call", ""); err != nil || !replay.Abandoned {
+	if replay, err := service.BeginFrontierWithHeads(ctx, source, "same-call", "", nil); err != nil || !replay.Abandoned {
 		t.Fatal("terminal identity reused", err)
 	}
 }
@@ -331,7 +331,7 @@ func TestFrontierVersionThreeMigrationAndFutureRefusal(t *testing.T) {
 	if pending, err := store.Pending(ctx, time.Now(), 64); err != nil || len(pending) != 1 {
 		t.Fatal("migration lost consent", err)
 	}
-	if _, err := service.BeginFrontier(ctx, domain.NativeSource{Worktree: "tree", Agent: "local-agent", SessionID: "native"}, "new", ""); err != nil {
+	if _, err := service.BeginFrontierWithHeads(ctx, domain.NativeSource{Worktree: "tree", Agent: "local-agent", SessionID: "native"}, "new", "", nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := store.Close(); err != nil {

@@ -23,15 +23,7 @@ type MRLink struct {
 	Title        string `json:"title"`
 }
 
-// NewMRLink validates the provider's human URL and derives a stable non-sensitive title.
-func NewMRLink(repo, base string, project, iid int64, value string) (MRLink, error) {
-	provider := ""
-	if strings.HasPrefix(base, "https://github.com/") {
-		provider = "github"
-	}
-	return NewProviderMRLink(provider, repo, base, project, iid, value)
-}
-
+// NewProviderMRLink validates an explicitly selected provider and its exact human MR/PR URL.
 func NewProviderMRLink(provider, repo, base string, project, iid int64, value string) (MRLink, error) {
 	l := MRLink{Provider: provider, RepositoryID: repo, BaseURL: base, ProjectID: project, IID: iid, URL: value, Title: ProviderMRLinkTitle(provider, iid)}
 	if l.Validate() != nil {

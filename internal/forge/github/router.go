@@ -13,10 +13,7 @@ import (
 // Router selects only operator-configured web/API pairs before credentials are sent.
 type Router struct{ clients map[string]*Client }
 
-func NewRouter(api, proxy string, enterprise []string, private bool) (*Router, error) {
-	return NewRouterWithEnterpriseProxy(api, proxy, proxy, enterprise, private)
-}
-
+// NewRouterWithEnterpriseProxy isolates the public and operator-selected Enterprise API routes.
 func NewRouterWithEnterpriseProxy(api, proxy, enterpriseProxy string, enterprise []string, private bool) (*Router, error) {
 	if len(enterprise) > 32 {
 		return nil, domain.ErrInvalid

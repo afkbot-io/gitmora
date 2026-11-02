@@ -46,8 +46,8 @@ func (s *RetrievalStore) authorized(ctx context.Context, p access.Principal, pro
 	return tx.Commit(ctx)
 }
 
-// eligibleSources is a security filter, not a post-ranking mask. Unavailable task sources and
-// wrong capabilities are excluded before lexical matching, ranking, LIMIT or source text return.
+// eligibleSources is a security filter, not a post-ranking mask. Unavailable sources and
+// wrong capabilities are excluded before ranking, LIMIT or source text return.
 const baseSourceAccess = `j.project_id=$1 AND ((j.source_kind='capture' AND $2 AND catalog.project_id=j.project_id) OR(j.source_kind='code' AND $3 AND catalog.project_id=j.project_id AND fc.enabled AND NOT fc.blocked AND NOT fc.code_blocked AND fc.code_checked_at>now()-interval '10 minutes' AND cr.provider_available AND cc.confirmed_at IS NOT NULL AND cp.status='stored' AND cf.provider_base_url=catalog.gitlab_url AND cf.provider_project_id=catalog.gitlab_project_id))`
 const baseSourceCurrent = `(j.source_kind='code' OR (j.source_kind='capture' AND cs.latest_revision=j.revision))`
 const baseSourceJoins = `LEFT JOIN forge_connections fc ON fc.repository_id=j.repository_id
@@ -116,8 +116,7 @@ func retrievalQuery(lexical bool) string {
 
 }
 
-// readChunks returns only the already-authorized bounded candidate set. Source aliases keep task
-// binding fields distinct from source identity; capture citations never acquire a task's digest.
+// readChunks returns only the authorized bounded candidates with their exact source identity.
 func readChunks(ctx context.Context, tx pgx.Tx, p access.Principal, q domain.Query, id string) ([]domain.Hit, error) {
 	statement := queryPrefix
 	if q.Terms != "" {
