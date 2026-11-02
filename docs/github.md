@@ -30,6 +30,10 @@ In GitHub account settings, create a **fine-grained personal access token** rest
 
 Public access is an explicit mode; a failed token never causes an anonymous retry. GitHub currently allows 60 unauthenticated REST requests per originating IP per hour, so public mode is suitable for a small initial test. Regular use should have a dedicated credential. Rate limits delay durable work without discarding the queue. See [GitHub's rate-limit rules](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api).
 
+## Commit verification
+
+The worker probes each full SHA through the read-only [Git commit object API](https://docs.github.com/en/rest/git/commits#get-a-commit-object), independently of the PR diff. A 404 leaves the capture’s commit unconfirmed and schedules a later check; local-only or rewritten objects do not stop synchronization of published commits. Authentication failures, invalid responses and a different returned SHA remain errors. Unconfirmed commits do not become verified search evidence.
+
 ## CLI/API and MCP
 
 The catalog representation uses `provider: "github"`, `provider_url: "https://github.com/owner/repository"` and `provider_repository_id`. GitHub records do not expose fictitious GitLab fields. Legacy GitLab catalog bodies remain compatible.

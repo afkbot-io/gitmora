@@ -1,5 +1,10 @@
 # Changes
 
+## 0.7.2
+
+- Verify GitHub commit existence through the exact Git object endpoint. Local-only or rewritten commits remain unconfirmed without blocking synchronization of other commits and PR context. Authentication errors, malformed responses and mismatched SHAs remain errors.
+- Exercise an unpublished local object alongside a pushed review through the actual collector, worker, database, search and MCP fixture. No schema changes.
+
 ## 0.7.1
 
 - Normalize public account-theme directories/files to 0755/0644 independently of source checkout permissions. A private archive extracted with umask 077 no longer creates unreadable templates in the nonroot provider.

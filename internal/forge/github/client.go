@@ -235,7 +235,9 @@ func (c *Client) ConfirmCommit(ctx context.Context, repo domain.Repository, toke
 	if err != nil || !identifier.ValidCommit(sha) {
 		return false, domain.ErrInvalid
 	}
-	raw, _, found, err := c.request(ctx, token, root+"/commits/"+sha+"?per_page=1", 8*1024*1024)
+	// Read a Git object rather than a diff/ref lookup: a local-only SHA is a
+	// normal 404 here, whereas /commits/{ref} returns 422 and can carry patches.
+	raw, _, found, err := c.request(ctx, token, root+"/git/commits/"+sha, 8*1024*1024)
 	if err != nil || !found {
 		return false, err
 	}
