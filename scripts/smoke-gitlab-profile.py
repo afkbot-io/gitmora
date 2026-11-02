@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate custom GitLab/CA profiles and their actual bind policy with an owned stopped probe."""
+"""Validate custom GitLab/CA profiles and their actual bind policy with an owned short-lived probe."""
 import json
 import os
 from pathlib import Path
@@ -15,12 +15,12 @@ def verify_bind(folder, mount):
     """Check engine read-only state and missing-source refusal, not optional JSON defaults."""
     project = "gitmora-ca-probe-" + uuid.uuid4().hex
     config = folder / "probe.json"
-    probe = {"services": {"probe": {"image": PG_IMAGE, "network_mode": "none", "volumes": [mount]}}}
+    probe = {"services": {"probe": {"image": PG_IMAGE, "network_mode": "none", "entrypoint": ["/bin/true"], "volumes": [mount]}}}
     command = ["docker", "compose", "--project-name", project, "-f", str(config)]
     subprocess.run(["docker", "image", "inspect", PG_IMAGE], check=True, capture_output=True)
     try:
         config.write_text(json.dumps(probe))
-        subprocess.run([*command, "create", "--no-build", "--pull", "never"], check=True, capture_output=True)
+        subprocess.run([*command, "up", "--no-build", "--pull", "never", "--abort-on-container-exit", "--exit-code-from", "probe"], check=True, capture_output=True)
         container = subprocess.check_output([*command, "ps", "--all", "-q", "probe"], text=True).strip()
         inspected = json.loads(subprocess.check_output(["docker", "inspect", container]))[0]
         selected = [v for v in inspected["Mounts"] if v["Destination"] == mount["target"]]
@@ -29,7 +29,7 @@ def verify_bind(folder, mount):
         missing = folder / "missing-ca.pem"
         probe["services"]["probe"]["volumes"] = [{**mount, "source": str(missing)}]
         config.write_text(json.dumps(probe))
-        rejected = subprocess.run([*command, "create", "--no-build", "--pull", "never"], capture_output=True)
+        rejected = subprocess.run([*command, "up", "--no-build", "--pull", "never", "--abort-on-container-exit", "--exit-code-from", "probe"], capture_output=True)
         assert rejected.returncode != 0 and not missing.exists(), "Missing CA source was created or accepted"
     finally:
         subprocess.run([*command, "down", "--volumes"], check=True, capture_output=True)
