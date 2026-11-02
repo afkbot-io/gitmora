@@ -16,6 +16,8 @@ The [CI workflow](../.github/workflows/ci.yml) runs on pull requests, pushes to 
 
 After source checks pass, the Linux release job runs `make verify-release`, then the separate `make smoke-load`. It provides nginx/OpenSSL, the pinned Playwright engines, Docker Compose and an unlocked isolated Secret Service for native CLI account tests. Its Codex fixture uses the published `@openai/codex@0.164.0-alpha.11.1`; OpenCode comes from `package-lock.json`. Agent prompts and provider responses are deterministic loopback fixtures; no model key or production credential is supplied. CI uses read-only repository permissions and commit-pinned official actions; it never deploys or publishes a release. Only the bounded load report is uploaded.
 
+The wrapper runs a private script file with closed subprocess stdin and requires the load report before success. Its regression tests include a child that consumes stdin and a missing-report case, preventing an incomplete run from appearing green.
+
 For the same complete local gate, install the prerequisites above and make the tested Codex executable available as `codex` or set `GITMORA_TEST_CODEX` to its absolute path. On macOS the installed app bundle is also detected. On Linux, `bash .github/scripts/verify-linux.sh` sets up an ephemeral D-Bus/keyring session after nginx/OpenSSL, `libsecret-tools`, `gnome-keyring` and `dbus-x11` have been installed. It does not use a personal keyring. On macOS run the following in the normal unlocked user session:
 
 ```sh

@@ -4,6 +4,7 @@
 
 - Remove unreachable constructors, handler wrappers and the obsolete direct session-association path. Collector tests exercise the same checkpoint/ref-scope path as native adapters.
 - Add Linux/macOS source CI and a complete Linux release/load pipeline with isolated native credentials and pinned verification tools.
+- Execute CI from a private script file so subprocess stdin cannot swallow the load command; require its report and cover the sequencing with a regression test.
 - Make fresh self-hosting and CLI/MCP enrollment explicit in the README. Require the selected identity hostname and use generic nginx templates; validate documentation heading links.
 - Keep unprivileged nginx verification logs and temporary paths inside owned fixture directories, preserve failed-test diagnostics on a clean checkout, and verify real read-only CA binds across Compose versions.
 - Return browser-session expiry at its actual PostgreSQL storage precision, keeping initial reads and CLI reauthentication consistent across platforms. No schema change.

@@ -256,7 +256,7 @@ smoke-github-profile:
 .PHONY: check-config smoke-self-host-config smoke-custom-server
 check-config:
 	python3 scripts/check-configuration.py
-	python3 -m unittest discover -s scripts/tests -p test_self_host_configuration.py
+	python3 -m unittest discover -s scripts/tests
 
 smoke-self-host-config: build check-config
 	python3 scripts/smoke-self-host-config.py

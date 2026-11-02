@@ -12,7 +12,7 @@ mkdir -m 700 "$verification_root/config" "$verification_root/data" "$verificatio
 export XDG_CONFIG_HOME="$verification_root/config"
 export XDG_DATA_HOME="$verification_root/data"
 export XDG_RUNTIME_DIR="$verification_root/runtime"
-dbus-run-session -- bash -euo pipefail <<'VERIFY'
+cat > "$verification_root/run.sh" <<'VERIFY'
   printf "%s" "gitmora-ci-ephemeral-unlock" | gnome-keyring-daemon --foreground --unlock --components=secrets >"$XDG_RUNTIME_DIR/keyring.log" 2>&1 &
   verification_keyring_pid=$!
   trap 'kill "$verification_keyring_pid" 2>/dev/null || true; wait "$verification_keyring_pid" 2>/dev/null || true' EXIT
@@ -22,6 +22,8 @@ dbus-run-session -- bash -euo pipefail <<'VERIFY'
     [[ "$verification_attempt" -lt 50 ]] || { echo "Secret Service did not become ready." >&2; exit 1; }
     sleep 0.1
   done
-  make verify-release
-  make smoke-load
+  make verify-release </dev/null
+  make smoke-load </dev/null
+  test -s build/load/report.json
 VERIFY
+dbus-run-session -- bash -euo pipefail "$verification_root/run.sh" </dev/null
