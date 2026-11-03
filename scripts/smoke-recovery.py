@@ -116,7 +116,9 @@ def main():
             keyring.chmod(0o444)
             target.compose(["up", "--detach", "--no-build", "--pull", "never", "--wait", "postgres"])
             assert target.compose(["ps", "-q", "api", "worker", "gateway"]).stdout.strip() == b"", "Unquarantined destination served traffic"
-            restore = ["exec", "-T", "postgres", "pg_restore", "--username", "workgraph", "--dbname", "workgraph", "--single-transaction", "--exit-on-error", "--no-owner", "--no-acl"]
+            # The target administrator owns the preinstalled vector extension. A
+            # non-superuser restore must not overwrite its COMMENT/ownership metadata.
+            restore = ["exec", "-T", "postgres", "pg_restore", "--username", "workgraph", "--dbname", "workgraph", "--single-transaction", "--exit-on-error", "--no-owner", "--no-acl", "--no-comments"]
             assert target.compose(restore, archive[:len(archive)//2], check=False).returncode != 0
             assert target.sql("SELECT count(*)FROM pg_tables WHERE schemaname='public'") == "0", "Failed restore left a partially usable schema"
             assert hashlib.sha256(archive).hexdigest() == checksum
