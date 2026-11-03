@@ -81,6 +81,23 @@ func TestSearchMetadataPagesExactCommitRangesAndFileEvidence(t *testing.T) {
 	if len(parts) != 30 || pages != 5 {
 		t.Fatal("missing/duplicated page records", len(parts), pages)
 	}
+	// Commit-only, path and combined text/path discovery must keep the same interval.
+	for _, selectors := range []domain.Query{
+		{},
+		{FilePath: "src/auth.go"},
+		{Text: "PaginationMarker", FilePath: "src/auth.go"},
+	} {
+		selectors.ProjectID, selectors.RepositoryID, selectors.CommitSHA, selectors.Limit = project, repository, a, 50
+		found, searchErr := service.Search(ctx, p, selectors)
+		if searchErr != nil || len(found.Items) != 30 {
+			t.Fatal("commit selector lost its message interval", selectors, len(found.Items), searchErr)
+		}
+		for _, item := range found.Items {
+			if item.Metadata.Model != "alpha" {
+				t.Fatal("commit selector included a later change", item.Part)
+			}
+		}
+	}
 	query = domain.Query{ProjectID: project, RepositoryID: repository, CommitSHA: a, FilePath: "src/auth.go", Text: "DeepNeedleTail"}
 	result, err := service.Search(ctx, p, query)
 	if err != nil || len(result.Items) != 1 || result.Items[0].Start == 0 || len(result.Items[0].FilePaths) != 1 || result.Items[0].FilePaths[0] != "src/auth.go" {

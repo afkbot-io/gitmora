@@ -72,14 +72,33 @@ const sourceIdentityProjection = `j.source_kind,j.project_id,j.repository_id,j.s
 // fetch wide source text only for the final bounded selection.
 // Identical language alternatives have the same matches and score, but repeat ranking work.
 // Materialize the single query row once, including when PostgreSQL chooses a generic plan.
-var queryPrefix = retrievalQuery("plain")
-var lexicalQueryPrefix = retrievalQuery("lexical")
-var pathQueryPrefix = retrievalQuery("path")
+var queryPrefix = retrievalQuery("plain", false)
+var lexicalQueryPrefix = retrievalQuery("lexical", false)
+var pathQueryPrefix = retrievalQuery("path", false)
+var commitQueryPrefix = retrievalQuery("plain", true)
+var commitLexicalQueryPrefix = retrievalQuery("lexical", true)
+var commitPathQueryPrefix = retrievalQuery("path", true)
+
+// Resolve commit membership once per source before examining its message ranges. A
+// correlated source-membership probe per chunk grows with unrelated chat history.
+const commitCandidates = `, commit_sources AS MATERIALIZED (
+ SELECT j.id,j.repository_id,j.session_id,j.revision,j.source_kind FROM retrieval_jobs j
+ WHERE j.project_id=$1 AND ($4::text='' OR j.repository_id::text=$4)
+ AND ((j.source_kind='code' AND j.code_sha=$6) OR (j.source_kind='capture' AND EXISTS(
+ SELECT 1 FROM capture_revision_commits rc JOIN commits c ON (c.repository_id,c.sha)=(rc.repository_id,rc.sha)
+ WHERE (rc.repository_id,rc.session_id,rc.revision)=(j.repository_id,j.session_id,j.revision) AND rc.sha=$6 AND c.confirmed_at IS NOT NULL)))
+ ), commit_matches AS MATERIALIZED (
+ SELECT d.id FROM commit_sources source JOIN retrieval_chunks d ON d.job_id=source.id
+ WHERE source.source_kind='code' OR (d.metadata->>'relation'='git_ai_reported' AND d.metadata->>'reported_commit'=$6)
+ OR EXISTS(SELECT 1 FROM capture_commit_ranges message_range
+ WHERE (message_range.repository_id,message_range.session_id,message_range.revision)=(source.repository_id,source.session_id,source.revision) AND message_range.sha=$6
+ AND CASE WHEN d.part ~ '^messages/[0-9]{1,4}$' THEN substring(d.part FROM 10)::integer>=message_range.start_message AND substring(d.part FROM 10)::integer<message_range.end_message ELSE false END)
+ )`
 
 // GIN selects candidate identities before authorization and ranking. No source text is
 // loaded until the final page. One best chunk per source part keeps long records from
 // occupying a result page; exact-ID expansion still addresses every original chunk.
-func retrievalQuery(mode string) string {
+func retrievalQuery(mode string, commitScoped bool) string {
 	candidates := ""
 	chunks := "retrieval_chunks d"
 	if mode == "lexical" {
@@ -88,6 +107,10 @@ func retrievalQuery(mode string) string {
 	} else if mode == "path" {
 		candidates = ", paths AS MATERIALIZED (SELECT job_id,part FROM retrieval_chunks WHERE file_paths@>ARRAY[$11::text])"
 		chunks = "paths candidates JOIN retrieval_chunks d ON (d.job_id,d.part)=(candidates.job_id,candidates.part)"
+	}
+	if commitScoped {
+		candidates = commitCandidates + candidates
+		chunks += " JOIN commit_matches commit_hits ON commit_hits.id=d.id"
 	}
 	return `WITH forms AS (
  SELECT plainto_tsquery('simple',$8) AS simple_terms,plainto_tsquery('english',$8) AS english_terms,plainto_tsquery('russian',$8) AS russian_terms
@@ -143,6 +166,14 @@ func readChunks(ctx context.Context, tx pgx.Tx, p access.Principal, q domain.Que
 		statement = lexicalQueryPrefix
 	} else if q.FilePath != "" {
 		statement = pathQueryPrefix
+	}
+	if q.CommitSHA != "" {
+		statement = commitQueryPrefix
+		if q.Terms != "" {
+			statement = commitLexicalQueryPrefix
+		} else if q.FilePath != "" {
+			statement = commitPathQueryPrefix
+		}
 	}
 	after := domain.SearchCursor{}
 	if q.After != nil {

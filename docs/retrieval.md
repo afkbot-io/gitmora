@@ -25,6 +25,8 @@ A local agent chooses short queries, inspects the returned citations, narrows by
 
 One best matching chunk per source part is returned, so one long tool record does not occupy a whole page. Search `next` is a query-bound keyset cursor: pass it verbatim as `after` while keeping filters unchanged. It pins an indexing cutoff and a resolved-prefix/text mode. Every page repeats current authorization. This is live source discovery, not a long-lived database snapshot; indexing or latest-revision changes can remove results, and a fresh search includes newer observations.
 
+SHA-scoped queries materialize confirmed source membership before selecting message ranges. Unrelated message history does not repeat the commit-membership probe for every chunk; the normal authorization and source-availability filters still run before ranking and text return.
+
 The web reader opens a hit at its exact revision and message position. It appends batches and verified continuations; “Conversation only” hides tools, and the local filter searches the parts already fetched. It does not claim to search unloaded parts. Raw records and immutable source identities remain available under source details.
 
 For a repeatable read-only probe, set a short-lived scoped token in `GITMORA_BENCHMARK_TOKEN`, then run:
