@@ -98,11 +98,13 @@ const commitCandidates = `, commit_sources AS MATERIALIZED (
 // GIN selects candidate identities before authorization and ranking. No source text is
 // loaded until the final page. One best chunk per source part keeps long records from
 // occupying a result page; exact-ID expansion still addresses every original chunk.
+// Bitmap OR keeps each matching row once without sorting a UNION of duplicate IDs.
+// A single lexeme has no inter-word proximity to evaluate, so its rank uses frequency.
 func retrievalQuery(mode string, commitScoped bool) string {
 	candidates := ""
 	chunks := "retrieval_chunks d"
 	if mode == "lexical" {
-		candidates = ", matched AS MATERIALIZED (SELECT id FROM retrieval_chunks WHERE lexical@@(SELECT query FROM terms) UNION SELECT id FROM retrieval_chunks WHERE part_lexical IS NOT NULL AND part_lexical@@(SELECT query FROM terms))"
+		candidates = ", matched AS MATERIALIZED (SELECT id FROM retrieval_chunks WHERE lexical@@(SELECT query FROM terms) OR (part_lexical IS NOT NULL AND part_lexical@@(SELECT query FROM terms)))"
 		chunks = "matched candidates JOIN retrieval_chunks d ON d.id=candidates.id"
 	} else if mode == "path" {
 		candidates = ", paths AS MATERIALIZED (SELECT job_id,part FROM retrieval_chunks WHERE file_paths@>ARRAY[$11::text])"
@@ -123,7 +125,7 @@ func retrievalQuery(mode string, commitScoped bool) string {
  CASE WHEN j.source_kind='capture' THEN cs.latest_revision=j.revision ELSE true END AS current,
  j.source_observed_at AS observed_at,
  CASE WHEN $8::text='' THEN CASE d.kind WHEN 'session' THEN 0.4 ELSE 0.2 END
- ELSE ts_rank_cd(d.lexical,terms.query,32)+(CASE WHEN position(lower($8) IN lower(d.title_terms))>0 THEN 1.0 ELSE 0.0 END) END::double precision AS score
+ ELSE (CASE WHEN numnode(terms.query)=1 THEN ts_rank(d.lexical,terms.query,32) ELSE ts_rank_cd(d.lexical,terms.query,32) END)+(CASE WHEN position(lower($8) IN lower(d.title_terms))>0 THEN 1.0 ELSE 0.0 END) END::double precision AS score
  FROM ` + chunks + ` JOIN retrieval_jobs j ON j.id=d.job_id ` + sourceJoins + ` CROSS JOIN terms
  WHERE ` + eligibleSources + ` AND j.completed_at IS NOT NULL
  AND d.indexed_at<=COALESCE($16::timestamptz,transaction_timestamp())
