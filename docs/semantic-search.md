@@ -26,6 +26,9 @@ Use the ordinary [deployment upgrade procedure](deployment.md) to migrate and
 recreate the API/worker. External PostgreSQL installations also need pgvector
 installed by their administrator. The application role remains a non-superuser.
 Vectors are derived data; source capture bytes and evidence identities do not change.
+For a non-superuser logical restore into a database with the administrator-owned
+extension already installed, pass `pg_restore --no-owner --no-acl --no-comments`.
+The application role must not replace the extension's ownership or comment metadata.
 Exact duplicate chunks reuse a completed vector only within the same project/profile;
 each citation keeps its own original source and producer metadata. This reduces
 inference work across repeated immutable revisions without merging their history.
