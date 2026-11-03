@@ -1,5 +1,9 @@
 # Changes
 
+## 0.9.2 — 2026-11-04
+
+- Avoid ranking unembedded historical chunks during partial backfill. Hybrid retrieval retains independent lexical matches, and permission checks still run before ranking and limits. A real historical query that exceeded five seconds now completes within its existing budget.
+
 ## 0.9.1 — 2026-11-04
 
 - Isolate interactive embedding inference from background indexing so long batches cannot occupy the search model's queue. The optional query replica validates the same pinned digest and preserves existing vector profiles.

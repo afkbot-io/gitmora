@@ -315,3 +315,51 @@ func TestEmbeddingReuseKeepsEachOriginalProducer(t *testing.T) {
 		t.Fatal("vector reuse borrowed another source's producer", result, err)
 	}
 }
+
+func TestSparseEmbeddingsPreserveUnindexedLexicalMatches(t *testing.T) {
+	pool := database(t)
+	seed(t, pool)
+	ctx := context.Background()
+	snap := snapshot()
+	snap.Messages = []capture.Message{
+		{Role: "assistant", Text: "needle is present before this message is embedded", Model: "lexical"},
+		{Role: "assistant", Text: "a semantically relevant decision", Model: "semantic"},
+		{Role: "assistant", Text: "an unrelated historical message", Model: "neither"},
+	}
+	if _, err := captureapp.NewService(postgres.NewCaptureStore(pool)).Ingest(ctx, subject, snap); err != nil {
+		t.Fatal(err)
+	}
+	store := postgres.NewRetrievalStore(pool)
+	if _, err := application.NewIndexer(store).ReconcileOnce(ctx); err != nil {
+		t.Fatal(err)
+	}
+	model := &testEmbeddings{}
+	if _, err := pool.Exec(ctx, `INSERT INTO retrieval_embeddings(profile,chunk_id,embedding,completed_at)
+ SELECT $1,id,'[1,0]'::public.vector,now() FROM retrieval_chunks WHERE metadata->>'model'='semantic'`, model.Profile()); err != nil {
+		t.Fatal(err)
+	}
+	// An obsolete profile may have another dimension; it must never enter distance calculations.
+	if _, err := pool.Exec(ctx, `INSERT INTO retrieval_embeddings(profile,chunk_id,embedding,completed_at)
+ SELECT $1,id,'[1,0,0]'::public.vector,now() FROM retrieval_chunks WHERE metadata->>'model'='neither'`, strings.Repeat("b", 64)); err != nil {
+		t.Fatal(err)
+	}
+	service := application.NewService(store).WithEmbeddings(model)
+	principal := access.Principal{UserID: reader, Scopes: []access.Permission{access.ReadCapture}}
+	query := domain.Query{ProjectID: project, Text: "needle", Mode: "hybrid", History: true, Kinds: []string{"session"}, Limit: 20}
+	hybrid, err := service.Search(ctx, principal, query)
+	if err != nil || len(hybrid.Items) != 2 {
+		t.Fatal("partial backfill lost a lexical match or included an unrelated chunk", hybrid, err)
+	}
+	seen := map[string]bool{}
+	for _, hit := range hybrid.Items {
+		seen[hit.Metadata.Model] = true
+	}
+	if !seen["lexical"] || !seen["semantic"] {
+		t.Fatal("hybrid lanes did not retain both independent sources", seen)
+	}
+	query.Mode = "semantic"
+	semantic, err := service.Search(ctx, principal, query)
+	if err != nil || len(semantic.Items) != 1 || semantic.Items[0].Metadata.Model != "semantic" {
+		t.Fatal("semantic search included an unembedded or wrong-profile message", semantic, err)
+	}
+}

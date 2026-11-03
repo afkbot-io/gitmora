@@ -113,6 +113,8 @@ behavior. Text can be narrowed by repository, session, commit range, path, agent
 model and role. A semantic match never broadens an MR's recorded message interval.
 Explicit source expansion still rechecks membership and current provider access.
 
+Candidate selection excludes chunks without either a lexical match or a completed vector for the active profile, so partial backfill does not require ranking unembedded history. Authorization and source-availability checks still run before ranking or limits.
+
 Each semantic lane uses exact cosine retrieval over its authorized source scope.
 It deliberately avoids approximate top-k followed by permission filtering, which
 can hide valid matches behind inaccessible projects. Lexical and semantic lanes

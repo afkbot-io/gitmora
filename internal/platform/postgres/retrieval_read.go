@@ -127,6 +127,17 @@ func retrievalQuery(mode string, commitScoped bool) string {
 		candidates = ", paths AS MATERIALIZED (SELECT job_id,part FROM retrieval_chunks WHERE file_paths@>ARRAY[$11::text])"
 		chunks = "paths candidates JOIN retrieval_chunks d ON (d.job_id,d.part)=(candidates.job_id,candidates.part)"
 	}
+	if semantic {
+		// Backfill can leave most historical chunks without a vector. Consider only
+		// actual lexical matches or completed vectors before the expensive source
+		// joins. Authorization still precedes every distance ranking and LIMIT.
+		lexical := ""
+		if mode == "hybrid" {
+			lexical = `SELECT id FROM retrieval_chunks WHERE lexical@@(SELECT query FROM terms) OR (part_lexical IS NOT NULL AND part_lexical@@(SELECT query FROM terms)) UNION `
+		}
+		candidates = `, matched AS MATERIALIZED (` + lexical + `SELECT chunk_id AS id FROM retrieval_embeddings WHERE profile=$22 AND completed_at<=COALESCE($16::timestamptz,transaction_timestamp()))`
+		chunks = "matched candidates JOIN retrieval_chunks d ON d.id=candidates.id"
+	}
 	if commitScoped {
 		candidates = commitCandidates + candidates
 		chunks += " JOIN commit_matches commit_hits ON commit_hits.id=d.id"
