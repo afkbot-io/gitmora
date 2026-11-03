@@ -12,6 +12,7 @@ export const english: Readonly<Record<string, string>> = {
   "3. Включите нужный агент": "3. Enable your agent",
   "API-ключ": "API key",
   "CLI и MCP": "CLI and MCP",
+  "Инструкция для агента · ai.md": "Agent guide · ai.md",
   "Contents, Pull requests и Actions: Read-only. Выберите только этот репозиторий.":
     "Contents, Pull requests and Actions: Read-only. Select only this repository.",
   "GitHub → Settings → Developer settings → Fine-grained tokens. Выберите репозиторий и разрешите Contents, Pull requests и Actions: Read-only.":

@@ -21,6 +21,7 @@
 !web/**/*.json
 !web/**/*.html
 !web/public/assets/workgraph.svg
+!web/public/ai.md
 !scripts/
 !scripts/build-web.mjs
 !deploy/
