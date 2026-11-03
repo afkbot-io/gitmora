@@ -1,5 +1,5 @@
 /** Public artifacts are immutable; publish this version before rolling out its onboarding UI. */
-export const publicClientVersion = "0.9.0";
+export const publicClientVersion = "0.9.1";
 export const clientPlatforms = [
   { label: "macOS · Apple Silicon", file: "gitmora_darwin_arm64" },
   { label: "macOS · Intel", file: "gitmora_darwin_amd64" },

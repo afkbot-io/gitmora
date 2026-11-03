@@ -1,5 +1,10 @@
 # Changes
 
+## 0.9.1 — 2026-11-04
+
+- Isolate interactive embedding inference from background indexing so long batches cannot occupy the search model's queue. The optional query replica validates the same pinned digest and preserves existing vector profiles.
+- Document CPU/RAM limits and the optional query endpoint; mount provisioned model weights read-only in both services.
+
 ## 0.9.0 — 2026-11-04
 
 - Add opt-in local hybrid/semantic retrieval with pgvector and a CPU embedding service. Query-bound pages retain exact source/commit ranges and current access checks; model outages preserve lexical search. A bounded query-vector cache avoids repeated inference; candidate snapshots keep semantic pages stable during concurrent indexing and let continuation reads work without inference.
