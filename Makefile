@@ -29,8 +29,14 @@ build: build-web
 	ln -sf workgraph bin/gitmora
 
 .PHONY: build-postgres-image
+.PHONY: smoke-semantic
+# Opt-in: provision the local embedding model first; see docs/semantic-search.md.
+smoke-semantic: build build-postgres-image
+	docker compose -f compose.test.yaml up -d --wait
+	python3 scripts/smoke-semantic.py
+
 build-postgres-image:
-	docker build --file deploy/postgres/Dockerfile --tag gitmora-postgres:18.6-security1 .
+	docker build --file deploy/postgres/Dockerfile --tag gitmora-postgres:18.6-vector1 .
 
 smoke smoke-opencode smoke-codex smoke-native-history smoke-compatibility smoke-forge \
 smoke-context smoke-agent-context smoke-directory smoke-identity \

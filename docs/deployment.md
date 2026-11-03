@@ -25,7 +25,7 @@ docker tag gitmora:local gitmora:0.8.0
 docker tag gitmora-identity:26.8.1-auth gitmora-identity:0.8.0-auth
 ```
 
-Получаются host-команды `bin/gitmorad`/`bin/gitmora`, API/gateway-образ `gitmora:0.8.0`, оптимизированный `/auth`-образ входа и `gitmora-postgres:18.6-security1`. Образы собираются для архитектуры сервера. Не заменяйте тег уже работающей версии другими байтами. `make build-image` готовит PostgreSQL автоматически. В runtime нет Node/npm/CDN. [Сборка и проверки](development.md).
+Получаются host-команды `bin/gitmorad`/`bin/gitmora`, API/gateway-образ `gitmora:0.8.0`, оптимизированный `/auth`-образ входа и `gitmora-postgres:18.6-vector1`. Образы собираются для архитектуры сервера. Не заменяйте тег уже работающей версии другими байтами. `make build-image` готовит PostgreSQL автоматически. В runtime нет Node/npm/CDN. [Сборка и проверки](development.md).
 
 ## 3. Создать приватную конфигурацию
 
@@ -194,6 +194,22 @@ gitmora api get /v1/projects --server "https://$GITMORA_PUBLIC_HOST"
 ## Обновления, backups и диагностика
 
 Сохраните исходный revision, image IDs, ordered overlays, оба приватных state-каталога и **обе** БД: приложения и входа. Обычные `deployment down`/`identity-server down` сохраняют volumes. `down -v`, очистка shared volumes и image rollback после несовместимой миграции не являются восстановлением. Проверяйте восстановленную копию до запуска worker/public ingress. Recovery primitives не заменяют полный координатор backup/restore. [Перенос](relocation.md).
+
+Перед миграцией 28 обновите образ БД на `gitmora-postgres:18.6-vector1` и включите
+pgvector в базе приложения от имени администратора БД. Это требуется и при
+выключенном семантическом поиске; на новой установке расширение включается
+автоматически. [Порядок подготовки БД](semantic-search.md#install-or-upgrade).
+
+Пути к новой сборке и overlay меняются без пересоздания installation ID и секретов:
+
+```sh
+bin/gitmorad deployment configure --directory /srv/gitmora/state \
+  --compose "$PWD/compose.yaml" --image gitmora:YOUR_REVIEWED_BUILD
+# Опционально: --add-overlay "$PWD/deploy/compose.embeddings.yaml"
+```
+
+`configure` только сохраняет проверенную конфигурацию. Он не запускает контейнеры
+и не мигрирует БД. Затем выполните подготовку БД и обычный `deployment up`.
 
 | Симптом | Что проверить |
 | --- | --- |

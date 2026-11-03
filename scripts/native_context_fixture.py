@@ -39,6 +39,12 @@ def verify(root, url, token, query, evidence, revoke):
         assert all(tool['annotations']['readOnlyHint'] for tool in tools['result']['tools'])
         searched = rpc('tools/call', dict(name='context.search', arguments=query))
         assert evidence in {item['id'] for item in searched['result']['structuredContent']['result']['items']}
+        page = searched['result']['structuredContent']['result']
+        if page.get('next'):
+            continued = rpc('tools/call', dict(name='context.search', arguments={**query, 'after': page['next']}))
+            assert not continued['result'].get('isError'), 'Native MCP continuation failed'
+            later = continued['result']['structuredContent']['result']
+            assert not {item['id'] for item in page['items']}.intersection(item['id'] for item in later['items']), 'Native MCP repeated a search result'
         expanded = rpc('tools/call', dict(name='context.expand', arguments=dict(evidence_id=evidence, limit=40)))
         assert expanded['result']['structuredContent']['result']['id'] == evidence
         revoke()

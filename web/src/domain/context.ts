@@ -94,6 +94,10 @@ export interface SourceMetadata {
   reported_commit?: string;
 }
 export interface SearchCursor {
+  snapshot_id?: string;
+  search_mode?: "lexical" | "hybrid" | "semantic";
+  semantic_profile?: string;
+  vector_digest?: string;
   resolved_commit_sha?: string;
   literal?: boolean;
   query_digest: string;
@@ -124,6 +128,11 @@ export interface Hit {
   file_path_count?: number;
 }
 export interface SearchResult {
+  search_mode?: "lexical" | "hybrid" | "semantic";
+  semantic_unavailable?: boolean;
+  semantic_pending?: number;
+  semantic_failed?: number;
+  candidate_window?: number;
   next?: SearchCursor;
   resolved_commit_sha?: string;
   items: Hit[];

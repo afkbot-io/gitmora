@@ -11,6 +11,12 @@ import (
 	"workgraph.local/platform/internal/retrieval/domain"
 )
 
+// Authorize checks current scope before optional inference; Search checks it again
+// after inference so a concurrent membership revocation cannot expose source text.
+func (s *RetrievalStore) Authorize(ctx context.Context, p access.Principal, q domain.Query) error {
+	return s.authorized(ctx, p, q.ProjectID, q.RepositoryID, func(pgx.Tx) error { return nil })
+}
+
 func (s *RetrievalStore) authorized(ctx context.Context, p access.Principal, project, repository string, fn func(pgx.Tx) error) error {
 	if !identifier.Valid(p.UserID) || !identifier.Valid(project) || (!p.Has(access.ReadCapture) && !p.Has(access.ReadIntegration)) {
 		return access.ErrDenied
@@ -83,6 +89,11 @@ var pathQueryPrefix = retrievalQuery("path", false)
 var commitQueryPrefix = retrievalQuery("plain", true)
 var commitLexicalQueryPrefix = retrievalQuery("lexical", true)
 var commitPathQueryPrefix = retrievalQuery("path", true)
+var hybridQueryPrefix = retrievalQuery("hybrid", false)
+var semanticQueryPrefix = retrievalQuery("semantic", false)
+var commitHybridQueryPrefix = retrievalQuery("hybrid", true)
+var commitSemanticQueryPrefix = retrievalQuery("semantic", true)
+var snapshotQueryPrefix = retrievalQuery("snapshot", false)
 
 // Resolve commit membership once per source before examining its message ranges. A
 // correlated source-membership probe per chunk grows with unrelated chat history.
@@ -106,6 +117,7 @@ const commitCandidates = `, commit_sources AS MATERIALIZED (
 // Bitmap OR keeps each matching row once without sorting a UNION of duplicate IDs.
 // A single lexeme has no inter-word proximity to evaluate, so its rank uses frequency.
 func retrievalQuery(mode string, commitScoped bool) string {
+	semantic := mode == "hybrid" || mode == "semantic"
 	candidates := ""
 	chunks := "retrieval_chunks d"
 	if mode == "lexical" {
@@ -119,6 +131,44 @@ func retrievalQuery(mode string, commitScoped bool) string {
 		candidates = commitCandidates + candidates
 		chunks += " JOIN commit_matches commit_hits ON commit_hits.id=d.id"
 	}
+	scoreName := "score"
+	extra := ""
+	ranking := `ranked AS (SELECT *,row_number() OVER(PARTITION BY job_id,part ORDER BY score DESC,id) AS position FROM allowed)`
+	if semantic {
+		chunks += ` LEFT JOIN retrieval_embeddings embedding ON embedding.chunk_id=d.id AND embedding.profile=$22 AND embedding.completed_at<=COALESCE($16::timestamptz,transaction_timestamp())`
+		scoreName = "lexical_score"
+		extra = `, (d.lexical@@terms.query OR COALESCE(d.part_lexical@@terms.query,false)) AS lexical_match,
+ CASE WHEN embedding.embedding IS NOT NULL THEN 1-(embedding.embedding OPERATOR(public.<=>) $21::public.vector) END AS similarity`
+		lexicalEnabled := "true"
+		if mode == "semantic" {
+			lexicalEnabled = "false"
+		}
+		// RRF combines independently ranked authorized parts. Each lane contributes at
+		// most 200 parts, bounding work/response traversal without letting one long tool
+		// record occupy the result window. Source text is fetched only after fusion.
+		ranking = `lexical_best AS MATERIALIZED (
+ SELECT DISTINCT ON(job_id,part) id,job_id,part,lexical_score,observed_at FROM allowed WHERE lexical_match AND ` + lexicalEnabled + ` ORDER BY job_id,part,lexical_score DESC,id
+ ), semantic_best AS MATERIALIZED (
+ SELECT DISTINCT ON(job_id,part) id,job_id,part,similarity,observed_at FROM allowed WHERE similarity>=0.35 ORDER BY job_id,part,similarity DESC,id
+ ), lexical_lane AS (
+ SELECT *,row_number() OVER(ORDER BY lexical_score DESC,observed_at DESC,id) AS rank FROM lexical_best ORDER BY lexical_score DESC,observed_at DESC,id LIMIT 200
+ ), semantic_lane AS (
+ SELECT *,row_number() OVER(ORDER BY similarity DESC,observed_at DESC,id) AS rank FROM semantic_best ORDER BY similarity DESC,observed_at DESC,id LIMIT 200
+ ), fused AS (
+ SELECT job_id,part,(array_agg(id ORDER BY lane,id))[1] AS id,sum(1.0/(60+rank))::double precision AS score FROM (
+ SELECT id,job_id,part,rank,0 AS lane FROM lexical_lane UNION ALL SELECT id,job_id,part,rank,1 AS lane FROM semantic_lane
+ ) lanes GROUP BY job_id,part
+ ), ranked AS (SELECT allowed.*,fused.score,1 AS position FROM fused JOIN allowed ON allowed.id=fused.id)`
+	}
+	if mode == "snapshot" {
+		candidates = `, snapshot_positions AS MATERIALIZED (SELECT * FROM jsonb_to_recordset($21::jsonb) AS p(id text,score double precision))`
+		chunks = `snapshot_positions snapshot JOIN retrieval_chunks d ON d.id=snapshot.id`
+	}
+	score := `CASE WHEN $8::text='' THEN CASE d.kind WHEN 'session' THEN 0.4 ELSE 0.2 END
+ ELSE (CASE WHEN numnode(terms.query)=1 THEN ts_rank(d.lexical,terms.query,32) ELSE ts_rank_cd(d.lexical,terms.query,32) END)+(CASE WHEN position(lower($8) IN lower(d.title_terms))>0 THEN 1.0 ELSE 0.0 END) END::double precision`
+	if mode == "snapshot" {
+		score = "snapshot.score"
+	}
 	return `WITH forms AS (
  SELECT plainto_tsquery('simple',$8) AS simple_terms,plainto_tsquery('english',$8) AS english_terms,plainto_tsquery('russian',$8) AS russian_terms
  ), terms AS MATERIALIZED (
@@ -129,8 +179,7 @@ func retrievalQuery(mode string, commitScoped bool) string {
  SELECT d.id,d.job_id,d.part,` + sourceIdentityProjection + `,
  CASE WHEN j.source_kind='capture' THEN cs.latest_revision=j.revision ELSE true END AS current,
  j.source_observed_at AS observed_at,
- CASE WHEN $8::text='' THEN CASE d.kind WHEN 'session' THEN 0.4 ELSE 0.2 END
- ELSE (CASE WHEN numnode(terms.query)=1 THEN ts_rank(d.lexical,terms.query,32) ELSE ts_rank_cd(d.lexical,terms.query,32) END)+(CASE WHEN position(lower($8) IN lower(d.title_terms))>0 THEN 1.0 ELSE 0.0 END) END::double precision AS score
+ ` + score + ` AS ` + scoreName + extra + `
  FROM ` + chunks + ` JOIN retrieval_jobs j ON j.id=d.job_id ` + sourceJoins + ` CROSS JOIN terms
  WHERE ` + eligibleSources + ` AND j.completed_at IS NOT NULL
  AND d.indexed_at<=COALESCE($16::timestamptz,transaction_timestamp())
@@ -148,9 +197,7 @@ func retrievalQuery(mode string, commitScoped bool) string {
  AND ((d.metadata->>'relation'='git_ai_reported' AND d.metadata->>'reported_commit'=$6) OR EXISTS(SELECT 1 FROM capture_commit_ranges message_range
  WHERE (message_range.repository_id,message_range.session_id,message_range.revision,message_range.sha)=(rc.repository_id,rc.session_id,rc.revision,rc.sha)
  AND CASE WHEN d.part ~ '^messages/[0-9]{1,4}$' THEN substring(d.part FROM 10)::integer>=message_range.start_message AND substring(d.part FROM 10)::integer<message_range.end_message ELSE false END))))
- ), ranked AS (
- SELECT *,row_number() OVER(PARTITION BY job_id,part ORDER BY score DESC,id) AS position FROM allowed
- ), selected AS (
+ ), ` + ranking + `, selected AS (
  SELECT * FROM ranked WHERE position=1
  AND (NOT $17::boolean OR score<$18::double precision OR(score=$18 AND(observed_at<$19::timestamptz OR(observed_at=$19 AND id>$20::text))))
  ORDER BY score DESC,observed_at DESC,id LIMIT $9
@@ -182,6 +229,21 @@ func readChunks(ctx context.Context, tx pgx.Tx, p access.Principal, q domain.Que
 			statement = commitPathQueryPrefix
 		}
 	}
+	if len(q.Vector) > 0 {
+		statement = hybridQueryPrefix
+		if q.Engine == "semantic" {
+			statement = semanticQueryPrefix
+		}
+		if q.CommitSHA != "" {
+			statement = commitHybridQueryPrefix
+			if q.Engine == "semantic" {
+				statement = commitSemanticQueryPrefix
+			}
+		}
+	}
+	if q.Snapshot != nil {
+		statement = snapshotQueryPrefix
+	}
 	after := domain.SearchCursor{}
 	if q.After != nil {
 		after = *q.After
@@ -190,7 +252,16 @@ func readChunks(ctx context.Context, tx pgx.Tx, p access.Principal, q domain.Que
 	if !q.ReadAt.IsZero() {
 		cutoff = q.ReadAt
 	}
-	rows, err := tx.Query(ctx, statement, q.ProjectID, p.Has(access.ReadCapture), p.Has(access.ReadIntegration), q.RepositoryID, q.History, q.CommitSHA, q.Kinds, q.Terms, q.Limit+1, id, q.FilePath, q.SessionID, q.Agent, q.Model, q.Role, cutoff, q.After != nil, after.Score, after.ObservedAt, after.ID)
+	args := []any{q.ProjectID, p.Has(access.ReadCapture), p.Has(access.ReadIntegration), q.RepositoryID, q.History, q.CommitSHA, q.Kinds, q.Terms, q.Limit + 1, id, q.FilePath, q.SessionID, q.Agent, q.Model, q.Role, cutoff, q.After != nil, after.Score, after.ObservedAt, after.ID}
+	if len(q.Vector) > 0 {
+		raw, _ := json.Marshal(q.Vector)
+		args = append(args, string(raw), q.SemanticProfile)
+	}
+	if q.Snapshot != nil {
+		raw, _ := json.Marshal(q.Snapshot)
+		args = append(args[:20], string(raw))
+	}
+	rows, err := tx.Query(ctx, statement, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -216,7 +287,13 @@ func readChunks(ctx context.Context, tx pgx.Tx, p access.Principal, q domain.Que
 
 // Search prefilters project/capabilities/source availability, then ranks and bounds source text.
 func (s *RetrievalStore) Search(ctx context.Context, p access.Principal, q domain.Query) (domain.Result, error) {
-	result := domain.Result{Items: []domain.Hit{}}
+	result := domain.Result{Items: []domain.Hit{}, SearchMode: q.Engine, SemanticProfile: q.SemanticProfile}
+	if result.SearchMode == "" {
+		result.SearchMode = "lexical"
+	}
+	if q.SemanticProfile != "" {
+		result.CandidateWindow = 200
+	}
 	err := s.authorized(ctx, p, q.ProjectID, q.RepositoryID, func(tx pgx.Tx) error {
 		if q.After != nil {
 			q.ReadAt = q.After.IndexedBefore
@@ -260,17 +337,42 @@ func (s *RetrievalStore) Search(ctx context.Context, p access.Principal, q domai
 				result.ResolvedCommitSHA = q.CommitSHA
 			}
 		}
-		items, err := readChunks(ctx, tx, p, q, "")
+		snapshotID := ""
+		readQuery := q
+		if q.SemanticProfile != "" {
+			if q.After == nil {
+				readQuery.Limit = 400
+			} else {
+				var err error
+				readQuery.Snapshot, err = loadSearchSnapshot(ctx, tx, p, q)
+				if err != nil {
+					return err
+				}
+				snapshotID = q.After.SnapshotID
+			}
+		}
+		items, err := readChunks(ctx, tx, p, readQuery, "")
 		if err != nil {
 			return err
+		}
+		if q.SemanticProfile != "" && q.After == nil && len(items) > q.Limit {
+			snapshotID, err = saveSearchSnapshot(ctx, tx, p, q, items)
+			if err != nil {
+				return err
+			}
 		}
 		if len(items) > q.Limit {
 			result.HasMore = true
 			items = items[:q.Limit]
 			last := items[len(items)-1]
-			result.Next = &domain.SearchCursor{QueryDigest: q.Fingerprint(), IndexedBefore: q.ReadAt, Score: last.Score, ObservedAt: last.ObservedAt, ID: last.ID, ResolvedCommitSHA: result.ResolvedCommitSHA, Literal: q.CommitPrefix != "" && q.CommitSHA == ""}
+			result.Next = &domain.SearchCursor{SnapshotID: snapshotID, SearchMode: q.Engine, SemanticProfile: q.SemanticProfile, VectorDigest: q.VectorDigest, QueryDigest: q.Fingerprint(), IndexedBefore: q.ReadAt, Score: last.Score, ObservedAt: last.ObservedAt, ID: last.ID, ResolvedCommitSHA: result.ResolvedCommitSHA, Literal: q.CommitPrefix != "" && q.CommitSHA == ""}
 		}
 		result.Items = items
+		if q.SemanticProfile != "" {
+			if err := tx.QueryRow(ctx, `SELECT count(*) FILTER(WHERE embedding.completed_at IS NULL),count(*) FILTER(WHERE embedding.last_error_code IS NOT NULL) FROM retrieval_chunks d JOIN retrieval_jobs j ON j.id=d.job_id `+sourceJoins+` LEFT JOIN retrieval_embeddings embedding ON embedding.chunk_id=d.id AND embedding.profile=$6 WHERE `+eligibleSources+` AND j.completed_at IS NOT NULL AND d.indexed_at<=$7`, q.ProjectID, p.Has(access.ReadCapture), p.Has(access.ReadIntegration), q.RepositoryID, q.History, q.SemanticProfile, q.ReadAt).Scan(&result.SemanticPending, &result.SemanticFailed); err != nil {
+				return err
+			}
+		}
 		return tx.QueryRow(ctx, `SELECT count(*),count(*) FILTER(WHERE j.last_error_code IS NOT NULL) FROM retrieval_jobs j `+sourceJoins+` WHERE `+eligibleSources+` AND (j.completed_at IS NULL OR j.projection_version<2)`, q.ProjectID, p.Has(access.ReadCapture), p.Has(access.ReadIntegration), q.RepositoryID, q.History).Scan(&result.PendingSources, &result.FailedSources)
 	})
 	return result, err

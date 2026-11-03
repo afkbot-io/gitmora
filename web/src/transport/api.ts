@@ -26,6 +26,7 @@ export const integrationErrors: Record<string, string> = {
     "Сервис вернул неподдерживаемый ответ. Проверьте адрес сервера и его версию.",
 };
 const diagnostics: Record<string, string> = {
+  search_expired: "Результаты устарели. Повторите поиск.",
   ...integrationErrors,
   username_taken: "Этот ник уже занят. Выберите другой.",
   cli_fresh_login_required:

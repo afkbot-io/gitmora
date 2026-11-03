@@ -363,8 +363,13 @@ export function ContextWorkspace({
             role="status"
           >
             <span>{t("Результаты: {0}", result.items.length)}</span>
-            {result.pending_sources_in_project > 0 && (
-              <span>{t("Индекс обновляется")}</span>
+            {result.semantic_unavailable ? (
+              <span>{t("Поиск по словам")}</span>
+            ) : (
+              (result.pending_sources_in_project > 0 ||
+                (result.semantic_pending ?? 0) > 0) && (
+                <span>{t("Индекс обновляется")}</span>
+              )
             )}
           </div>
           {!result.items.length ? (

@@ -51,7 +51,7 @@ func main() {
 }
 
 func run(ctx context.Context, args []string, output io.Writer) error {
-	const usage = "Usage: gitmorad serve | worker | migrate | init-admin | bootstrap | issue-token | grant-operator | healthcheck | gateway | deployment | identity-server | users | recovery | egress | version"
+	const usage = "Usage: gitmorad serve | worker | embedding-worker | migrate | init-admin | bootstrap | issue-token | grant-operator | healthcheck | gateway | deployment | identity-server | users | recovery | egress | version"
 	if len(args) == 0 {
 		return errors.New(usage)
 	}
@@ -84,7 +84,7 @@ func run(ctx context.Context, args []string, output io.Writer) error {
 	if command == "healthcheck" {
 		return healthcheck(ctx, args[1:], output)
 	}
-	if command != "serve" && command != "worker" && command != "migrate" && command != "init-admin" && command != "bootstrap" && command != "issue-token" && command != "grant-operator" {
+	if command != "serve" && command != "worker" && command != "embedding-worker" && command != "migrate" && command != "init-admin" && command != "bootstrap" && command != "issue-token" && command != "grant-operator" {
 		return errors.New("unknown command; run gitmorad --help")
 	}
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
@@ -107,7 +107,7 @@ func run(ctx context.Context, args []string, output io.Writer) error {
 	if command == "serve" {
 		flags.StringVar(&listen, "listen", "127.0.0.1:8080", "HTTP listen address")
 	}
-	if command == "worker" {
+	if command == "worker" || command == "embedding-worker" {
 		flags.BoolVar(&once, "once", false, "Process one due unit per configured worker and exit")
 	}
 	if command == "grant-operator" {
@@ -212,6 +212,18 @@ func run(ctx context.Context, args []string, output io.Writer) error {
 			TokenID   string    `json:"token_id"`
 			ExpiresAt time.Time `json:"expires_at"`
 		}{issued.Secret, issued.Record.ID, issued.Record.ExpiresAt})
+	case "embedding-worker":
+		if err := postgres.VerifySchema(startup, pool); err != nil {
+			return err
+		}
+		embeddings, err := embeddingClient(startup, pool)
+		if err != nil {
+			return err
+		}
+		if embeddings == nil {
+			return errors.New("local embeddings are not configured")
+		}
+		return runWorker(ctx, once, output, retrievalapp.NewEmbeddingIndexer(postgres.NewRetrievalStore(pool), embeddings))
 	case "worker":
 		if err := postgres.VerifySchema(startup, pool); err != nil {
 			return errors.New("database schema is not ready; run workgraphd migrate")
@@ -271,7 +283,14 @@ func run(ctx context.Context, args []string, output io.Writer) error {
 			}
 		}
 		directoryService.WithRepositoryResolver(resolver)
+		embeddings, err := embeddingClient(startup, pool)
+		if err != nil {
+			return err
+		}
 		retrievalService := retrievalapp.NewService(postgres.NewRetrievalStore(pool))
+		if embeddings != nil {
+			retrievalService.WithEmbeddings(embeddings)
+		}
 		handler := httpapi.NewHandler(httpapi.Config{Captures: application.NewService(postgres.NewCaptureStore(pool)), Authenticator: postgres.NewCredentialStore(pool), Ready: func(ctx context.Context) error { return postgres.VerifySchema(ctx, pool) }, Forge: forgePort, Code: codePort, Retrieval: retrievalService, ContextPacks: contextapp.NewService(postgres.NewContextStore(pool), retrievalService), ContextBrowser: contextapp.NewBrowser(postgres.NewContextStore(pool)), ContextResolver: contextapp.NewResolver(postgres.NewContextStore(pool)), Directory: directoryService, Identity: identityPort, CLIEnrollment: cliEnrollment, MCPAllowedOrigins: origins, MCPPublicOrigin: publicOrigin, WebUI: webui.Embedded()})
 		return serve(ctx, listen, handler)
 	default:

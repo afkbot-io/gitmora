@@ -8,3 +8,5 @@ BEGIN
 END
 $init$;
 CREATE DATABASE workgraph OWNER workgraph;
+\connect workgraph
+CREATE EXTENSION IF NOT EXISTS vector;

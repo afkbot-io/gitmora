@@ -199,6 +199,8 @@ export const english: Readonly<Record<string, string>> = {
   "Импорт:": "Import:",
   "Импортированный отчёт": "Imported report",
   "Индекс обновляется": "Index updating",
+  "Поиск по словам": "Keyword search",
+  "Результаты устарели. Повторите поиск.": "Results expired. Search again.",
   "Инструкция сервиса": "Provider instructions",
   Инструмент: "Tool",
   "Историческая версия": "Historical version",

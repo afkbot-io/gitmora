@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add opt-in local hybrid/semantic retrieval with pgvector and a CPU embedding service. Query-bound pages retain exact source/commit ranges and current access checks; model outages preserve lexical search. A bounded query-vector cache avoids repeated inference; candidate snapshots keep semantic pages stable during concurrent indexing and let continuation reads work without inference.
+- Add `gitmora search`, a separate retryable embedding worker, model-digest/dimension validation and real-model CLI/MCP acceptance/relevance evaluation. Model provenance stays source-reported; no native line-authorship claims are added.
+- Add atomic `deployment configure` for image/Compose/overlay edits without changing installation identity, secrets or persistent volume namespaces. Migration 28 requires pgvector in the application database; upgrade the bundled PostgreSQL image and enable the extension as its administrator before migrating.
+
 ## 0.8.0 — 2026-11-03
 
 - Search messages, Gitmora session UUIDs, unique confirmed commit abbreviations and exact repository paths through the web, CLI and MCP. Metadata filters support integration, model/provider and message role. Query-bound keyset pages append results without repeating long message fragments. Words separated by chunk boundaries inside one bounded message remain searchable.
