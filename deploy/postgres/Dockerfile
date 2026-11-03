@@ -10,6 +10,8 @@ RUN apk add --no-cache --virtual .vector-build build-base clang21 llvm21-dev cur
     && tar -xzf /tmp/vector.tar.gz -C /tmp \
     && make -C /tmp/pgvector-0.8.7 OPTFLAGS='' \
     && make -C /tmp/pgvector-0.8.7 install \
+    && mkdir -p /usr/local/share/licenses/pgvector \
+    && cp /tmp/pgvector-0.8.7/LICENSE /usr/local/share/licenses/pgvector/LICENSE \
     && rm -rf /tmp/pgvector-0.8.7 /tmp/vector.tar.gz \
     && apk del .vector-build
 
