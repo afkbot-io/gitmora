@@ -1,6 +1,6 @@
 import { t as translate } from "../domain/locale.js";
 import { buttonStyles, sharedStyles } from "./ui.js";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import type {
   Me,
@@ -20,6 +20,12 @@ import {
 } from "./SettingsShared.js";
 import { Empty, ErrorNotice } from "./shared.js";
 import { ForgeConnection } from "./connections/ForgeConnection.js";
+import { RepositoryAccess } from "./connections/RepositoryAccess.js";
+import {
+  clearRepositoryToken,
+  repositoryAccessBody,
+  type RepositoryAccessValue,
+} from "../domain/repository-access.js";
 
 export function RepositoryCatalog({
   client,
@@ -39,6 +45,7 @@ export function RepositoryCatalog({
   const canConnect =
     capabilities(me, project).catalog && capabilities(me, project).integrations;
   const [open, setOpen] = useState(repositories.length === 0 && canConnect);
+  const [connected, setConnected] = useState(false);
   return (
     <section className="repository-view px-0 pb-8">
       <div className={sharedStyles.heading}>
@@ -58,12 +65,15 @@ export function RepositoryCatalog({
             </p>
           )}
         </div>
-        {canConnect && repositories.length > 0 && (
+        {canConnect && repositories.length > 0 && !open && (
           <button
             className={buttonStyles.primary}
-            onClick={() => setOpen(!open)}
+            onClick={() => {
+              setOpen(true);
+              setConnected(false);
+            }}
           >
-            {open ? translate("Отмена") : translate("Добавить репозиторий")}
+            {translate("Добавить репозиторий")}
           </button>
         )}
       </div>
@@ -71,11 +81,14 @@ export function RepositoryCatalog({
         <RepositoryCreate
           client={client}
           project={project}
+          repositories={repositories}
+          {...(repositories.length ? { onCancel: () => setOpen(false) } : {})}
           onRegistered={onSaved}
-          onSaved={async (id) => {
+          onSaved={async (id, first) => {
             await onSaved();
             setOpen(false);
-            onConnected(id);
+            setConnected(true);
+            if (first) onConnected(id);
           }}
         />
       )}
@@ -85,6 +98,16 @@ export function RepositoryCatalog({
             "Добавьте GitHub или GitLab, чтобы сохранять историю разработки.",
           )}
         </Empty>
+      )}
+      {connected && (
+        <p role="status" className="text-sm text-success my-4">
+          {translate("Репозиторий подключён.")}
+        </p>
+      )}
+      {open && repositories.length > 0 && (
+        <h2 className="mt-8 mb-4 text-base">
+          {translate("Подключённые репозитории")}
+        </h2>
       )}
       {repositories.map((repository) => (
         <RepositoryEntry
@@ -104,19 +127,27 @@ function RepositoryCreate({
   project,
   onSaved,
   onRegistered,
+  repositories,
+  onCancel,
 }: {
   client: ApiClient;
   project: Project;
-  onSaved: (id: string) => Promise<void>;
+  onSaved: (id: string, first: boolean) => Promise<void>;
   onRegistered: () => Promise<void>;
+  repositories: Repository[];
+  onCancel?: () => void;
 }) {
   const busy = useRef(false);
+  const [first] = useState(repositories.length === 0);
   const [saving, setSaving] = useState(false);
+  const [accessRevision, setAccessRevision] = useState(0);
   const [host, setHost] = useState<"github" | "gitlab">("github");
   const [url, setURL] = useState("");
-  const [token, setToken] = useState("");
+  const [access, setAccess] = useState<RepositoryAccessValue>({
+    kind: "new",
+    token: "",
+  });
   const [name, setName] = useState("");
-  const [anonymous, setAnonymous] = useState(false);
   const [id] = useState(() => crypto.randomUUID());
   const [created, setCreated] = useState(false);
   const [resolved, setResolved] = useState<ResolvedRepository | null>(null);
@@ -124,14 +155,17 @@ function RepositoryCreate({
   const lookup = useMutation(client);
   const connection = useMutation(client);
   const [error, setError] = useState("");
+  useEffect(() => {
+    setAccess({ kind: "new", token: "" });
+  }, [host]);
   async function create(event: FormEvent) {
     event.preventDefault();
     if (busy.current) return;
     busy.current = true;
     setSaving(true);
     setError("");
-    const credential = token;
-    setToken("");
+    const credentials = repositoryAccessBody(access);
+    setAccess(clearRepositoryToken(access));
     let identity = resolved;
     try {
       if (!created) {
@@ -141,12 +175,13 @@ function RepositoryCreate({
           {
             url: url.trim(),
             provider: host,
-            ...(!anonymous || host !== "github"
-              ? { api_token: credential }
-              : {}),
+            ...(access.kind === "public" ? {} : credentials),
           },
         );
-        if (!found) return;
+        if (!found) {
+          if (access.kind === "saved") setAccessRevision((value) => value + 1);
+          return;
+        }
         identity = found.value;
         if (
           identity.provider !== (host === "github" ? "github" : "") ||
@@ -154,6 +189,20 @@ function RepositoryCreate({
           identity.provider_repository_id < 1
         )
           throw new Error(translate("Проверьте данные репозитория."));
+        if (
+          repositories.some(
+            (repository) =>
+              (repository.provider ?? "") === identity!.provider &&
+              repositoryURL(repository) === identity!.provider_url &&
+              (repository.provider === "github"
+                ? repository.provider_repository_id
+                : repository.gitlab_project_id) ===
+                identity!.provider_repository_id,
+          )
+        ) {
+          setError(translate("Этот репозиторий уже добавлен в проект."));
+          return;
+        }
         setResolved(identity);
         const fields =
           host === "github"
@@ -180,13 +229,12 @@ function RepositoryCreate({
         "PUT",
         `/v1/repositories/${id}/forge`,
         {
-          ...(host === "github" && anonymous
-            ? { anonymous: true }
-            : { api_token: credential }),
+          ...credentials,
           webhook_mode: "disabled",
         },
       );
-      if (saved) await onSaved(id);
+      if (saved) await onSaved(id, first);
+      else if (access.kind === "saved") setAccessRevision((value) => value + 1);
     } catch (e) {
       setError(e instanceof Error ? e.message : translate("Проверьте данные."));
     } finally {
@@ -210,8 +258,7 @@ function RepositoryCreate({
             onChange={(e) => {
               setHost(e.target.value as "github" | "gitlab");
               setResolved(null);
-              setAnonymous(false);
-              setToken("");
+              setAccess({ kind: "new", token: "" });
             }}
           >
             <option value="github">GitHub</option>
@@ -246,63 +293,16 @@ function RepositoryCreate({
           />
         </label>
       </div>
-      {!(host === "github" && anonymous) && (
-        <label>
-          {translate("Токен чтения")}
-          <input
-            type="password"
-            name="repository_token"
-            required
-            autoComplete="off"
-            minLength={8}
-            maxLength={4096}
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-          />
-        </label>
-      )}
-      <details className="mb-4 text-sm text-muted">
-        <summary>{translate("Как получить токен")}</summary>
-        <p className="mt-3">
-          {host === "github"
-            ? translate(
-                "GitHub → Settings → Developer settings → Fine-grained tokens. Выберите репозиторий и разрешите Contents, Pull requests и Actions: Read-only.",
-              )
-            : translate(
-                "GitLab → Settings → Access tokens. Создайте токен с правом read_api и доступом к этому проекту.",
-              )}
-        </p>
-        <a
-          className="inline-flex py-2"
-          target="_blank"
-          rel="noopener noreferrer"
-          href={
-            host === "github"
-              ? "https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens"
-              : "https://docs.gitlab.com/user/profile/personal_access_tokens/"
-          }
-        >
-          {translate("Инструкция сервиса")}
-        </a>
-      </details>
-      {host === "github" && (
-        <label className="checkbox">
-          <input
-            type="checkbox"
-            checked={anonymous}
-            onChange={(e) => {
-              setAnonymous(e.target.checked);
-              setToken("");
-            }}
-          />
-          {translate("Публичный репозиторий без токена")}
-        </label>
-      )}
-      {host === "github" && anonymous && (
-        <p className="text-sm text-muted">
-          {translate("Без токена доступен небольшой общий лимит GitHub API.")}
-        </p>
-      )}
+      <RepositoryAccess
+        key={host}
+        client={client}
+        projectID={project.id}
+        provider={host}
+        url={url}
+        value={access}
+        onChange={setAccess}
+        refreshKey={accessRevision}
+      />
       <details className="mb-5 text-sm">
         <summary>{translate("Дополнительно")}</summary>
         <label className="mt-4">
@@ -322,17 +322,28 @@ function RepositoryCreate({
       {created && connection.error && (
         <p className="text-sm text-muted">
           {translate(
-            "Репозиторий добавлен. Введите действующий токен, чтобы завершить подключение.",
+            "Репозиторий добавлен. Выберите доступ, чтобы завершить подключение.",
           )}
         </p>
       )}
-      <button className={buttonStyles.primary}>
-        {saving
-          ? translate("Подключаем…")
-          : created
-            ? translate("Сохранить подключение")
-            : translate("Подключить репозиторий")}
-      </button>
+      <div className="flex flex-wrap gap-3 border-t border-line pt-4">
+        <button className={buttonStyles.primary}>
+          {saving
+            ? translate("Подключаем…")
+            : created
+              ? translate("Сохранить подключение")
+              : translate("Подключить репозиторий")}
+        </button>
+        {onCancel && (
+          <button
+            className={buttonStyles.secondary}
+            type="button"
+            onClick={onCancel}
+          >
+            {translate("Отмена")}
+          </button>
+        )}
+      </div>
     </MutationForm>
   );
 }
@@ -371,7 +382,7 @@ function RepositoryEntry({
   }
   return (
     <article className="settings-resource mt-4 overflow-hidden rounded-lg border border-line bg-paper">
-      <div className="repository-row flex flex-wrap items-center justify-between gap-4 p-4">
+      <div className="repository-row flex flex-wrap items-center justify-between gap-4 p-4 mobile:flex-col mobile:items-stretch">
         <div className="min-w-0 flex-1">
           <h2 className="mb-1 text-base">{repository.name}</h2>
           <p className="m-0 truncate text-xs text-muted">
@@ -385,7 +396,7 @@ function RepositoryEntry({
             )}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 mobile:grid mobile:grid-cols-2">
           <a
             className={buttonStyles.secondary + " action-link text-sm"}
             href={`#view=setup&project=${project.id}&repository=${repository.id}`}

@@ -271,6 +271,9 @@ func run(ctx context.Context, args []string, output io.Writer) error {
 			}
 		}
 		directoryService.WithRepositoryResolver(resolver)
+		if forge != nil {
+			forge.WithCredentialResolver(resolver)
+		}
 		retrievalService := retrievalapp.NewService(postgres.NewRetrievalStore(pool))
 		handler := httpapi.NewHandler(httpapi.Config{Captures: application.NewService(postgres.NewCaptureStore(pool)), Authenticator: postgres.NewCredentialStore(pool), Ready: func(ctx context.Context) error { return postgres.VerifySchema(ctx, pool) }, Forge: forgePort, Code: codePort, Retrieval: retrievalService, ContextPacks: contextapp.NewService(postgres.NewContextStore(pool), retrievalService), ContextBrowser: contextapp.NewBrowser(postgres.NewContextStore(pool)), ContextResolver: contextapp.NewResolver(postgres.NewContextStore(pool)), Directory: directoryService, Identity: identityPort, CLIEnrollment: cliEnrollment, MCPAllowedOrigins: origins, MCPPublicOrigin: publicOrigin, WebUI: webui.Embedded()})
 		return serve(ctx, listen, handler)

@@ -65,7 +65,7 @@ func TestGitHubRepositoryCatalogAndWorkerIdentityAreExplicitAndImmutable(t *test
 	if err != nil || repo.Provider != "github" || repo.BaseURL != command.ProviderURL || repo.ProjectID != 42 {
 		t.Fatal(repo, err)
 	}
-	status, err := forge.Connect(ctx, subject, repo, bytes.Repeat([]byte{1}, 40), "disabled", true)
+	status, err := forge.Connect(ctx, subject, repo, bytes.Repeat([]byte{1}, 40), "disabled", true, nil)
 	if err != nil || status.Provider != "github" || len(status.Streams) != 2 || !status.Anonymous {
 		t.Fatal("unsupported GitLab lanes advertised", status, err)
 	}
