@@ -1,6 +1,12 @@
 # Optional CPU-only semantic retrieval. Provision the model cache before starting.
 # No model/API ports are published; runtime inference has no external network.
 services:
+  api:
+    environment:
+      WORKGRAPH_EMBEDDING_QUERY_URL: http://embedding-queries:11434
+    depends_on:
+      embedding-queries: {condition: service_started}
+
   embeddings:
     image: ollama/ollama:0.40.14@sha256:ebaef4f4c5d93660e1f25f8ad085a112f51ccfb0e8458073e71793959dba91c9
     command: [serve]
@@ -12,7 +18,7 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     volumes:
-      - ${WORKGRAPH_STATE_DIR:?}/embedding-models:/root/.ollama
+      - ${WORKGRAPH_STATE_DIR:?}/embedding-models:/root/.ollama:ro
     tmpfs: ["/tmp:rw,noexec,nosuid,size=128m,mode=1777"]
     networks: [private]
     mem_limit: 2g
@@ -22,6 +28,11 @@ services:
     logging:
       driver: json-file
       options: {max-size: "10m", max-file: "3"}
+
+  # Separate CPU/model queues prevent long backfill batches blocking query vectors.
+  embedding-queries:
+    extends:
+      service: embeddings
 
   embedding-worker:
     image: ${WORKGRAPH_IMAGE:-gitmora:local}

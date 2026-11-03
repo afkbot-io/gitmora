@@ -84,7 +84,7 @@ Without an OIDC configuration, capture/API/MCP bearer operations can be used for
 
 ## Source-build settings
 
-`make build build-image RELEASE_VERSION=0.9.0 RELEASE_REVISION="$(git rev-parse HEAD)"` stamps host binaries and the application image. Defaults are `development` and an empty revision. These are build inputs, not runtime env values. Tag the resulting local images immutably as described in [deployment](deployment.md); application and identity images are pinned independently.
+`make build build-image RELEASE_VERSION=0.9.3 RELEASE_REVISION="$(git rev-parse HEAD)"` stamps host binaries and the application image. Defaults are `development` and an empty revision. These are build inputs, not runtime env values. Tag the resulting local images immutably as described in [deployment](deployment.md); application and identity images are pinned independently.
 
 ## Developer CLI and agent settings
 
@@ -104,16 +104,16 @@ Test-only `WORKGRAPH_TEST_*`, `GITMORA_*TEST*` and browser switches are describe
 ## Optional local embeddings
 
 See [semantic search setup and upgrade](semantic-search.md). These settings must
-match on the API and the separate `embedding-worker`; ordinary workers do not
-invoke the model. No cloud API key is accepted.
+match on the API and the separate `embedding-worker`, except the optional query
+replica URL; ordinary workers do not invoke the model. No cloud API key is accepted.
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `WORKGRAPH_EMBEDDING_URL` | unset: disabled | Operator-owned Ollama origin, e.g. `http://embeddings:11434`; no path, credentials or redirects. |
+| `WORKGRAPH_EMBEDDING_QUERY_URL` | document URL | Optional isolated Ollama origin for interactive requests. The bundled overlay sets `http://embedding-queries:11434` on the API. Must serve the same pinned model; does not change the vector profile. |
 | `WORKGRAPH_EMBEDDING_MODEL` | unset | Exact provisioned model name; required with URL. |
 | `WORKGRAPH_EMBEDDING_REVISION` | unset | Full 64-character model digest; required with URL; changing it selects a new vector profile. |
 | `WORKGRAPH_EMBEDDING_DIMENSIONS` | unset | Exact model output dimensions, 1–2048; required with URL. |
-
 | `WORKGRAPH_EMBEDDING_QUERY_PREFIX` | empty | Model-specific query prompt, at most 200 bytes; included in the profile. |
 | `WORKGRAPH_EMBEDDING_PASSAGE_PREFIX` | empty | Model-specific document prompt, at most 200 bytes; included in the profile. |
 

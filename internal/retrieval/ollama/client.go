@@ -23,6 +23,9 @@ type Config struct {
 	URL, Model, Revision       string
 	Dimensions                 int
 	QueryPrefix, PassagePrefix string
+	// QueryURL optionally isolates interactive inference from background batches.
+	// Both endpoints must serve the same pinned model and formatting profile.
+	QueryURL string
 }
 type Client struct {
 	config  Config
@@ -37,23 +40,37 @@ type cachedQuery struct {
 	expires time.Time
 }
 
+// profileConfig is the persisted version-1 vector identity, independent of replicas.
+type profileConfig struct {
+	URL, Model, Revision       string
+	Dimensions                 int
+	QueryPrefix, PassagePrefix string
+}
+
 // New rejects credential-bearing URLs and ambient proxies/redirects. The service
 // must be on a private operator-controlled network; no cloud key is supported.
 func New(c Config) (*Client, error) {
-	u, e := url.Parse(c.URL)
-	if e != nil || u.Host == "" || u.User != nil || u.Opaque != "" || u.RawQuery != "" || u.Fragment != "" || u.Path != "" || u.Scheme != "http" && u.Scheme != "https" || strings.TrimSpace(c.Model) != c.Model || c.Model == "" || len(c.Model) > 200 || !domain.Digest(c.Revision) || c.Dimensions < 1 || c.Dimensions > 2048 || len(c.QueryPrefix) > 200 || len(c.PassagePrefix) > 200 {
+	if !validOrigin(c.URL) || c.QueryURL != "" && !validOrigin(c.QueryURL) || strings.TrimSpace(c.Model) != c.Model || c.Model == "" || len(c.Model) > 200 || !domain.Digest(c.Revision) || c.Dimensions < 1 || c.Dimensions > 2048 || len(c.QueryPrefix) > 200 || len(c.PassagePrefix) > 200 {
 		return nil, domain.ErrInvalid
 	}
+	// Preserve the version-1 profile byte-for-byte. A query replica changes routing,
+	// not vector identity; including it would silently split API and worker indexes.
+	profile := profileConfig{c.URL, c.Model, c.Revision, c.Dimensions, c.QueryPrefix, c.PassagePrefix}
 	raw, _ := json.Marshal(struct {
 		Version int
-		Config  Config
-	}{1, c})
+		Config  profileConfig
+	}{1, profile})
 	t := http.DefaultTransport.(*http.Transport).Clone()
 	t.Proxy = nil
 	t.MaxResponseHeaderBytes = 16384
 	return &Client{config: c, profile: domain.Hash(raw), http: &http.Client{Transport: t, Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, queries: map[string]cachedQuery{}}, nil
 }
 func (c *Client) Profile() string { return c.profile }
+
+func validOrigin(raw string) bool {
+	u, err := url.Parse(raw)
+	return err == nil && u.Host != "" && u.User == nil && u.Opaque == "" && u.RawQuery == "" && u.Fragment == "" && u.Path == "" && (u.Scheme == "http" || u.Scheme == "https")
+}
 
 // Embed uses the pinned operator model for a bounded batch and validates every vector.
 // Truncation is disabled: an oversized input is retried/diagnosed, never silently indexed incompletely.
@@ -66,7 +83,11 @@ func (c *Client) Embed(ctx context.Context, texts []string, query bool) ([][]flo
 			return nil, domain.ErrInvalid
 		}
 	}
-	if err := c.verifyRevision(ctx); err != nil {
+	endpoint := c.config.URL
+	if query && c.config.QueryURL != "" {
+		endpoint = c.config.QueryURL
+	}
+	if err := c.verifyRevision(ctx, endpoint); err != nil {
 		return nil, err
 	}
 	cacheKey := ""
@@ -94,7 +115,7 @@ func (c *Client) Embed(ctx context.Context, texts []string, query bool) ([][]flo
 		KeepAlive string         `json:"keep_alive"`
 		Options   map[string]int `json:"options"`
 	}{c.config.Model, formatted, false, "30m", map[string]int{"num_thread": 2}})
-	req, e := http.NewRequestWithContext(ctx, "POST", c.config.URL+"/api/embed", bytes.NewReader(raw))
+	req, e := http.NewRequestWithContext(ctx, "POST", endpoint+"/api/embed", bytes.NewReader(raw))
 	if e != nil {
 		return nil, ErrUnavailable
 	}
@@ -143,8 +164,8 @@ func (c *Client) Embed(ctx context.Context, texts []string, query bool) ([][]flo
 }
 
 // verifyRevision prevents a moved model tag from mixing incompatible vectors.
-func (c *Client) verifyRevision(ctx context.Context) error {
-	req, err := http.NewRequestWithContext(ctx, "GET", c.config.URL+"/api/tags", nil)
+func (c *Client) verifyRevision(ctx context.Context, endpoint string) error {
+	req, err := http.NewRequestWithContext(ctx, "GET", endpoint+"/api/tags", nil)
 	if err != nil {
 		return ErrUnavailable
 	}

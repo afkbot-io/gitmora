@@ -37,9 +37,7 @@ inference work across repeated immutable revisions without merging their history
 
 The optional overlay uses Ollama 0.40.14 and can run `embeddinggemma:300m` on CPU.
 Review the model's own license before redistributing its weights. Its output is
-768-dimensional; the prompt prefixes below follow its model card. Model size is about 622 MB; allow 2 GB RAM for the model service
-and additional PostgreSQL space for vectors. The overlay permits two inference requests in parallel and bounds the model queue; backfill uses small batches to share CPU with interactive searches. This is a starting profile, not a
-capacity guarantee for concurrent teams.
+768-dimensional; the prompt prefixes below follow its model card. Model size is about 622 MB on disk. The overlay runs two isolated model services, each bounded to 2 GB RAM and two CPU cores, sharing the same read-only weights. Allow up to 4 GB RAM plus PostgreSQL space for vectors. Interactive requests use `embedding-queries`; background batches use `embeddings`. Separate queues prevent long backfill inputs from delaying short search queries. Inference concurrency settings alone do not guarantee this isolation. This is a starting profile, not a capacity guarantee for concurrent teams.
 
 Set `GITMORA_STATE` to your private installation directory. Provisioning temporarily
 uses an ordinary Docker network to download weights. It receives no source data:
@@ -80,7 +78,12 @@ bin/gitmorad deployment configure --directory /srv/gitmora/state \
 
 The edit preserves installation ID, secrets, port and existing ordered overlays. Keep all previously selected
 identity/provider overlays. Start with `deployment up`. The model service publishes
-no host port; a separate `embedding-worker` backfills two chunks per batch and
+no host port; the overlay sets `WORKGRAPH_EMBEDDING_QUERY_URL=http://embedding-queries:11434`
+only on the API. For a custom deployment, set this optional variable to an isolated
+replica serving the identical model/digest. It changes routing without invalidating
+existing vectors. Both endpoints validate the pinned digest, including cached queries.
+Initial model loading can cause a bounded first-request fallback; repeat after the
+model has loaded. A separate `embedding-worker` backfills two chunks per batch and
 continues after restarts. Ordinary capture, provider synchronization and lexical
 indexing use their existing worker and do not wait for model inference.
 
@@ -109,6 +112,8 @@ SHA, unique commit prefixes, session UUID and metadata-only lookups retain exact
 behavior. Text can be narrowed by repository, session, commit range, path, agent,
 model and role. A semantic match never broadens an MR's recorded message interval.
 Explicit source expansion still rechecks membership and current provider access.
+
+Candidate selection excludes chunks without either a lexical match or a completed vector for the active profile, so partial backfill does not require ranking unembedded history. Authorization and source-availability checks still run before ranking or limits.
 
 Each semantic lane uses exact cosine retrieval over its authorized source scope.
 It deliberately avoids approximate top-k followed by permission filtering, which

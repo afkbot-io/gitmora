@@ -74,7 +74,8 @@ const sourceJoins = baseSourceJoins
 
 const confirmedReferenceAccess = `(d.kind<>'code_reference' OR EXISTS(SELECT 1 FROM capture_revision_commits rc JOIN commits c ON c.repository_id=rc.repository_id AND c.sha=rc.sha WHERE rc.repository_id=j.repository_id AND rc.session_id=j.session_id AND rc.revision=j.revision AND c.confirmed_at IS NOT NULL))`
 
-var eligibleSources = `(` + baseSourceAccess + `) AND ($4::text='' OR j.repository_id::text=$4) AND ($5 OR ` + baseSourceCurrent + `)`
+// Cast the optional parameter, preserving UUID column statistics and indexes.
+var eligibleSources = `(` + baseSourceAccess + `) AND ($4::text='' OR j.repository_id=NULLIF($4,'')::uuid) AND ($5 OR ` + baseSourceCurrent + `)`
 
 // Parameters 1..5 are the shared authorized source scope; matching/ranking use 6..12.
 const sourceIdentityProjection = `j.source_kind,j.project_id,j.repository_id,j.session_id,j.revision,j.source_digest,j.code_sha,j.code_path,j.code_blob_id`
@@ -99,7 +100,7 @@ var snapshotQueryPrefix = retrievalQuery("snapshot", false)
 // correlated source-membership probe per chunk grows with unrelated chat history.
 const commitCandidates = `, commit_sources AS MATERIALIZED (
  SELECT j.id,j.repository_id,j.session_id,j.revision,j.source_kind FROM retrieval_jobs j
- WHERE j.project_id=$1 AND ($4::text='' OR j.repository_id::text=$4)
+ WHERE j.project_id=$1 AND ($4::text='' OR j.repository_id=NULLIF($4,'')::uuid)
  AND ((j.source_kind='code' AND j.code_sha=$6) OR (j.source_kind='capture' AND EXISTS(
  SELECT 1 FROM capture_revision_commits rc JOIN commits c ON (c.repository_id,c.sha)=(rc.repository_id,rc.sha)
  WHERE (rc.repository_id,rc.session_id,rc.revision)=(j.repository_id,j.session_id,j.revision) AND rc.sha=$6 AND c.confirmed_at IS NOT NULL)))
@@ -126,6 +127,17 @@ func retrievalQuery(mode string, commitScoped bool) string {
 	} else if mode == "path" {
 		candidates = ", paths AS MATERIALIZED (SELECT job_id,part FROM retrieval_chunks WHERE file_paths@>ARRAY[$11::text])"
 		chunks = "paths candidates JOIN retrieval_chunks d ON (d.job_id,d.part)=(candidates.job_id,candidates.part)"
+	}
+	if semantic {
+		// Backfill can leave most historical chunks without a vector. Consider only
+		// actual lexical matches or completed vectors before the expensive source
+		// joins. Authorization still precedes every distance ranking and LIMIT.
+		lexical := ""
+		if mode == "hybrid" {
+			lexical = `SELECT id FROM retrieval_chunks WHERE lexical@@(SELECT query FROM terms) OR (part_lexical IS NOT NULL AND part_lexical@@(SELECT query FROM terms)) UNION `
+		}
+		candidates = `, matched AS MATERIALIZED (` + lexical + `SELECT chunk_id AS id FROM retrieval_embeddings WHERE profile=$22 AND completed_at<=COALESCE($16::timestamptz,transaction_timestamp()))`
+		chunks = "matched candidates JOIN retrieval_chunks d ON d.id=candidates.id"
 	}
 	if commitScoped {
 		candidates = commitCandidates + candidates
