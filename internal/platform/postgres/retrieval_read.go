@@ -20,6 +20,11 @@ func (s *RetrievalStore) authorized(ctx context.Context, p access.Principal, pro
 		return err
 	}
 	defer tx.Rollback(ctx)
+	// Optional selectors have very different selectivity. A cached generic plan can
+	// replace indexed evidence reads with broad scans; keep this local to this read.
+	if _, err = tx.Exec(ctx, "SET LOCAL plan_cache_mode=force_custom_plan"); err != nil {
+		return err
+	}
 	var role string
 	err = tx.QueryRow(ctx, `SELECT m.role FROM memberships m JOIN users u ON u.id=m.user_id WHERE m.project_id=$1 AND m.user_id=$2 AND u.enabled FOR SHARE OF m,u`, project, p.UserID).Scan(&role)
 	if errors.Is(err, pgx.ErrNoRows) {

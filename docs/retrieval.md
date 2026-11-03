@@ -14,7 +14,7 @@ Use `context.expand` with an exact `evidence_id`, `offset` and `limit` to retrie
 
 For an MR/PR link use `context.resolve`, then `context.pack`. Packs expand verified continuation windows and source commit membership; SHA-scoped message search also requires recorded commit message ranges. A whole-session association never substitutes for a missing interval. See [context contracts](context.md), [code collection](code.md), [CLI/MCP](native-context.md) and [custom servers](custom-server.md).
 
-`make smoke-context` verifies built API/PostgreSQL/search/MCP, replay, exact excerpts and revocation. `make smoke-agent-context` runs source discovery, pack retrieval and exact expansion through an actual local OpenCode MCP client with a deterministic model fixture. Load tests measure bounded synthetic workloads and are not a production capacity guarantee.
+`make smoke-context` verifies built API/PostgreSQL/search/MCP, replay, exact excerpts and revocation. `make smoke-agent-context` runs source discovery, pack retrieval and exact expansion through an actual local OpenCode MCP client with a deterministic model fixture. The load check forces a generic connection planning default to exercise reused prepared statements and the retrieval transaction override. Load tests measure bounded synthetic workloads and are not a production capacity guarantee.
 
 
 ## How an agent searches
@@ -26,6 +26,8 @@ A local agent chooses short queries, inspects the returned citations, narrows by
 One best matching chunk per source part is returned, so one long tool record does not occupy a whole page. Search `next` is a query-bound keyset cursor: pass it verbatim as `after` while keeping filters unchanged. It pins an indexing cutoff and a resolved-prefix/text mode. Every page repeats current authorization. This is live source discovery, not a long-lived database snapshot; indexing or latest-revision changes can remove results, and a fresh search includes newer observations.
 
 SHA-scoped queries materialize confirmed source membership before selecting message ranges. Unrelated message history does not repeat the commit-membership probe for every chunk; the normal authorization and source-availability filters still run before ranking and text return.
+
+Retrieval transactions use a custom PostgreSQL plan for their actual selectors. This prevents prepared statements from switching to an unsuitable generic plan as concurrent clients reuse connections. The setting is transaction-local; other database work keeps its configured planning policy.
 
 The web reader opens a hit at its exact revision and message position. It appends batches and verified continuations; “Conversation only” hides tools, and the local filter searches the parts already fetched. It does not claim to search unloaded parts. Raw records and immutable source identities remain available under source details.
 

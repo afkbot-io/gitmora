@@ -49,7 +49,10 @@ def main() -> None:
     }
     # Do not inherit the API host CPU count for a database running in a smaller Docker VM.
     environment["WORKGRAPH_DATABASE_URL"] = (api.BASE_DSN + "&search_path=" + schema
-                                              + "&pool_max_conns=" + str(args.database_pool_max))
+                                              + "&pool_max_conns=" + str(args.database_pool_max)
+                                              + "&plan_cache_mode=force_generic_plan")
+    # Reused prepared statements must not turn optional retrieval selectors into broad scans.
+    # Other operations retain this generic default; retrieval chooses its plan per transaction.
     process = worker = None
     failures: list[str] = []
     try:
@@ -398,6 +401,7 @@ def main() -> None:
             unconfirmed_sha_not_promoted=True,
             production_target=False,
             database_pool_max=args.database_pool_max,
+            connection_plan_policy="force_generic_plan",
         )
         if args.output:
             args.output.parent.mkdir(parents=True, exist_ok=True)
