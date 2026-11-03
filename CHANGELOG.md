@@ -1,5 +1,9 @@
 # Changes
 
+## 0.9.3 — 2026-11-04
+
+- Preserve PostgreSQL UUID statistics and indexes when filtering search by repository. Common-word searches remain within the existing deadline for both current and historical records.
+
 ## 0.9.2 — 2026-11-04
 
 - Avoid ranking unembedded historical chunks during partial backfill. Hybrid retrieval retains independent lexical matches, and permission checks still run before ranking and limits. A real historical query that exceeded five seconds now completes within its existing budget.

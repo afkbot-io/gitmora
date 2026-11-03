@@ -74,7 +74,8 @@ const sourceJoins = baseSourceJoins
 
 const confirmedReferenceAccess = `(d.kind<>'code_reference' OR EXISTS(SELECT 1 FROM capture_revision_commits rc JOIN commits c ON c.repository_id=rc.repository_id AND c.sha=rc.sha WHERE rc.repository_id=j.repository_id AND rc.session_id=j.session_id AND rc.revision=j.revision AND c.confirmed_at IS NOT NULL))`
 
-var eligibleSources = `(` + baseSourceAccess + `) AND ($4::text='' OR j.repository_id::text=$4) AND ($5 OR ` + baseSourceCurrent + `)`
+// Cast the optional parameter, preserving UUID column statistics and indexes.
+var eligibleSources = `(` + baseSourceAccess + `) AND ($4::text='' OR j.repository_id=NULLIF($4,'')::uuid) AND ($5 OR ` + baseSourceCurrent + `)`
 
 // Parameters 1..5 are the shared authorized source scope; matching/ranking use 6..12.
 const sourceIdentityProjection = `j.source_kind,j.project_id,j.repository_id,j.session_id,j.revision,j.source_digest,j.code_sha,j.code_path,j.code_blob_id`
@@ -99,7 +100,7 @@ var snapshotQueryPrefix = retrievalQuery("snapshot", false)
 // correlated source-membership probe per chunk grows with unrelated chat history.
 const commitCandidates = `, commit_sources AS MATERIALIZED (
  SELECT j.id,j.repository_id,j.session_id,j.revision,j.source_kind FROM retrieval_jobs j
- WHERE j.project_id=$1 AND ($4::text='' OR j.repository_id::text=$4)
+ WHERE j.project_id=$1 AND ($4::text='' OR j.repository_id=NULLIF($4,'')::uuid)
  AND ((j.source_kind='code' AND j.code_sha=$6) OR (j.source_kind='capture' AND EXISTS(
  SELECT 1 FROM capture_revision_commits rc JOIN commits c ON (c.repository_id,c.sha)=(rc.repository_id,rc.sha)
  WHERE (rc.repository_id,rc.session_id,rc.revision)=(j.repository_id,j.session_id,j.revision) AND rc.sha=$6 AND c.confirmed_at IS NOT NULL)))
