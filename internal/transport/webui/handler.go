@@ -21,6 +21,7 @@ var contentTypes = map[string]string{
 	".woff": "font/woff", ".woff2": "font/woff2", ".svg": "image/svg+xml",
 	".txt": "text/plain; charset=utf-8",
 	".sh":  "text/plain; charset=utf-8",
+	".md":  "text/markdown; charset=utf-8",
 }
 
 // Embedded returns application bytes built before the Go binary is compiled.
@@ -49,7 +50,7 @@ func New(assets fs.FS) http.Handler {
 		name := strings.TrimPrefix(r.URL.Path, "/")
 		if r.URL.Path == "/" {
 			name = "index.html"
-		} else if (r.URL.Path != "/install.sh" && !strings.HasPrefix(r.URL.Path, "/assets/")) || !fs.ValidPath(name) || strings.ContainsAny(name, "\\\x00") {
+		} else if (r.URL.Path != "/install.sh" && r.URL.Path != "/ai.md" && !strings.HasPrefix(r.URL.Path, "/assets/")) || !fs.ValidPath(name) || strings.ContainsAny(name, "\\\x00") {
 			http.NotFound(w, r)
 			return
 		}

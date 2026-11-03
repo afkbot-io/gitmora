@@ -98,7 +98,17 @@ export function ProjectWorkspace({
         />
       ) : view === "setup" ? (
         <section>
-          <h1>{translate("CLI и MCP")}</h1>
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+            <h1 className="mb-0">{translate("CLI и MCP")}</h1>
+            <a
+              href="/ai.md"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm font-medium"
+            >
+              {translate("Инструкция для агента · ai.md")}
+            </a>
+          </div>
           {repositories.length > 1 && (
             <label className="block max-w-xl mb-6">
               {translate("Репозиторий")}
