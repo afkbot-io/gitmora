@@ -367,6 +367,15 @@ try {
   await page.getByRole("button", { name: "Найти", exact: true }).click();
   await page.getByText("Ничего не найдено", { exact: true }).waitFor();
   await nav("CLI и MCP");
+  const agentGuide = page.getByRole("link", {
+    name: "Инструкция для агента · ai.md",
+    exact: true,
+  });
+  assert.equal(await agentGuide.getAttribute("href"), "/ai.md");
+  const guideResponse = await fetch(fixture.url + "/ai.md");
+  assert.equal(guideResponse.status, 200);
+  assert.match(guideResponse.headers.get("content-type"), /^text\/markdown/);
+  assert.match(await guideResponse.text(), /context\.search/);
   assert.match(await page.locator(".setup-guide").innerText(), /\/install.sh/);
   await audit("cli");
   await page.getByText("Поиск через MCP", { exact: true }).click();

@@ -4,6 +4,8 @@
 
 [Сайт](https://gitmora.tasktopia.online) · [Руководство пользователя](docs/getting-started.md) · [Установка на сервер](docs/deployment.md)
 
+[ai.md — инструкция для агента](web/public/ai.md): CLI, MCP, навыки и поиск контекста.
+
 ## Возможности
 
 - Запись разрешённых сессий Codex и OpenCode в локальную очередь SQLite.

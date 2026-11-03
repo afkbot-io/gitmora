@@ -27,6 +27,11 @@ Missing permissions, empty history, pending indexing, provider unavailability an
 
 The project setup page selects the target repository and supplies `install.sh`, browser-confirmed CLI login, initialization and supported-agent commands. The installer detects macOS/Linux architecture and verifies the binary and release manifest checksums before execution. Advanced details include platform downloads and MCP configuration. Commands contain no credentials. Publish immutable client artifacts before activating the corresponding frontend.
 
+The heading links to `/ai.md`, a public Markdown guide for developers and agents.
+It explains CLI/MCP setup, reusable agent instructions, the six read tools and exact
+source verification. The guide contains no account/project credentials and uses the
+current installation's origin; its canonical source is `web/public/ai.md`.
+
 Native stdio MCP reads authorized project context using the local saved CLI login. Ordinary API keys remain available under personal settings for explicit automation. Their first secret is displayed once, uncertain issuance retries preserve command identity, and revocation/expiry/logout remove the appropriate descendant credentials. No browser storage contains authentication material. See [CLI authentication](cli-auth.md).
 
 ## Language, appearance and accessibility
