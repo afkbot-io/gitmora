@@ -55,6 +55,15 @@ func (r *Router) selectClient(raw string) (*Client, error) {
 func (r *Router) LookupRepository(ctx context.Context, raw string) (directory.ResolvedRepository, error) {
 	return r.LookupRepositoryWithToken(ctx, raw, "")
 }
+
+// RepositoryEndpoint resolves an operator-approved web/API pair without sending credentials.
+func (r *Router) RepositoryEndpoint(raw string) (string, error) {
+	c, err := r.selectClient(raw)
+	if err != nil {
+		return "", err
+	}
+	return c.webBase, nil
+}
 func (r *Router) LookupRepositoryWithToken(ctx context.Context, raw, token string) (directory.ResolvedRepository, error) {
 	c, e := r.selectClient(raw)
 	if e != nil {

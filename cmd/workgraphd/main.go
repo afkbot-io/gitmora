@@ -283,9 +283,13 @@ func run(ctx context.Context, args []string, output io.Writer) error {
 			}
 		}
 		directoryService.WithRepositoryResolver(resolver)
+		if forge != nil {
+			forge.WithCredentialResolver(resolver)
+		}
 		embeddings, err := embeddingClient(startup, pool)
 		if err != nil {
 			return err
+
 		}
 		retrievalService := retrievalapp.NewService(postgres.NewRetrievalStore(pool))
 		if embeddings != nil {

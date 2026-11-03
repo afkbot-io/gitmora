@@ -27,6 +27,10 @@ var (
 	ErrConflict = errors.New("forge state conflict")
 	// ErrNotFound identifies missing authorized integration state.
 	ErrNotFound = errors.New("forge connection not found")
+	// ErrCredentialUnavailable identifies a removed, blocked or rotated saved token selection.
+	ErrCredentialUnavailable = errors.New("saved forge credential unavailable")
+	// ErrCredentialEndpoint prevents forwarding a saved token across provider endpoint boundaries.
+	ErrCredentialEndpoint = errors.New("saved forge credential endpoint mismatch")
 )
 
 // Repository holds the immutable provider identity owned by the catalog.

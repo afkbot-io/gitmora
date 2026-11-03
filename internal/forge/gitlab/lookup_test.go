@@ -33,3 +33,19 @@ func TestPrivatePathLookupPinsConfiguredBaseAndCanonicalIdentity(t *testing.T) {
 		t.Fatal("foreign path acquired credentials", e, calls)
 	}
 }
+
+func TestSavedTokenEndpointSelectsTheLongestConfiguredInstancePrefixWithoutIO(t *testing.T) {
+	c, err := gitlab.NewWithProxy([]string{"https://forge.example.com", "https://forge.example.com/gitlab"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	base, err := c.RepositoryEndpoint("https://forge.example.com/gitlab/team/project.git")
+	if err != nil || base != "https://forge.example.com/gitlab" {
+		t.Fatal("nested instance token routing changed", base, err)
+	}
+	for _, raw := range []string{"https://user:password@forge.example.com/gitlab/team/project", "https://forge.example.com/gitlab/team/project?access_token=private", "https://foreign.example.com/team/project"} {
+		if _, err := c.RepositoryEndpoint(raw); err == nil {
+			t.Fatal("unsafe saved-token destination accepted")
+		}
+	}
+}

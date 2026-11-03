@@ -8,12 +8,26 @@ import (
 	"testing"
 
 	"workgraph.local/platform/internal/access"
+	directory "workgraph.local/platform/internal/directory/domain"
 	forgeapp "workgraph.local/platform/internal/forge/application"
 	"workgraph.local/platform/internal/forge/domain"
 	"workgraph.local/platform/internal/transport/httpapi"
 )
 
 type forge struct{ calls int }
+
+func (f *forge) Credentials(context.Context, string, string, string) (forgeapp.CredentialPage, error) {
+	f.calls++
+	return forgeapp.CredentialPage{}, nil
+}
+func (f *forge) LookupWithCredential(context.Context, string, string, string, string, forgeapp.CredentialRef) (directory.ResolvedRepository, error) {
+	f.calls++
+	return directory.ResolvedRepository{}, nil
+}
+func (f *forge) ConnectUsingCredential(context.Context, string, string, forgeapp.CredentialRef, domain.Secrets) (forgeapp.Status, error) {
+	f.calls++
+	return forgeapp.Status{}, nil
+}
 
 func (f *forge) MergeRequest(context.Context, string, string, forgeapp.MetadataQuery) (forgeapp.MRView, error) {
 	f.calls++
@@ -83,6 +97,21 @@ func TestForgeWebhookRejectsDuplicateAuthenticationHeadersAndOversizedBody(t *te
 		handler.ServeHTTP(w, r)
 		if w.Code != expected || service.calls != 0 {
 			t.Fatal("invalid webhook reached use case")
+		}
+	}
+}
+
+func TestSavedForgeTokenLabelsRequireManageScopeAndStrictQuery(t *testing.T) {
+	service := &forge{}
+	config := httpapi.Config{Captures: &capture{}, Authenticator: auth{scopes: []access.Permission{access.ReadIntegration}}, Ready: func(context.Context) error { return nil }, Forge: service}
+	path := "/v1/projects/11111111-1111-4111-8111-111111111111/forge/credentials"
+	if w := request(httpapi.NewHandler(config), "GET", path, "", "test-secret"); w.Code != 403 || service.calls != 0 {
+		t.Fatal("read-only caller listed credential labels")
+	}
+	config.Authenticator = auth{scopes: []access.Permission{access.ManageIntegration}}
+	for _, query := range []string{"?unexpected=1", "?after_id=one&after_id=two", "?after_id=%zz"} {
+		if w := request(httpapi.NewHandler(config), "GET", path+query, "", "test-secret"); w.Code != 422 || service.calls != 0 {
+			t.Fatal("ambiguous credential list request reached use case", w.Code)
 		}
 	}
 }

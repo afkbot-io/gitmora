@@ -46,7 +46,7 @@ export function ProjectSettings({
   return (
     <section className="settings-view">
       <h1>{translate("Настройки проекта")}</h1>
-      <section className="settings-section grid grid-cols-[180px_minmax(0,1fr)] gap-6 border-b border-line pb-8 mobile:grid-cols-1">
+      <section className="settings-section grid grid-cols-[180px_minmax(0,1fr)] gap-6 border-b border-line pb-6 mobile:grid-cols-1 mobile:gap-2">
         <h2 className="text-base">{translate("Проект")}</h2>
         <div>
           {rights.catalog ? (
@@ -69,20 +69,19 @@ export function ProjectSettings({
         </div>
       </section>
       {rights.catalog && (
-        <section className="settings-section grid grid-cols-[180px_minmax(0,1fr)] gap-6 py-6 mobile:grid-cols-1">
-          <h2 className="text-base">{translate("Удаление проекта")}</h2>
+        <details className="settings-section py-5">
+          <summary className="text-sm font-medium py-2">
+            {translate("Удаление проекта")}
+          </summary>
           <div>
-            <p className="text-sm text-muted">
-              {translate("Удаляет историю и настройки проекта в Gitmora.")}
-            </p>
             <button
-              className={buttonStyles.dangerOutline}
+              className={buttonStyles.dangerOutline + " mt-4"}
               onClick={() => setDeleting(true)}
             >
               {translate("Удалить проект")}
             </button>
           </div>
-        </section>
+        </details>
       )}
       {deleting && (
         <ConfirmAction

@@ -40,6 +40,21 @@ Russian and English cover all authored UI strings, including errors and empty st
 
 Local storage contains validated theme/language preferences and `gitmora.project.<user UUID>` for the selected project. The project preference conveys no authority: the server still checks membership. Logout clears visible data immediately and revokes the cookie session with CSRF protection. Failure offers a retry; a locally hidden screen is not treated as server revocation.
 
+## Saved repository access
+
+Repository creation and connection settings share one access selector: new token,
+an existing connection's API token, or explicit public GitHub access. Saved token
+labels are paginated by `GET /v1/projects/{project}/forge/credentials` under
+`integration:manage` and current project-admin membership. Reads contain only
+repository ID/name, provider endpoint and connection generation. Lookup and PUT
+accept `credential: {repository_id, generation}` instead of `api_token`.
+Selections cannot cross projects, providers or configured instance path prefixes.
+The target is verified before saving, and the source generation is rechecked
+atomically with that write. Only the API token is copied into a separately scoped
+encrypted target envelope; webhook secrets and later token rotations are independent.
+Adding further repositories keeps the catalog open; the first connection continues
+to CLI setup, including after a retry of partially completed registration.
+
 ## Build and verification
 
 ```sh

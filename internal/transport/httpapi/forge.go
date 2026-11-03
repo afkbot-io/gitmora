@@ -6,10 +6,12 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
 	"workgraph.local/platform/internal/access"
+	directory "workgraph.local/platform/internal/directory/domain"
 	"workgraph.local/platform/internal/forge/application"
 	"workgraph.local/platform/internal/forge/domain"
 	"workgraph.local/platform/internal/jsonwire"
@@ -17,6 +19,9 @@ import (
 
 // ForgeService is the authorized provider administration and authenticated webhook use-case port.
 type ForgeService interface {
+	Credentials(context.Context, string, string, string) (application.CredentialPage, error)
+	LookupWithCredential(context.Context, string, string, string, string, application.CredentialRef) (directory.ResolvedRepository, error)
+	ConnectUsingCredential(context.Context, string, string, application.CredentialRef, domain.Secrets) (application.Status, error)
 	Connect(context.Context, string, string, domain.Secrets) (application.Status, error)
 	Status(context.Context, string, string) (application.Status, error)
 	Disconnect(context.Context, string, string) error
@@ -25,6 +30,11 @@ type ForgeService interface {
 	MergeRequest(context.Context, string, string, application.MetadataQuery) (application.MRView, error)
 	Pipelines(context.Context, string, string, application.MetadataQuery) (application.PipelinePage, error)
 	Deployments(context.Context, string, string, application.MetadataQuery) (application.DeploymentPage, error)
+}
+
+type forgeInput struct {
+	domain.Secrets
+	Credential *application.CredentialRef `json:"credential,omitempty"`
 }
 
 func registerForge(mux *http.ServeMux, config Config) {
@@ -42,6 +52,29 @@ func registerForge(mux *http.ServeMux, config Config) {
 			next(w, r, principal)
 		})
 	}
+	mux.HandleFunc("GET /v1/projects/{project}/forge/credentials", authorize(config.Authenticator, access.ManageIntegration, func(w http.ResponseWriter, r *http.Request, p access.Principal) {
+		if config.Forge == nil {
+			writeError(w, 503, "integration_unconfigured", "Provider integration is not configured")
+			return
+		}
+		query, queryError := url.ParseQuery(r.URL.RawQuery)
+		if queryError != nil {
+			forgeError(w, domain.ErrInvalid)
+			return
+		}
+		for key, values := range query {
+			if key != "after_id" || len(values) != 1 {
+				forgeError(w, domain.ErrInvalid)
+				return
+			}
+		}
+		result, err := config.Forge.Credentials(r.Context(), p.UserID, r.PathValue("project"), query.Get("after_id"))
+		if err != nil {
+			forgeError(w, err)
+			return
+		}
+		writeJSON(w, 200, result)
+	}))
 	// The catalog selects the provider; /gitlab remains a compatibility alias.
 	for _, route := range []string{"/v1/repositories/{repository}/gitlab", "/v1/repositories/{repository}/forge"} {
 		mux.HandleFunc("PUT "+route, admin(access.ManageIntegration, func(w http.ResponseWriter, r *http.Request, principal access.Principal) {
@@ -49,12 +82,18 @@ func registerForge(mux *http.ServeMux, config Config) {
 			if !ok {
 				return
 			}
-			var input domain.Secrets
+			var input forgeInput
 			if jsonwire.DecodeObject(raw, &input) != nil {
 				writeError(w, 400, "invalid_request", "Invalid provider configuration JSON")
 				return
 			}
-			result, err := config.Forge.Connect(r.Context(), principal.UserID, r.PathValue("repository"), input)
+			var result application.Status
+			var err error
+			if input.Credential != nil {
+				result, err = config.Forge.ConnectUsingCredential(r.Context(), principal.UserID, r.PathValue("repository"), *input.Credential, input.Secrets)
+			} else {
+				result, err = config.Forge.Connect(r.Context(), principal.UserID, r.PathValue("repository"), input.Secrets)
+			}
 			if err != nil {
 				forgeError(w, err)
 				return
@@ -144,6 +183,10 @@ func forgeBody(w http.ResponseWriter, r *http.Request, limit int64) ([]byte, boo
 func forgeError(w http.ResponseWriter, err error) {
 	var provider *application.ProviderError
 	switch {
+	case errors.Is(err, domain.ErrCredentialUnavailable):
+		writeError(w, 409, "credential_unavailable", "Saved token selection is no longer available")
+	case errors.Is(err, domain.ErrCredentialEndpoint):
+		writeError(w, 422, "credential_endpoint_mismatch", "Saved token belongs to another provider endpoint")
 	case errors.Is(err, domain.ErrUnauthenticated):
 		writeError(w, 401, "invalid_webhook", "Invalid webhook authentication")
 	case errors.Is(err, domain.ErrInvalid):

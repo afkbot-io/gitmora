@@ -59,7 +59,10 @@ type Outcome struct {
 type Store interface {
 	MetadataStore
 	RepositoryForAdmin(context.Context, string, string) (domain.Repository, error)
-	Connect(context.Context, string, domain.Repository, []byte, string, bool) (Status, error)
+	Connect(context.Context, string, domain.Repository, []byte, string, bool, *Connection) (Status, error)
+	Credentials(context.Context, string, string, string) (CredentialPage, error)
+	Credential(context.Context, string, string, CredentialRef) (Connection, error)
+	CredentialForTarget(context.Context, string, string, CredentialRef) (Connection, error)
 	Status(context.Context, string, string) (Status, error)
 	Disconnect(context.Context, string, string) error
 	RequestSync(context.Context, string, string) error
@@ -95,15 +98,16 @@ func (e *ProviderError) Error() string { return "Forge request failed: " + e.Cod
 
 // Service keeps provider I/O outside local database transactions.
 type Service struct {
-	store    Store
-	vault    Vault
-	provider Provider
-	now      func() time.Time
+	store              Store
+	vault              Vault
+	provider           Provider
+	now                func() time.Time
+	credentialResolver CredentialResolver
 }
 
 // NewService supplies the durable store, encryption boundary, provider adapter and clock.
 func NewService(store Store, vault Vault, provider Provider, now func() time.Time) *Service {
-	return &Service{store, vault, provider, now}
+	return &Service{store: store, vault: vault, provider: provider, now: now}
 }
 
 // Connect verifies a token against the configured immutable project before encrypted persistence.
@@ -118,6 +122,10 @@ func (s *Service) Connect(ctx context.Context, subject, repository string, secre
 	if err != nil {
 		return Status{}, err
 	}
+	return s.connect(ctx, subject, repo, secrets, nil)
+}
+
+func (s *Service) connect(ctx context.Context, subject string, repo domain.Repository, secrets domain.Secrets, source *Connection) (Status, error) {
 	if err := secrets.ValidateForProvider(repo.Provider); err != nil {
 		return Status{}, err
 	}
@@ -132,7 +140,7 @@ func (s *Service) Connect(ctx context.Context, subject, repository string, secre
 	if err != nil {
 		return Status{}, err
 	}
-	return s.store.Connect(ctx, subject, repo, envelope, secrets.Mode(), secrets.Anonymous)
+	return s.store.Connect(ctx, subject, repo, envelope, secrets.Mode(), secrets.Anonymous, source)
 }
 
 // Status returns only authorized metadata and integration health.

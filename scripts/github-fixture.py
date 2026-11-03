@@ -47,6 +47,8 @@ class GitHubFixture(http.server.BaseHTTPRequestHandler):
         path = urllib.parse.urlparse(self.path).path
         root = "/repos/example/gitmora-fixture"
         now = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=1)).isoformat()
+        if path in ["/repositories/101", "/repos/example/second"]:
+            return self.respond(dict(id=101, private=False, html_url="https://github.com/example/second", name="second"))
         if path in ["/repositories/99", root]:
             return self.respond(
                 dict(

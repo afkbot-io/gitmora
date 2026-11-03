@@ -48,11 +48,13 @@ async function call(
   assert.ok(r.ok, "Synthetic API operation failed: " + r.status);
   return r.status === 204 ? undefined : r.json();
 }
+let areas = 0;
 async function audit(name) {
   await auditUI(page, "workspace-" + name, {
     enabled: true,
     widths: mobile ? [390] : [1920, 390],
   });
+  areas++;
 }
 try {
   // Establish the public invitation handle through the same authenticated profile form.
@@ -284,14 +286,125 @@ try {
     "",
   );
   await page.getByRole("button", { name: "Отмена", exact: true }).click();
+  // Add a distinct repository using only a saved reference: no token is typed again.
+  await page.getByRole("button", { name: "Свернуть", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Добавить репозиторий", exact: true })
+    .click();
+  await page
+    .getByLabel("Сервис", { exact: true })
+    .selectOption(fixture.github ? "github" : "gitlab");
+  await page
+    .getByLabel("Ссылка на репозиторий", { exact: true })
+    .fill(
+      fixture.github
+        ? "https://github.com/example/second"
+        : fixture.gitlab + "/example/second",
+    );
+  const accessPicker = page.getByLabel("Доступ к репозиторию", { exact: true });
+  await accessPicker
+    .locator(`option[value="${repository.id}"]`)
+    .waitFor({ state: "attached" });
+  await accessPicker.selectOption(repository.id);
+  assert.equal(
+    await page.getByLabel("Токен чтения", { exact: true }).count(),
+    0,
+  );
+  await audit("reuse-token");
+  const connectedResponse = page.waitForResponse(
+    (response) =>
+      response.url().includes("/forge") &&
+      response.request().method() === "PUT",
+  );
+  await page
+    .getByRole("button", { name: "Подключить репозиторий", exact: true })
+    .click();
+  const connected = await connectedResponse;
+  assert.equal(connected.status(), 200);
+  const sent = connected.request().postDataJSON();
+  assert.deepEqual(sent.credential, {
+    repository_id: repository.id,
+    generation: current.generation,
+  });
+  assert.equal(sent.api_token, undefined);
+  await page
+    .getByRole("status")
+    .filter({ hasText: "Репозиторий подключён." })
+    .waitFor();
+  assert.equal(
+    await page
+      .getByRole("heading", { name: "Репозитории", exact: true })
+      .count(),
+    1,
+  );
+  assert.equal(
+    (await call(`/v1/projects/${project}/repositories`)).items.length,
+    2,
+  );
+  await audit("multiple-repositories");
+  const originalRow = page.locator("article.settings-resource").filter({
+    has: page.getByRole("heading", { name: repository.name, exact: true }),
+  });
+  await originalRow
+    .getByRole("button", { name: "Настроить", exact: true })
+    .click();
+  const twoRepositories = await call(`/v1/projects/${project}/repositories`);
+  const secondRepository = twoRepositories.items.find(
+    (item) => item.id !== repository.id,
+  );
+  assert.ok(secondRepository);
+  await originalRow
+    .getByRole("button", { name: "Изменить доступ", exact: true })
+    .click();
+  const editAccess = page.getByLabel("Доступ к репозиторию", { exact: true });
+  await editAccess
+    .locator(`option[value="${secondRepository.id}"]`)
+    .waitFor({ state: "attached" });
+  await editAccess.selectOption(secondRepository.id);
+  // Rotate the source after selection, then verify the form recovers with a fresh reference.
+  await call(
+    `/v1/repositories/${secondRepository.id}/forge`,
+    {
+      api_token: fixture.github
+        ? "synthetic-github-read-token"
+        : "synthetic-gitlab-token",
+      webhook_mode: "disabled",
+    },
+    "PUT",
+    fixture.new_user_manage_token,
+  );
+  await page
+    .getByRole("button", { name: "Сохранить подключение", exact: true })
+    .click();
+  await page
+    .getByRole("alert")
+    .filter({ hasText: "Токен больше недоступен" })
+    .waitFor();
+  await editAccess.locator('option[value=""]').waitFor({ state: "attached" });
+  assert.equal(
+    (await call(`/v1/repositories/${repository.id}/forge`)).generation,
+    current.generation,
+  );
+  await editAccess.selectOption(secondRepository.id);
+  await page
+    .getByRole("button", { name: "Сохранить подключение", exact: true })
+    .click();
+  await page
+    .getByRole("status")
+    .filter({ hasText: "Подключение сохранено" })
+    .waitFor();
+  assert.equal(
+    (await call(`/v1/repositories/${repository.id}/forge`)).generation,
+    current.generation + 1,
+  );
   if (fixture.github) {
     await page
       .getByRole("button", { name: "Изменить доступ", exact: true })
       .first()
       .click();
     await page
-      .getByLabel("Публичный репозиторий без токена", { exact: true })
-      .check();
+      .getByLabel("Доступ к репозиторию", { exact: true })
+      .selectOption("public");
     await page
       .getByRole("button", { name: "Сохранить подключение", exact: true })
       .click();
@@ -319,7 +432,9 @@ try {
       },
     );
     await page.reload();
-    await page.getByRole("button", { name: "Настроить", exact: true }).click();
+    await originalRow
+      .getByRole("button", { name: "Настроить", exact: true })
+      .click();
     await page
       .getByRole("button", { name: "Подключить токен", exact: true })
       .waitFor();
@@ -329,9 +444,9 @@ try {
       .click();
     assert.equal(
       await page
-        .getByLabel("Публичный репозиторий без токена", { exact: true })
-        .isChecked(),
-      false,
+        .getByLabel("Доступ к репозиторию", { exact: true })
+        .inputValue(),
+      "new",
     );
     await page.unroute(`**/v1/repositories/${repository.id}/forge`);
     await page.getByRole("button", { name: "Отмена", exact: true }).click();
@@ -402,6 +517,7 @@ try {
   await nav("Personal settings");
   await page.getByLabel("Language", { exact: true }).selectOption("ru");
   await nav("Настройки проекта");
+  await page.getByText("Удаление проекта", { exact: true }).click();
   await page
     .getByRole("button", { name: "Удалить проект", exact: true })
     .click();
@@ -429,8 +545,10 @@ try {
       member_by_handle: true,
       full_width: true,
       invalid_token_clear_and_no_rotation: true,
+      saved_token_reuse: true,
+      stale_selection_recovery: true,
       locale: true,
-      areas: 16,
+      areas,
     }),
   );
 } catch (error) {

@@ -14,6 +14,16 @@ type repositoryResolver struct {
 	gitlab *gitlab.Client
 }
 
+func (r repositoryResolver) CredentialEndpoint(raw, provider string) (string, error) {
+	if provider == "github" && r.github != nil {
+		return r.github.RepositoryEndpoint(raw)
+	}
+	if provider == "gitlab" && r.gitlab != nil {
+		return r.gitlab.RepositoryEndpoint(raw)
+	}
+	return "", &application.ProviderError{Code: "provider_endpoint_not_allowed"}
+}
+
 func (r repositoryResolver) LookupRepository(ctx context.Context, url string) (directory.ResolvedRepository, error) {
 	return r.LookupRepositoryWithToken(ctx, url, "github", "")
 }
