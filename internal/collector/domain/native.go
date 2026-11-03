@@ -41,6 +41,33 @@ func (h NativeHistory) validate(messages []capture.Message) error {
 	return nil
 }
 
+// CompatibleSealedWindow recognizes metadata enrichment/replay without revising a parent
+// whose exact canonical bytes are already pinned by a continuation child.
+// New text, known-fact changes or newly observed file events require a replacement branch.
+func (r *Recording) CompatibleSealedWindow(o NormalizedObservation) bool {
+	v := o.Value()
+	old := r.state.Snapshot.Messages
+	if v.History == nil || len(v.Messages) > len(old) || len(v.ChangedFiles) > 0 || len(r.state.NativeMessageIDs) < len(v.Messages) {
+		return false
+	}
+	pruned := map[int]bool{}
+	for _, i := range v.History.Pruned {
+		pruned[i] = true
+	}
+	for i, m := range v.Messages {
+		if v.History.MessageIDs[i] != r.state.NativeMessageIDs[i] {
+			return false
+		}
+		if pruned[i] {
+			m.Text = old[i].Text
+		}
+		if !m.Enriches(old[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 // ObserveNative preserves previously captured tool bytes when the native source only prunes output.
 func (r *Recording) ObserveNative(o NormalizedObservation) error {
 	value := o.Value()
@@ -56,7 +83,7 @@ func (r *Recording) ObserveNative(o NormalizedObservation) error {
 			value.Messages[i] = message
 		}
 	}
-	if len(value.Messages) < len(r.state.Snapshot.Messages) && slices.Equal(value.Messages, r.state.Snapshot.Messages[:len(value.Messages)]) {
+	if len(value.Messages) < len(r.state.Snapshot.Messages) && capture.MessagesEqual(value.Messages, r.state.Snapshot.Messages[:len(value.Messages)]) {
 		value.Messages = slices.Clone(r.state.Snapshot.Messages)
 		value.History.MessageIDs = slices.Clone(r.state.NativeMessageIDs)
 		value.Agent = r.state.Snapshot.Agent

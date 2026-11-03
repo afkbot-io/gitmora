@@ -560,7 +560,7 @@ try {
   await page.locator(".context-view #search").fill("abcdef0");
   await click("Найти");
   await visible(
-    page.getByRole("alert").filter({ hasText: "Вставьте полный SHA" }),
+    page.getByRole("heading", { name: "Ничего не найдено", exact: true }),
   );
   await page
     .getByRole("searchbox")

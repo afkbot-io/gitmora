@@ -27,7 +27,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--serve", action="store_true", help="Keep synthetic fixtures alive for CLI visual inspection")
     parser.add_argument("--history", action="store_true", help="Exercise accepted-source navigation and session revisions")
+    parser.add_argument("--search",action="store_true",help="Exercise search pagination, metadata and code provenance")
     args = parser.parse_args()
+    assert not(args.history and args.search)
     schema = "web_smoke_" + uuid.uuid4().hex
     api.sql(f'CREATE SCHEMA "{schema}"')
     environment = {k: v for k, v in os.environ.items() if k in {"PATH", "HOME", "TMPDIR", "USER", "LANG", "SHELL"}}
@@ -112,6 +114,24 @@ def main():
                 assert status == 201
                 if index <= 30:
                     previous_session, previous_revision, digest = extra["session_id"], 1, accepted["digest"]
+        if args.search:
+            repo=identity["repository_id"];owner=identity["user_id"]
+            search_session="dddddddd-dddd-4ddd-8ddd-000000000001"
+            messages=[]
+            for index in range(45):
+                message=dict(role="assistant",text=f"SearchScenarioMarker visible answer {index}",model="model-alpha" if index<25 else "model-beta",provider="fixture",native_id=f"message-{index}")
+                if index%3==0:
+                    message.update(role="tool",tool_name="write",changes=[dict(path="src/search.ts" if index<25 else "src/other.ts")])
+                messages.append(message)
+            messages[5]["text"]="SearchScenarioMarker "+"long exposed text "*300+" SearchScenarioTail"
+            messages[0]["text"]+=" https://docs.example.test/installation"
+            tracked=dict(schema_version=1,repository_id=repo,session_id=search_session,revision=1,started_at="2026-11-03T10:00:00Z",agent=dict(name="opencode",model="model-beta",model_basis="message_metadata"),messages=messages,files=["src/search.ts","src/other.ts"],commits=["a"*40,"b"*40],commit_ranges=[dict(commit_sha="a"*40,start=0,end=25,basis="observed_checkpoint"),dict(commit_sha="b"*40,start=25,end=45,basis="observed_checkpoint")])
+            assert call("/v1/captures",tracked)[0]==201
+            code_text="export function SearchScenarioCode() { return true; }\n"
+            content=code_text.encode();blob=hashlib.sha1(f"blob {len(content)}\0".encode()+content).hexdigest()
+            file=dict(identity=dict(repository_id=repo,provider_base_url="https://gitlab.internal",provider_project_id=42,commit_sha="a"*40,path="src/search.ts",blob_id=blob,raw_size=len(content)),raw_sha256=hashlib.sha256(content).hexdigest(),content=code_text,redaction_policy="code-lines-v1",redacted=False)
+            raw=json.dumps(file,separators=(',',':'));digest=hashlib.sha256(raw.encode()).hexdigest()
+            api.sql(f"UPDATE \"{schema}\".commits SET confirmed_at=now(); INSERT INTO \"{schema}\".forge_connections(repository_id,webhook_mode,secret_envelope,updated_by,last_synced_at,code_checked_at,next_sync_at,code_next_at,code_probe_at) VALUES('{repo}','signature',decode(repeat('00',32),'hex'),'{owner}',now(),now(),now()+interval '1 day',now()+interval '1 day',now()+interval '1 day'); INSERT INTO \"{schema}\".forge_code_runs(repository_id,sha,discovery_ended) VALUES('{repo}','{'a'*40}',true) ON CONFLICT DO NOTHING; INSERT INTO \"{schema}\".forge_code_paths(repository_id,sha,path,status) VALUES('{repo}','{'a'*40}','src/search.ts','stored'); INSERT INTO \"{schema}\".forge_code_snapshots(repository_id,sha,path,digest,blob_id,provider_base_url,provider_project_id,model) VALUES('{repo}','{'a'*40}','src/search.ts','{digest}','{blob}','https://gitlab.internal',42,$fixture${raw}$fixture$); INSERT INTO \"{schema}\".retrieval_jobs(id,source_kind,project_id,repository_id,code_sha,code_path,code_blob_id,source_digest,source_observed_at) VALUES('{uid()}','code','{identity['project_id']}','{repo}','{'a'*40}','src/search.ts','{blob}','{digest}',now());")
         for _ in range(30):
             indexed = api.command(["worker", "--once"], environment)
             assert indexed.returncode == 0, "Synthetic index worker failed"
@@ -137,7 +157,12 @@ def main():
                 issued = api.command(["issue-token", "--user-id", user, "--scopes", "directory:read,capture:read"], environment)
                 assert issued.returncode == 0
                 payload["capture_only"] = json.loads(issued.stdout)["token"]
-            script = "scripts/smoke-history.mjs" if args.history else "scripts/smoke-web.mjs"
+            if args.search:
+                payload["search_session"]=search_session
+                scoped=api.command(["issue-token","--user-id",user,"--scopes","directory:read,capture:read,integration:read"],environment)
+                assert scoped.returncode==0
+                payload["read_token"]=json.loads(scoped.stdout)["token"]
+            script = "scripts/smoke-search.mjs" if args.search else "scripts/smoke-history.mjs" if args.history else "scripts/smoke-web.mjs"
             checked = subprocess.run(["node", script], input=json.dumps(payload), text=True, cwd=ROOT, timeout=600 if os.environ.get("GITMORA_UI_AUDIT") == "1" else 180)
             assert checked.returncode == 0, "Actual browser workflow failed"
     except KeyboardInterrupt:

@@ -35,7 +35,7 @@ build-postgres-image:
 smoke smoke-opencode smoke-codex smoke-native-history smoke-compatibility smoke-forge \
 smoke-context smoke-agent-context smoke-directory smoke-identity \
 smoke-web smoke-settings smoke-credentials smoke-cli-consent \
-smoke-cli-auth smoke-history smoke-cli-release: build-postgres-image
+smoke-cli-auth smoke-history smoke-search smoke-cli-release: build-postgres-image
 
 build-image: build-postgres-image
 	docker build --file deploy/Dockerfile --tag gitmora:local --build-arg RELEASE_VERSION=$(RELEASE_VERSION) --build-arg RELEASE_REVISION=$(RELEASE_REVISION) .
@@ -185,7 +185,13 @@ smoke-history: build test-web
 	python3 scripts/smoke-web.py --history
 
 
-verify: check-config vet integration smoke smoke-opencode smoke-codex smoke-native-history smoke-compatibility smoke-forge smoke-context smoke-agent-context smoke-directory smoke-identity smoke-web smoke-settings smoke-credentials smoke-cli-consent smoke-history smoke-deployment smoke-recovery smoke-egress smoke-keycloak smoke-registration smoke-identity-proxy smoke-cli-downloads smoke-cli-release
+smoke-search: build test-web
+	mkdir -p bin/verification
+	go build -trimpath -o bin/verification/oidc-fixture ./internal/identity/oidc/testdata/fixture.go
+	docker compose -f compose.test.yaml up -d --wait
+	python3 scripts/smoke-web.py --search
+
+verify: check-config vet integration smoke smoke-opencode smoke-codex smoke-native-history smoke-compatibility smoke-forge smoke-context smoke-agent-context smoke-directory smoke-identity smoke-web smoke-settings smoke-credentials smoke-cli-consent smoke-history smoke-search smoke-deployment smoke-recovery smoke-egress smoke-keycloak smoke-registration smoke-identity-proxy smoke-cli-downloads smoke-cli-release
 
 verify-linux: build-web build-postgres-image
 	bash scripts/test-linux.sh

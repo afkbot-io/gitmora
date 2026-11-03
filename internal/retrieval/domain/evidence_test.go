@@ -91,13 +91,33 @@ func TestCodeChunksAndPartialExpansionsPreserveLinesAcrossOverlap(t *testing.T) 
 	}
 }
 
-func TestExactSessionSelectorRequiresItsRepositoryAndWorksWithoutTerms(t *testing.T) {
+func TestExactSessionSelectorUsesExplicitProjectAndOptionalRepository(t *testing.T) {
 	q := domain.Query{ProjectID: project, RepositoryID: repo, SessionID: "22222222-2222-4222-8222-222222222222"}
 	if _, err := domain.NormalizeQuery(q); err != nil {
 		t.Fatal(err)
 	}
 	q.RepositoryID = ""
-	if _, err := domain.NormalizeQuery(q); err == nil {
-		t.Fatal("unscoped session selector accepted")
+	if _, err := domain.NormalizeQuery(q); err != nil {
+		t.Fatal("project-scoped session selector rejected", err)
+	}
+}
+
+func TestSearchSupportsSessionUUIDAndBoundedMetadataFilters(t *testing.T) {
+	q, err := domain.NormalizeQuery(domain.Query{ProjectID: project, Text: "22222222-2222-4222-8222-222222222222", Agent: " CODEX "})
+	if err != nil || q.SessionID != "22222222-2222-4222-8222-222222222222" || q.Agent != "codex" || q.Terms != "" {
+		t.Fatal(q, err)
+	}
+	q, err = domain.NormalizeQuery(domain.Query{ProjectID: project, Text: "ABC1234"})
+	if err != nil || q.CommitPrefix != "abc1234" || q.Terms != "" {
+		t.Fatal(q, err)
+	}
+	if _, err = domain.NormalizeQuery(domain.Query{ProjectID: project, Model: "alpha"}); err != nil {
+		t.Fatal("model-only query rejected", err)
+	}
+	if _, err = domain.NormalizeQuery(domain.Query{ProjectID: project, Role: "unknown"}); err == nil {
+		t.Fatal("invalid role accepted")
+	}
+	if _, err = domain.NormalizeQuery(domain.Query{ProjectID: project, CommitPrefix: "a"}); err == nil {
+		t.Fatal("unbounded/short prefix accepted")
 	}
 }

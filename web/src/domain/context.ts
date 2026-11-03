@@ -71,6 +71,37 @@ export interface Source {
   file_path?: string;
   blob_id?: string;
 }
+export interface SourceMetadata {
+  agent?: string;
+  version?: string;
+  model?: string;
+  provider?: string;
+  model_basis?: "message_metadata" | "session_configuration" | "import_report";
+  role?: string;
+  tool?: string;
+  profile?: string;
+  native_id?: string;
+  turn_id?: string;
+  relation?:
+    | "message"
+    | "tool_reported"
+    | "session_reported"
+    | "git_ai_reported"
+    | "retained_code";
+  reported_line_start?: number;
+  reported_line_end?: number;
+  attribution_kind?: "ai" | "known_human";
+  reported_commit?: string;
+}
+export interface SearchCursor {
+  resolved_commit_sha?: string;
+  literal?: boolean;
+  query_digest: string;
+  indexed_before: string;
+  score: number;
+  observed_at: string;
+  id: string;
+}
 export interface Hit {
   id: string;
   source: Source;
@@ -88,8 +119,13 @@ export interface Hit {
   confirmed_count: number;
   line_start?: number;
   line_end?: number;
+  metadata?: SourceMetadata;
+  file_paths?: string[];
+  file_path_count?: number;
 }
 export interface SearchResult {
+  next?: SearchCursor;
+  resolved_commit_sha?: string;
   items: Hit[];
   has_more: boolean;
   pending_sources_in_project: number;
@@ -105,6 +141,13 @@ export interface SearchQuery {
   kinds?: string[];
   history: boolean;
   limit: number;
+  agent?: string;
+  model?: string;
+  role?: string;
+  file_path?: string;
+  commit_sha?: string;
+  session_id?: string;
+  after?: SearchCursor;
 }
 
 export const sourceNames: Record<string, string> = {
@@ -120,10 +163,18 @@ export function searchQuery(
   text: string,
   kind: string,
   history: boolean,
+  filters: {
+    agent?: string;
+    model?: string;
+    role?: string;
+    file_path?: string;
+  } = {},
 ): SearchQuery {
   text = text.trim();
-  if (!text)
-    throw new Error("Введите поисковый запрос или полный SHA коммита.");
+  if (!text && !Object.values(filters).some((value) => value?.trim()))
+    throw new Error("Введите запрос или выберите фильтр.");
+  if (filters.file_path && !repository)
+    throw new Error("Выберите репозиторий для поиска по файлу.");
   if (new TextEncoder().encode(text).length > 512)
     throw new Error("Запрос должен занимать не более 512 байт UTF-8.");
   return {
@@ -133,6 +184,11 @@ export function searchQuery(
     ...(kind ? { kinds: [kind] } : {}),
     history,
     limit: 20,
+    ...Object.fromEntries(
+      Object.entries(filters)
+        .map(([key, value]) => [key, value?.trim()])
+        .filter(([, value]) => value),
+    ),
   };
 }
 
@@ -154,4 +210,19 @@ export function readableError(error: unknown): string {
   return error instanceof Error
     ? error.message
     : "Не удалось выполнить запрос. Повторите попытку.";
+}
+
+/** Only MR/PR-shaped links select provider context; other URLs remain searchable message text. */
+export function isMergeRequestURL(text: string): boolean {
+  try {
+    const url = new URL(text.trim());
+    return (
+      ["http:", "https:"].includes(url.protocol) &&
+      !url.username &&
+      !url.password &&
+      /\/(?:pull|-\/merge_requests)\/[1-9][0-9]*\/?$/.test(url.pathname)
+    );
+  } catch {
+    return false;
+  }
 }

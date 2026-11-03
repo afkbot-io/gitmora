@@ -26,10 +26,13 @@ var ErrProtocol = errors.New("Codex history is invalid, unsupported or exceeds t
 var ErrUnavailable = errors.New("Codex app-server unavailable; source remains local")
 
 type Thread struct {
-	ID        string `json:"id"`
-	CWD       string `json:"cwd"`
-	CreatedAt int64  `json:"createdAt"`
-	UpdatedAt int64  `json:"updatedAt"`
+	ID            string `json:"id"`
+	CWD           string `json:"cwd"`
+	CreatedAt     int64  `json:"createdAt"`
+	UpdatedAt     int64  `json:"updatedAt"`
+	Model         string `json:"model"`
+	ModelProvider string `json:"modelProvider"`
+	CLIVersion    string `json:"cliVersion"`
 }
 type Entry struct {
 	TurnID string          `json:"turnId"`
@@ -189,8 +192,17 @@ func Normalize(thread Thread, entries []Entry, model, version, root string) (His
 	if !locator(thread.ID) || !filepath.IsAbs(root) || !filepath.IsAbs(thread.CWD) || filepath.Clean(root) != filepath.Clean(thread.CWD) || thread.CreatedAt < 1 || len(entries) > maxHistoryItems {
 		return History{}, ErrProtocol
 	}
+	basis := "hook_configuration"
+	if thread.Model != "" {
+		model = thread.Model
+		basis = "thread_configuration"
+	}
+	if thread.CLIVersion != "" {
+		version = thread.CLIVersion
+	}
 	if model == "" {
 		model = "unknown"
+		basis = ""
 	}
 	if version == "" {
 		version = "unknown"
@@ -206,7 +218,7 @@ func Normalize(thread Thread, entries []Entry, model, version, root string) (His
 		o := current.Observation
 		o.SchemaVersion = 1
 		o.SourceSessionID = "codex:" + thread.ID
-		o.Agent = capture.Agent{Name: "codex", Model: model, Version: version}
+		o.Agent = capture.Agent{Name: "codex", Model: model, Version: version, Provider: thread.ModelProvider, ModelBasis: basis}
 		o.StartedAt = &started
 		o.History.PageID = digest("codex-page-v1", o.History.MessageIDs[0])
 		o.History.Epoch = digest("codex-items-v1", thread.ID)
@@ -271,6 +283,17 @@ func Normalize(thread Thread, entries []Entry, model, version, root string) (His
 		}
 		part := 0
 		for _, message := range visible {
+			message.TurnID = entry.TurnID
+			message.NativeID = i.ID
+			if message.Role == "tool" {
+				seenPaths := map[string]bool{}
+				for _, event := range events {
+					if capture.ValidFilePath(event.Path) && !seenPaths[event.Path] && len(message.Changes) < 256 {
+						message.Changes = append(message.Changes, capture.FileChange{Path: event.Path})
+						seenPaths[event.Path] = true
+					}
+				}
+			}
 			message.Text = redact.Conversation(message.Text)
 			total += len(message.Text)
 			if total > 64*1024*1024 {
@@ -285,7 +308,14 @@ func Normalize(thread Thread, entries []Entry, model, version, root string) (His
 				piece := message
 				piece.Text = text[:n]
 				text = text[n:]
-				raw, _ := json.Marshal(piece)
+				legacy := piece
+				legacy.Model = ""
+				legacy.Provider = ""
+				legacy.AgentProfile = ""
+				legacy.NativeID = ""
+				legacy.TurnID = ""
+				legacy.Changes = nil
+				raw, _ := json.Marshal(legacy)
 				eventRaw, _ := json.Marshal(events)
 				if len(current.Observation.Messages) > 0 && (size+len(raw)+len(eventRaw) > 1024*1024 || len(current.Observation.Messages) >= 512) {
 					if e := flush(); e != nil {

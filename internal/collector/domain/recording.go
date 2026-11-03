@@ -252,14 +252,14 @@ func (r *Recording) Observe(o NormalizedObservation) error {
 	if !reflect.DeepEqual(input.Origin, current.Origin) {
 		return ErrConflict
 	}
-	if input.Origin != nil && (!slices.Equal(input.Messages, current.Messages) || !slices.Equal(input.ChangedFiles, current.Files) || input.Agent != current.Agent) {
+	if input.Origin != nil && (!capture.MessagesEqual(input.Messages, current.Messages) || !slices.Equal(input.ChangedFiles, current.Files) || input.Agent != current.Agent) {
 		return ErrConflict
 	}
 	if len(input.Messages) < len(current.Messages) {
 		return ErrConflict
 	}
 	for i, message := range current.Messages {
-		if input.Messages[i] != message {
+		if !input.Messages[i].Enriches(message) {
 			return ErrConflict
 		}
 	}

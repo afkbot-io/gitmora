@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -150,5 +151,33 @@ func TestPRContextReturnsOnlyItsRecordedMessageIntervals(t *testing.T) {
 	}
 	if _, err := store.Read(ctx, principal, q); !errors.Is(err, access.ErrDenied) {
 		t.Fatal("revoked scoped read", err)
+	}
+}
+
+func TestTranscriptPathReportsCannotExhaustThePageBudget(t *testing.T) {
+	pool := contextFixture(t)
+	ctx := context.Background()
+	source := snapshot()
+	source.Revision = 2
+	message := capture.Message{Role: "tool", ToolName: "apply_patch", Text: strings.Repeat("<>&", 4000), Model: "reported-model", Provider: "local"}
+	for i := 0; i < 256; i++ {
+		message.Changes = append(message.Changes, capture.FileChange{Path: fmt.Sprintf("src/%03d-", i) + strings.Repeat("x", 950) + ".go"})
+	}
+	source.Messages = []capture.Message{message}
+	if _, err := captureapp.NewService(postgres.NewCaptureStore(pool)).Ingest(ctx, subject, source); err != nil {
+		t.Fatal(err)
+	}
+	page, err := postgres.NewContextStore(pool).Read(ctx, contextPrincipal(access.ReadCapture), pack.Query{ProjectID: project, RepositoryID: repository, SessionID: source.SessionID, MessageView: "compact"})
+	if err != nil || len(page.Transcript.Items) != 1 {
+		t.Fatal("large metadata blocked transcript", err)
+	}
+	item := page.Transcript.Items[0]
+	raw, _ := json.Marshal(page)
+	if item.ChangeCount != 256 || !item.ChangesMore || len(item.Message.Changes) > 4 || len(raw) > 64*1024 || item.Message.Model != "reported-model" {
+		t.Fatal("unbounded or lost metadata", item.ChangeCount, len(item.Message.Changes), len(raw))
+	}
+	stored, err := captureapp.NewService(postgres.NewCaptureStore(pool)).Get(ctx, reader, repository, source.SessionID, 2)
+	if err != nil || len(stored.Session.Snapshot().Messages[0].Changes) != 256 {
+		t.Fatal("bounded projection changed canonical evidence", err)
 	}
 }

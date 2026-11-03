@@ -183,6 +183,10 @@ function MessageEntry({
         <span className="font-semibold">
           {label}
           {message.kind === "agent_summary" ? ` · ${t("Резюме агента")}` : ""}
+          {message.agent_profile ? ` · ${message.agent_profile}` : ""}
+          {message.model ? (
+            <span className="ml-2 font-normal text-muted">{message.model}</span>
+          ) : null}
         </span>
         <span className="text-muted">#{index + 1}</span>
       </header>

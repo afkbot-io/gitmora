@@ -138,6 +138,8 @@ export interface MessageCursor {
   head?: string;
 }
 export interface ScopedMessage {
+  change_count?: number;
+  changes_have_more?: boolean;
   text_preview?: boolean;
   full_text_after?: MessageCursor;
   message_offset?: number;
@@ -213,7 +215,13 @@ export interface SessionRevision {
     repository_id: string;
     session_id: string;
     revision: number;
-    agent: { name: string; model: string; version?: string };
+    agent: {
+      name: string;
+      model: string;
+      version?: string;
+      provider?: string;
+      model_basis?: string;
+    };
     started_at: string;
     ended_at?: string;
     task?: { country_id: string; task_id: string };
@@ -222,6 +230,12 @@ export interface SessionRevision {
       text: string;
       tool_name?: string;
       kind?: string;
+      model?: string;
+      provider?: string;
+      agent_profile?: string;
+      native_id?: string;
+      turn_id?: string;
+      changes?: { path: string }[];
     }[];
     continuation?: {
       root_session_id: string;

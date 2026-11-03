@@ -299,3 +299,43 @@ func TestCommitCheckpointPinsPositionWithinOneStoredWindow(t *testing.T) {
 		t.Fatal("old recovery relabelled later work", changed, err)
 	}
 }
+
+func TestUpgradedCollectorEnrichesExistingMessagesWithoutRewritingHistory(t *testing.T) {
+	value := observation()
+	value.Messages = []capture.Message{{Role: "assistant", Text: "Original answer"}}
+	normalized, err := domain.Normalize(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recording, err := domain.NewRecording(repoID, sessionID, "tree", nil, normalized, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, _, err := recording.Seal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	value.EventID = "metadata-enriched"
+	value.Messages[0].Model = "alpha"
+	value.Messages[0].NativeID = "item"
+	normalized, err = domain.Normalize(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = recording.Observe(normalized); err != nil {
+		t.Fatal("collector upgrade conflicted", err)
+	}
+	second, changed, err := recording.Seal()
+	if err != nil || !changed || second.Snapshot().Revision != first.Snapshot().Revision+1 || first.Snapshot().Messages[0].Model != "" {
+		t.Fatal("historical revision mutated", err)
+	}
+	value.Messages[0].Model = "beta"
+	value.EventID = "bad-rewrite"
+	normalized, err = domain.Normalize(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = recording.Observe(normalized); !errors.Is(err, domain.ErrConflict) {
+		t.Fatal("recorded model rewritten", err)
+	}
+}

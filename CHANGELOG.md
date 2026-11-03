@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.8.0 — 2026-11-03
+
+- Search messages, Gitmora session UUIDs, unique confirmed commit abbreviations and exact repository paths through the web, CLI and MCP. Metadata filters support integration, model/provider and message role. Query-bound keyset pages append results without repeating long message fragments. Words separated by chunk boundaries inside one bounded message remain searchable.
+- Restrict SHA-scoped message search to recorded commit ranges. Imported Git AI line claims stay pinned to their reported target SHA; unavailable/unauthorized sources cannot influence prefix resolution. Short hex text with no matching commit remains searchable as text, with its mode pinned across pages.
+- Retain available OpenCode per-message model/provider/profile/native IDs and successful tool path reports. Codex preserves thread configuration/provider/CLI version separately from per-message execution; no historical models or line authorship are invented. Retained code links to exact reported source records through a collapsed provenance view.
+- Server migration 27 atomically rebuilds derived search metadata/vectors while keeping completed evidence readable and prioritizing fresh captures over metadata backfill. Bounded 30-second atomic writes and a covering lease support slower hosts; persistence failures record retry health without acknowledging partial projections. The local collector upgrades to schema 7 so older binaries cannot discard new immutable message fields. Upgrade the server first, stop old collectors/watchers and back up local state before installing CLI 0.8.0; reinstall the owned OpenCode helper after stopping OpenCode.
+
+
 ## 0.7.3 — 2026-11-02
 
 - Fill conversation batches with 20 source messages across bounded pages and continuation windows. Expand long user/assistant records independently, cap collapsed tool groups, and allow explicit previous session history without broadening PR/MCP scope.

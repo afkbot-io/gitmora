@@ -17,6 +17,20 @@ export type ConversationItem =
   | { kind: "message"; key: number; entry: IndexedMessage }
   | { kind: "tools"; key: number; entries: IndexedMessage[] };
 
+function messageSearchText(message: Message): string {
+  return [
+    message.text,
+    message.tool_name,
+    message.model,
+    message.provider,
+    message.agent_profile,
+    ...(message.changes ?? []).map((change) => change.path),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLocaleLowerCase();
+}
+
 /** Render one source window without changing original message positions or preview provenance. */
 export function scopedConversationItems(
   items: ScopedMessage[],
@@ -28,13 +42,7 @@ export function scopedConversationItems(
   for (const item of items) {
     if (onlyDialogue && !["user", "assistant"].includes(item.message.role))
       continue;
-    if (
-      term &&
-      !(item.message.text + " " + (item.message.tool_name ?? ""))
-        .toLocaleLowerCase()
-        .includes(term)
-    )
-      continue;
+    if (term && !messageSearchText(item.message).includes(term)) continue;
     const entry: IndexedMessage = {
       message: item.message,
       index: item.index,
@@ -66,13 +74,7 @@ export function conversationItems(
   messages.slice(0, visible).forEach((message, index) => {
     if (dialogueOnly && message.role !== "user" && message.role !== "assistant")
       return;
-    if (
-      term &&
-      !(message.text + " " + (message.tool_name ?? ""))
-        .toLocaleLowerCase()
-        .includes(term)
-    )
-      return;
+    if (term && !messageSearchText(message).includes(term)) return;
     const entry = { message, index };
     const previous = result.at(-1);
     if (message.role === "tool") {

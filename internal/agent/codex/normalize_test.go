@@ -108,3 +108,25 @@ func TestConversationPasswordIsMaskedBeforeNativeFragmentation(t *testing.T) {
 		t.Fatal("password split across exposed fragments")
 	}
 }
+
+func TestThreadModelConfigurationIsNeverInventedAsPerTurnTelemetry(t *testing.T) {
+	thread := codex.Thread{ID: "models", CWD: "/repo", CreatedAt: 1793318400, Model: "thread-model", ModelProvider: "provider", CLIVersion: "1.2.3"}
+	entries := []codex.Entry{item("answer", "agentMessage", map[string]any{"text": "Visible answer"}), item("edit", "fileChange", map[string]any{"status": "completed", "changes": []any{map[string]any{"path": "/repo/a.go", "diff": "+line"}, map[string]any{"path": "/repo/.git/config", "diff": "blocked"}}})}
+	h, err := codex.Normalize(thread, entries, "hook-current-model", "hook-version", "/repo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	observation := h.Windows[0].Observation
+	if observation.Agent.Model != "thread-model" || observation.Agent.Provider != "provider" || observation.Agent.ModelBasis != "thread_configuration" || observation.Agent.Version != "1.2.3" {
+		t.Fatal(observation.Agent)
+	}
+	for _, m := range observation.Messages {
+		if m.Model != "" || m.TurnID != "turn" || m.NativeID == "" {
+			t.Fatal("configuration presented as execution", m)
+		}
+	}
+	changes := observation.Messages[1].Changes
+	if len(changes) != 1 || changes[0].Path != "a.go" {
+		t.Fatal("successful in-repository file evidence missing", changes)
+	}
+}

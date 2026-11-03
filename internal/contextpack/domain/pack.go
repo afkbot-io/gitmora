@@ -237,6 +237,8 @@ func (c MessageCursor) Validate() error {
 }
 
 type ScopedMessage struct {
+	ChangeCount   int              `json:"change_count,omitempty"`
+	ChangesMore   bool             `json:"changes_have_more,omitempty"`
 	TextPreview   bool             `json:"text_preview,omitempty"`
 	FullTextAfter *MessageCursor   `json:"full_text_after,omitempty"`
 	MessageOffset int              `json:"message_offset,omitempty"`
