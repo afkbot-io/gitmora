@@ -1,6 +1,14 @@
 # Changes
 
-## Unreleased
+## 0.9.0 — 2026-11-04
+
+- Add opt-in local hybrid/semantic retrieval with pgvector and a CPU embedding service. Query-bound pages retain exact source/commit ranges and current access checks; model outages preserve lexical search. A bounded query-vector cache avoids repeated inference; candidate snapshots keep semantic pages stable during concurrent indexing and let continuation reads work without inference.
+- Add `gitmora search`, a separate retryable embedding worker, model-digest/dimension validation and real-model CLI/MCP acceptance/relevance evaluation. Model provenance stays source-reported; no native line-authorship claims are added.
+- Add atomic `deployment configure` for image/Compose/overlay edits without changing installation identity, secrets or persistent volume namespaces. Migration 28 requires pgvector in the application database; upgrade the bundled PostgreSQL image and enable the extension as its administrator before migrating.
+
+- Reuse an active repository's API token within the same project and configured GitHub/GitLab instance. Selection remains secret-free, verifies target access and fences source rotation; copies and webhook settings stay independent. Simplify project/repository setup and mobile repository controls.
+- Publish `/ai.md` with CLI, MCP and agent instructions from the setup page.
+- Restore application backups without trying to change administrator-owned extension comments; the isolated dump/restore gate covers pgvector installations.
 
 ## 0.8.0 — 2026-11-03
 

@@ -11,9 +11,9 @@ For a native development server, set `WORKGRAPH_GITHUB_ENABLED=true`. The normal
 ## Register and connect
 
 1. Sign in or register and create your project.
-2. Open **Repositories**, choose **GitHub**, and enter the full repository URL and a dedicated read token. Both public and private repositories are resolved before registration; the immutable numeric ID is detected automatically.
+2. Open **Repositories**, choose **GitHub**, enter the full repository URL and choose access: a new read token or a token from another connected repository in the same Gitmora project and GitHub instance. Both public and private repositories are resolved before registration; the immutable numeric ID is detected automatically.
 3. Choose **Connect repository**. Public repositories can explicitly use anonymous access for a small initial test.
-4. Use **Project settings → Integrations** to replace the token, inspect synchronization or disconnect. Failed verification never replaces an existing connection.
+4. Use **Repositories → Configure** to replace the token, inspect synchronization or disconnect. Failed verification never replaces an existing connection.
 5. Open **CLI and MCP**, install the client, sign in and copy the repository-specific `gitmora init` command. Enable the chosen local agent and commit/push normally.
 
 ### GitHub Enterprise
@@ -26,7 +26,9 @@ For Docker, copy `deploy/compose.github-enterprise.example.yaml` into the instal
 
 ## Dedicated read token
 
-In GitHub account settings, create a **fine-grained personal access token** restricted to the selected repository, with **Contents**, **Pull requests** and **Actions** repository permissions set to **Read-only**. Metadata access is included by GitHub. Set an expiry and obtain organization approval if required. Paste it only into the Gitmora connection form. Gitmora verifies the immutable numeric ID and canonical URL, encrypts the credential and clears the form. Replacing it fences outstanding worker results from the previous connection generation.
+In GitHub account settings, create a **fine-grained personal access token** restricted to the selected repositories, with **Contents**, **Pull requests** and **Actions** repository permissions set to **Read-only**. Metadata access is included by GitHub. Set an expiry and obtain organization approval if required. Paste it only into the Gitmora connection form. Gitmora verifies the immutable numeric ID and canonical URL, encrypts the credential and clears the form. Replacing it fences outstanding worker results from the previous connection generation.
+
+Selecting a saved token copies only its API credential into an independently encrypted target connection. Both repositories must be in the same Gitmora project and configured GitHub instance. The token must grant access to the new repository; selection alone does not widen provider permissions. Later token replacement/disconnect is per connection, while revoking the token at GitHub affects every connection using it.
 
 Public access is an explicit mode; a failed token never causes an anonymous retry. GitHub currently allows 60 unauthenticated REST requests per originating IP per hour, so public mode is suitable for a small initial test. Regular use should have a dedicated credential. Rate limits delay durable work without discarding the queue. See [GitHub's rate-limit rules](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api).
 

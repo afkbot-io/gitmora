@@ -14,29 +14,11 @@ import (
 
 // LookupRepositoryWithToken resolves a path only below a configured GitLab base.
 func (c *Client) LookupRepositoryWithToken(ctx context.Context, raw, token string) (directory.ResolvedRepository, error) {
-	u, e := url.Parse(raw)
-	if e != nil || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.RawPath != "" || u.Opaque != "" || u.ForceQuery {
-		return directory.ResolvedRepository{}, domain.ErrInvalid
+	base, path, e := c.lookupLocation(raw)
+	if e != nil {
+		return directory.ResolvedRepository{}, e
 	}
 	canonical := strings.TrimSuffix(strings.TrimSuffix(raw, "/"), ".git")
-	base := ""
-	for candidate := range c.allowed {
-		if strings.HasPrefix(canonical, candidate+"/") && len(candidate) > len(base) {
-			base = candidate
-		}
-	}
-	if base == "" {
-		return directory.ResolvedRepository{}, &application.ProviderError{Code: "provider_endpoint_not_allowed"}
-	}
-	path := strings.TrimPrefix(canonical, base+"/")
-	if len(path) > 1000 || !strings.Contains(path, "/") || strings.Contains(path, "//") {
-		return directory.ResolvedRepository{}, domain.ErrInvalid
-	}
-	for _, part := range strings.Split(path, "/") {
-		if part == "" || part == "." || part == ".." {
-			return directory.ResolvedRepository{}, domain.ErrInvalid
-		}
-	}
 	if len(token) < 8 || len(token) > 4096 || strings.ContainsAny(token, "\x00\r\n") {
 		return directory.ResolvedRepository{}, domain.ErrInvalid
 	}
@@ -79,4 +61,37 @@ func (c *Client) LookupRepositoryWithToken(ctx context.Context, raw, token strin
 		return directory.ResolvedRepository{}, invalidResponse()
 	}
 	return directory.ResolvedRepository{URL: base, ID: value.ID, Name: value.Path}, nil
+}
+
+// RepositoryEndpoint resolves the exact allowlisted base before a saved token is decrypted.
+func (c *Client) RepositoryEndpoint(raw string) (string, error) {
+	base, _, err := c.lookupLocation(raw)
+	return base, err
+}
+
+func (c *Client) lookupLocation(raw string) (string, string, error) {
+	u, e := url.Parse(raw)
+	if e != nil || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.RawPath != "" || u.Opaque != "" || u.ForceQuery {
+		return "", "", domain.ErrInvalid
+	}
+	canonical := strings.TrimSuffix(strings.TrimSuffix(raw, "/"), ".git")
+	base := ""
+	for candidate := range c.allowed {
+		if strings.HasPrefix(canonical, candidate+"/") && len(candidate) > len(base) {
+			base = candidate
+		}
+	}
+	if base == "" {
+		return "", "", &application.ProviderError{Code: "provider_endpoint_not_allowed"}
+	}
+	path := strings.TrimPrefix(canonical, base+"/")
+	if len(path) > 1000 || !strings.Contains(path, "/") || strings.Contains(path, "//") {
+		return "", "", domain.ErrInvalid
+	}
+	for _, part := range strings.Split(path, "/") {
+		if part == "" || part == "." || part == ".." {
+			return "", "", domain.ErrInvalid
+		}
+	}
+	return base, path, nil
 }

@@ -55,7 +55,7 @@ func (s *ForgeStore) RepositoryForAdmin(ctx context.Context, subject, repository
 }
 
 // Connect rechecks administrator authority and catalog identity after provider verification.
-func (s *ForgeStore) Connect(ctx context.Context, subject string, repo domain.Repository, envelope []byte, mode string, anonymous bool) (application.Status, error) {
+func (s *ForgeStore) Connect(ctx context.Context, subject string, repo domain.Repository, envelope []byte, mode string, anonymous bool, source *application.Connection) (application.Status, error) {
 	var result application.Status
 	if anonymous && repo.Provider != "github" {
 		return result, domain.ErrInvalid
@@ -66,6 +66,11 @@ func (s *ForgeStore) Connect(ctx context.Context, subject string, repo domain.Re
 	err := s.authorized(ctx, subject, repo.ID, access.ManageIntegration, func(tx pgx.Tx, current domain.Repository) error {
 		if current != repo {
 			return domain.ErrConflict
+		}
+		if source != nil {
+			if err := fenceCredential(ctx, tx, repo, *source); err != nil {
+				return err
+			}
 		}
 		_, err := tx.Exec(ctx, `INSERT INTO forge_connections(repository_id,webhook_mode,secret_envelope,updated_by,anonymous) VALUES($1,$2,$3,$4,$5)
    ON CONFLICT(repository_id) DO UPDATE SET generation=forge_connections.generation+1,enabled=true,anonymous=excluded.anonymous,webhook_mode=excluded.webhook_mode,secret_envelope=excluded.secret_envelope,updated_by=excluded.updated_by,updated_at=now(),requested_seq=forge_connections.requested_seq+1,next_sync_at=now(),last_synced_at=NULL,lease_owner=NULL,lease_until=NULL,attempts=0,blocked=false,last_error_code=NULL,code_lease_owner=NULL,code_lease_until=NULL,code_blocked=false,code_error=NULL,code_checked_at=NULL,code_next_at=now(),code_probe_at=now()`, repo.ID, mode, envelope, subject, anonymous)

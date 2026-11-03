@@ -292,9 +292,10 @@ func registerDirectory(mux *http.ServeMux, c Config) {
 			return
 		}
 		var input struct {
-			URL      string `json:"url"`
-			Provider string `json:"provider"`
-			Token    string `json:"api_token"`
+			URL        string                  `json:"url"`
+			Provider   string                  `json:"provider"`
+			Token      string                  `json:"api_token"`
+			Credential *forgeapp.CredentialRef `json:"credential,omitempty"`
 		}
 		if jsonwire.DecodeObject(raw, &input) != nil {
 			directoryError(w, domain.ErrInvalid)
@@ -302,14 +303,28 @@ func registerDirectory(mux *http.ServeMux, c Config) {
 		}
 		var result domain.ResolvedRepository
 		var err error
-		if input.Provider != "" {
+		if input.Credential != nil {
+			if !p.Has(access.ReadDirectory) || (!p.Has(access.ManageDirectory) && !p.Has(access.ManagePlatform)) || !p.Has(access.ManageIntegration) {
+				mapError(w, access.ErrDenied)
+				return
+			}
+			if input.Token != "" || !input.Credential.Valid() {
+				directoryError(w, domain.ErrInvalid)
+				return
+			}
+			if c.Forge == nil {
+				writeError(w, 503, "integration_unconfigured", "Provider integration is not configured")
+				return
+			}
+			result, err = c.Forge.LookupWithCredential(r.Context(), p.UserID, r.PathValue("project"), input.URL, input.Provider, *input.Credential)
+		} else if input.Provider != "" {
 			result, err = c.Directory.LookupRepositoryWithToken(r.Context(), p, r.PathValue("project"), input.URL, input.Provider, input.Token)
 		} else {
 			result, err = c.Directory.LookupRepository(r.Context(), p, r.PathValue("project"), input.URL)
 		}
 		if err != nil {
 			var provider *forgeapp.ProviderError
-			if errors.As(err, &provider) {
+			if input.Credential != nil || errors.As(err, &provider) {
 				forgeError(w, err)
 			} else {
 				directoryError(w, err)

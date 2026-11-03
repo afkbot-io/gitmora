@@ -8,7 +8,7 @@ import tempfile
 import uuid
 
 ROOT = Path(__file__).resolve().parent.parent
-PG_IMAGE = "gitmora-postgres:18.6-security1"
+PG_IMAGE = "gitmora-postgres:18.6-vector1"
 
 
 def verify_bind(folder, mount):

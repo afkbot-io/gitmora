@@ -13,12 +13,6 @@ export const english: Readonly<Record<string, string>> = {
   "API-ключ": "API key",
   "CLI и MCP": "CLI and MCP",
   "Инструкция для агента · ai.md": "Agent guide · ai.md",
-  "Contents, Pull requests и Actions: Read-only. Выберите только этот репозиторий.":
-    "Contents, Pull requests and Actions: Read-only. Select only this repository.",
-  "GitHub → Settings → Developer settings → Fine-grained tokens. Выберите репозиторий и разрешите Contents, Pull requests и Actions: Read-only.":
-    "GitHub → Settings → Developer settings → Fine-grained tokens. Select the repository and allow Contents, Pull requests and Actions: Read-only.",
-  "GitLab → Settings → Access tokens. Создайте токен с правом read_api и доступом к этому проекту.":
-    "GitLab → Settings → Access tokens. Create a token with read_api permission and access to this project.",
   "Gitmora связывает сессии агентов с коммитами и MR/PR. Находите решения команды и продолжайте работу с нужным контекстом.":
     "Gitmora connects agent sessions to commits and merge requests. Find your team’s decisions and continue with the context you need.",
   "Gitmora — история разработки": "Gitmora — development history",
@@ -200,7 +194,8 @@ export const english: Readonly<Record<string, string>> = {
   "Импорт:": "Import:",
   "Импортированный отчёт": "Imported report",
   "Индекс обновляется": "Index updating",
-  "Инструкция сервиса": "Provider instructions",
+  "Поиск по словам": "Keyword search",
+  "Результаты устарели. Повторите поиск.": "Results expired. Search again.",
   Инструмент: "Tool",
   "Историческая версия": "Historical version",
   "Исторические версии": "Historical versions",
@@ -301,8 +296,6 @@ export const english: Readonly<Record<string, string>> = {
   "Новый проект": "New project",
   "Нужны Git 2.43+ и curl. Для входа на Linux установите libsecret-tools и запустите Secret Service в своей пользовательской сессии.":
     "Requires Git 2.43+ and curl. For Linux sign-in, install libsecret-tools and run Secret Service in your user session.",
-  "Нужны read_api и доступ к этому проекту GitLab.":
-    "Requires read_api and access to this GitLab project.",
   "Обновите список или выпустите ограниченный ключ.":
     "Refresh the list or issue a restricted key.",
   Обновить: "Refresh",
@@ -401,7 +394,6 @@ export const english: Readonly<Record<string, string>> = {
   "Последняя сохранённая версия": "Latest saved version",
   "Права и срок ключа ограничены текущей сессией. Выход завершит работу выданных через неё ключей.":
     "Key permissions and lifetime are limited by this session. Signing out revokes keys issued through it.",
-  "Права токена": "Token permissions",
   "Предыдущие диапазоны": "Previous ranges",
   "Предыдущие сообщения сессии": "Earlier session messages",
   "Привязка уже существует или её версия изменилась. Обновите OIDC-привязки перед новым изменением.":
@@ -448,8 +440,6 @@ export const english: Readonly<Record<string, string>> = {
   "Резюме агента": "Agent summary",
   Репозитории: "Repositories",
   Репозиторий: "Repository",
-  "Репозиторий добавлен. Введите действующий токен, чтобы завершить подключение.":
-    "Repository added. Enter a valid token to finish connecting.",
   "Репозиторий не найден. Проверьте ссылку и доступ токена.":
     "Repository not found. Check its URL and the token's access.",
   Родитель: "Parent",
@@ -579,8 +569,6 @@ export const english: Readonly<Record<string, string>> = {
   "Удалить проект и его данные": "Delete project and data",
   "Удалить репозиторий": "Delete repository",
   "Удалить репозиторий и его данные": "Delete repository and its data",
-  "Удаляет историю и настройки проекта в Gitmora.":
-    "Deletes this project's Gitmora history and settings.",
   "Управлять каталогом проекта": "Manage the project catalog",
   "Управлять своими ключами": "Manage your keys",
   "Управлять установкой при наличии роли оператора":
@@ -637,4 +625,29 @@ export const english: Readonly<Record<string, string>> = {
   "корневой ключ": "root key",
   "полных минут. Браузерная сессия ограничивает срок её дочерних ключей; более долгий корневой ключ выдаётся отдельной доверенной процедурой.":
     "whole minutes. A browser session limits its child keys' lifetime; longer-lived root keys require trusted server administration.",
+  "Токен больше недоступен. Обновите список или введите новый.":
+    "The saved token is no longer available. Refresh the list or enter a new token.",
+  "Выбранный токен относится к другому серверу. Выберите другой доступ.":
+    "The selected token belongs to another server. Select another access option.",
+  "Репозиторий подключён.": "Repository connected.",
+  "Подключённые репозитории": "Connected repositories",
+  "Этот репозиторий уже добавлен в проект.":
+    "This repository has already been added to the project.",
+  "Репозиторий добавлен. Выберите доступ, чтобы завершить подключение.":
+    "Repository added. Select access to finish connecting.",
+  "Затем подключите репозиторий и пригласите команду.":
+    "Next, connect a repository and invite your team.",
+  "Доступ к репозиторию": "Repository access",
+  "Новый токен": "New token",
+  "Токен из {0}": "Token from {0}",
+  "Выберите токен заново": "Select the token again",
+  "Токен больше не подходит. Выберите другой доступ.":
+    "This token no longer matches. Select another access option.",
+  "Загружаем сохранённые токены…": "Loading saved tokens…",
+  "Обновить список токенов": "Refresh token list",
+  "Ещё сохранённые токены": "More saved tokens",
+  "GitLab → Settings → Access tokens. Создайте токен с правом read_api и доступом к нужным проектам.":
+    "GitLab → Settings → Access tokens. Create a token with read_api and access to the projects.",
+  "GitHub → Settings → Developer settings → Fine-grained tokens. Выберите нужные репозитории и разрешите Contents, Pull requests и Actions: Read-only.":
+    "GitHub → Settings → Developer settings → Fine-grained tokens. Select the repositories and grant Contents, Pull requests and Actions: Read-only.",
 };

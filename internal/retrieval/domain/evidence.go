@@ -16,10 +16,12 @@ import (
 )
 
 var (
-	ErrInvalid   = errors.New("invalid retrieval input")
-	ErrNotFound  = errors.New("evidence not found or unavailable")
-	ErrLease     = errors.New("retrieval lease lost")
-	ErrAmbiguous = errors.New("commit prefix matches multiple confirmed commits; provide a longer SHA")
+	ErrInvalid       = errors.New("invalid retrieval input")
+	ErrNotFound      = errors.New("evidence not found or unavailable")
+	ErrLease         = errors.New("retrieval lease lost")
+	ErrAmbiguous     = errors.New("commit prefix matches multiple confirmed commits; provide a longer SHA")
+	ErrUnavailable   = errors.New("semantic search unavailable; retry or use lexical mode")
+	ErrSearchExpired = errors.New("search results expired; start a new search")
 )
 
 // Source identifies original immutable evidence independently of indexing time or ranking.
@@ -134,27 +136,45 @@ func validText(s string, max int, required bool) bool {
 
 // Query combines plain lexical terms with explicit scope and source-reported metadata filters.
 type Query struct {
-	ProjectID    string        `json:"project_id"`
-	RepositoryID string        `json:"repository_id,omitempty"`
-	SessionID    string        `json:"session_id,omitempty"`
-	Text         string        `json:"text,omitempty"`
-	CommitSHA    string        `json:"commit_sha,omitempty"`
-	CommitPrefix string        `json:"commit_prefix,omitempty"`
-	FilePath     string        `json:"file_path,omitempty"`
-	Kinds        []string      `json:"kinds,omitempty"`
-	Limit        int           `json:"limit,omitempty"`
-	History      bool          `json:"history,omitempty"`
-	Terms        string        `json:"-"`
-	Agent        string        `json:"agent,omitempty"`
-	Model        string        `json:"model,omitempty"`
-	Role         string        `json:"role,omitempty"`
-	After        *SearchCursor `json:"after,omitempty"`
-	ReadAt       time.Time     `json:"-"`
-	PrefixText   string        `json:"-"`
+	Snapshot        []SearchPosition `json:"-"`
+	Mode            string           `json:"mode,omitempty"`
+	Engine          string           `json:"-"`
+	Vector          []float32        `json:"-"`
+	SemanticProfile string           `json:"-"`
+	VectorDigest    string           `json:"-"`
+	ProjectID       string           `json:"project_id"`
+	RepositoryID    string           `json:"repository_id,omitempty"`
+	SessionID       string           `json:"session_id,omitempty"`
+	Text            string           `json:"text,omitempty"`
+	CommitSHA       string           `json:"commit_sha,omitempty"`
+	CommitPrefix    string           `json:"commit_prefix,omitempty"`
+	FilePath        string           `json:"file_path,omitempty"`
+	Kinds           []string         `json:"kinds,omitempty"`
+	Limit           int              `json:"limit,omitempty"`
+	History         bool             `json:"history,omitempty"`
+	Terms           string           `json:"-"`
+	Agent           string           `json:"agent,omitempty"`
+	Model           string           `json:"model,omitempty"`
+	Role            string           `json:"role,omitempty"`
+	After           *SearchCursor    `json:"after,omitempty"`
+	ReadAt          time.Time        `json:"-"`
+	PrefixText      string           `json:"-"`
+}
+
+// SearchPosition freezes candidate scores without caching source text or access rights.
+type SearchPosition struct {
+	ID    string  `json:"id"`
+	Score float64 `json:"score"`
 }
 
 // NormalizeQuery bounds work and treats a full SHA as an exact confirmed-relation filter.
 func NormalizeQuery(q Query) (Query, error) {
+	if !slices.Contains([]string{"", "auto", "lexical", "hybrid", "semantic"}, q.Mode) {
+		return Query{}, ErrInvalid
+	}
+	if q.Mode == "auto" {
+		q.Mode = ""
+	}
 	if q.SessionID != "" && !identifier.Valid(q.SessionID) {
 		return Query{}, ErrInvalid
 	}
@@ -260,12 +280,18 @@ type Hit struct {
 
 // Result bounds retrieval without implying stable pagination while indexing changes.
 type Result struct {
-	Items             []Hit         `json:"items"`
-	HasMore           bool          `json:"has_more"`
-	PendingSources    int           `json:"pending_sources_in_project"`
-	FailedSources     int           `json:"failed_sources_in_project"`
-	Next              *SearchCursor `json:"next,omitempty"`
-	ResolvedCommitSHA string        `json:"resolved_commit_sha,omitempty"`
+	SearchMode          string        `json:"search_mode"`
+	SemanticProfile     string        `json:"semantic_profile,omitempty"`
+	SemanticPending     int           `json:"semantic_pending,omitempty"`
+	SemanticFailed      int           `json:"semantic_failed,omitempty"`
+	CandidateWindow     int           `json:"candidate_window,omitempty"`
+	SemanticUnavailable bool          `json:"semantic_unavailable,omitempty"`
+	Items               []Hit         `json:"items"`
+	HasMore             bool          `json:"has_more"`
+	PendingSources      int           `json:"pending_sources_in_project"`
+	FailedSources       int           `json:"failed_sources_in_project"`
+	Next                *SearchCursor `json:"next,omitempty"`
+	ResolvedCommitSHA   string        `json:"resolved_commit_sha,omitempty"`
 }
 
 // Expansion requests a bounded range inside an exactly identified evidence chunk.

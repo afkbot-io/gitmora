@@ -1,6 +1,6 @@
 # Supported core scope
 
-The current product is development context, described by [requirements C01–C18](requirements.md) and the [architecture](system-analysis.md). The latest released server and standalone client are 0.8.0; subsequent source changes are listed under Unreleased in [the changelog](../CHANGELOG.md).
+The current product is development context, described by [requirements C01–C18](requirements.md) and the [architecture](system-analysis.md). The latest released server and standalone client are 0.9.0; subsequent source changes are listed under Unreleased in [the changelog](../CHANGELOG.md).
 
 | Area | Delivered behavior |
 | --- | --- |
@@ -15,4 +15,4 @@ The current product is development context, described by [requirements C01–C18
 
 [Development](development.md) lists reproducible unit, integration, browser, native, provider, deployment and restore gates. Test fixtures and actual upstream-service checks are different forms of evidence; a green fixture does not certify every provider version or deployment.
 
-Operators configure service credentials, routes/CA, project membership, backups and developer enrollment for their installation. Physical-phone coverage, SMTP recovery, external ACL synchronization, signing/notarization, unattended updates and a production capacity guarantee are not included. Server inference and autonomous review are outside this scope.
+Operators configure service credentials, routes/CA, project membership, backups and developer enrollment for their installation. Physical-phone coverage, SMTP recovery, external ACL synchronization, signing/notarization, unattended updates and a production capacity guarantee are not included. Optional local embeddings support semantic retrieval; generated server chat and autonomous review are outside this scope.

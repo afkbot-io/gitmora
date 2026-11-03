@@ -13,15 +13,22 @@ import (
 
 // Reader checks current membership and source availability before ranking or fetching source text.
 type Reader interface {
+	Authorize(context.Context, access.Principal, domain.Query) error
 	Search(context.Context, access.Principal, domain.Query) (domain.Result, error)
 	Get(context.Context, access.Principal, string) (domain.Hit, error)
 }
 
 // Service exposes source references and excerpts, never an inference or an instruction to execute.
-type Service struct{ reader Reader }
+type Service struct {
+	reader     Reader
+	embeddings Embeddings
+}
 
 // NewService injects the permission-aware projection reader.
-func NewService(reader Reader) *Service { return &Service{reader} }
+func NewService(reader Reader) *Service { return &Service{reader: reader} }
+
+// WithEmbeddings enables local semantic retrieval without changing source/citation authority.
+func (s *Service) WithEmbeddings(e Embeddings) *Service { s.embeddings = e; return s }
 func authorized(p access.Principal) bool {
 	return identifier.Valid(p.UserID) && (p.Has(access.ReadCapture) || p.Has(access.ReadIntegration))
 }
@@ -37,10 +44,20 @@ func (s *Service) Search(ctx context.Context, p access.Principal, q domain.Query
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
+	if q.Terms != "" && (s.embeddings != nil || q.Mode == "semantic") && q.Mode != "lexical" {
+		if err := s.reader.Authorize(ctx, p, q); err != nil {
+			return domain.Result{}, err
+		}
+	}
+	q, degraded, err := s.prepareSemantic(ctx, q)
+	if err != nil {
+		return domain.Result{}, err
+	}
 	result, err := s.reader.Search(ctx, p, q)
 	if err != nil {
 		return domain.Result{}, err
 	}
+	result.SemanticUnavailable = degraded
 	for i := range result.Items {
 		hit := &result.Items[i]
 		terms := q.Terms

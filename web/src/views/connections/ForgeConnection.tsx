@@ -1,6 +1,13 @@
 import { t as translate } from "../../domain/locale.js";
 import { useState, useEffect } from "react";
 import type { FormEvent } from "react";
+import { repositoryURL } from "../../domain/context.js";
+import { RepositoryAccess } from "./RepositoryAccess.js";
+import {
+  clearRepositoryToken,
+  repositoryAccessBody,
+  type RepositoryAccessValue,
+} from "../../domain/repository-access.js";
 import type { Repository } from "../../domain/context.js";
 import type { ForgeStatus } from "../../domain/settings.js";
 import { integrationErrors } from "../../transport/api.js";
@@ -32,15 +39,18 @@ export function ForgeConnection({
   const status = useConnection<ForgeStatus>(client, path, canRead);
   const action = useMutation(client);
   const [editing, setEditing] = useState(false);
+  const [accessRevision, setAccessRevision] = useState(0);
   const [removing, setRemoving] = useState(false);
-  const [token, setToken] = useState("");
-  const [anonymous, setAnonymous] = useState(false);
+  const [access, setAccess] = useState<RepositoryAccessValue>({
+    kind: "new",
+    token: "",
+  });
   const [mode, setMode] = useState<ForgeStatus["webhook_mode"]>("disabled");
   const [webhook, setWebhook] = useState("");
   useEffect(() => {
     if (!canManage) {
       setEditing(false);
-      setToken("");
+      setAccess({ kind: "new", token: "" });
       setWebhook("");
       setRemoving(false);
     }
@@ -48,16 +58,19 @@ export function ForgeConnection({
   const value = status.value;
   const issue = value?.last_error_code;
   function open(withToken = false) {
-    setToken("");
     setWebhook("");
-    setAnonymous(withToken ? false : !!value?.anonymous);
+    setAccess(
+      !withToken && value?.anonymous
+        ? { kind: "public" }
+        : { kind: "new", token: "" },
+    );
     setMode(value?.webhook_mode ?? "disabled");
     setEditing(true);
   }
   async function save(e: FormEvent) {
     e.preventDefault();
     const body = {
-      ...(github && anonymous ? { anonymous: true } : { api_token: token }),
+      ...repositoryAccessBody(access),
       webhook_mode: github ? "disabled" : mode,
       ...(mode === "signature"
         ? { webhook_signing_token: webhook }
@@ -65,14 +78,14 @@ export function ForgeConnection({
           ? { legacy_webhook_token: webhook }
           : {}),
     };
-    setToken("");
+    setAccess(clearRepositoryToken(access));
     setWebhook("");
     const saved = await action.run<ForgeStatus>("PUT", path, body);
     if (saved) {
       status.setValue(saved.value);
       setEditing(false);
       action.setMessage("Подключение сохранено.");
-    }
+    } else if (access.kind === "saved") setAccessRevision((value) => value + 1);
   }
   async function sync() {
     if (await action.run("POST", path + "/sync")) {
@@ -89,7 +102,7 @@ export function ForgeConnection({
   }
   const form = canManage && (editing || status.missing);
   return (
-    <div className="connection-detail mt-5">
+    <div className="connection-detail">
       <ErrorNotice>{status.error}</ErrorNotice>
       {status.loading && !value && (
         <p role="status">{translate("Загрузка…")}</p>
@@ -164,52 +177,16 @@ export function ForgeConnection({
           onSubmit={(e) => void save(e)}
           className="grid gap-4"
         >
-          {!(github && anonymous) && (
-            <label>
-              {translate("Токен чтения")}
-              <input
-                className="mt-2 w-full"
-                type="password"
-                name="forge_token"
-                required
-                autoComplete="off"
-                minLength={8}
-                maxLength={4096}
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-              />
-            </label>
-          )}
-          {github && (
-            <label className="flex gap-2 items-center font-normal text-sm">
-              <input
-                type="checkbox"
-                checked={anonymous}
-                onChange={(e) => {
-                  setAnonymous(e.target.checked);
-                  setToken("");
-                }}
-              />
-              {translate("Публичный репозиторий без токена")}
-            </label>
-          )}
-          {github && anonymous && (
-            <p className="text-xs text-muted mb-0">
-              {translate(
-                "Без токена доступен небольшой общий лимит GitHub API.",
-              )}
-            </p>
-          )}
-          <details className="text-sm text-muted">
-            <summary>{translate("Права токена")}</summary>
-            <p className="mt-3 mb-0">
-              {github
-                ? translate(
-                    "Contents, Pull requests и Actions: Read-only. Выберите только этот репозиторий.",
-                  )
-                : translate("Нужны read_api и доступ к этому проекту GitLab.")}
-            </p>
-          </details>
+          <RepositoryAccess
+            client={client}
+            projectID={repository.project_id}
+            provider={github ? "github" : "gitlab"}
+            url={repositoryURL(repository)}
+            repositoryID={repository.id}
+            value={access}
+            onChange={setAccess}
+            refreshKey={accessRevision}
+          />
           {!github && (
             <details className="text-sm">
               <summary>{translate("Вебхуки")}</summary>
@@ -258,7 +235,7 @@ export function ForgeConnection({
                 className={buttonStyles.secondary}
                 onClick={() => {
                   setEditing(false);
-                  setToken("");
+                  setAccess({ kind: "new", token: "" });
                   setWebhook("");
                 }}
               >

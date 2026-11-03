@@ -74,8 +74,12 @@ func registerRetrieval(mux *http.ServeMux, config Config) {
 }
 func retrievalError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, domain.ErrSearchExpired):
+		writeError(w, 409, "search_expired", "Search results expired; start a new search")
 	case errors.Is(err, domain.ErrInvalid):
 		writeError(w, 422, "invalid_context_query", "Invalid or excessive context request")
+	case errors.Is(err, domain.ErrUnavailable):
+		writeError(w, 503, "semantic_unavailable", "Semantic search is unavailable; retry or use lexical mode")
 	case errors.Is(err, domain.ErrAmbiguous):
 		writeError(w, 409, "ambiguous_commit", "Provide a longer commit SHA")
 	case errors.Is(err, domain.ErrNotFound):

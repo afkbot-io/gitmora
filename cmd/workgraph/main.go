@@ -27,6 +27,8 @@ import (
 	distribution "workgraph.local/platform/internal/distribution/domain"
 	"workgraph.local/platform/internal/identity/native"
 	"workgraph.local/platform/internal/jsonwire"
+	retrieval "workgraph.local/platform/internal/retrieval/domain"
+	"workgraph.local/platform/internal/transport/nativeapi"
 )
 
 func main() {
@@ -36,7 +38,14 @@ func main() {
 		code := 1
 		message := "Gitmora operation failed"
 		var hook *gitrepo.HookExit
+		var apiError nativeapi.ResponseError
 		switch {
+		case errors.Is(err, retrieval.ErrSearchExpired):
+			message = "Search results expired; repeat the query without --after"
+		case errors.Is(err, retrieval.ErrInvalid):
+			message = "Invalid search query or cursor; use gitmora search --help"
+		case errors.As(err, &apiError):
+			message = apiError.Error()
 		case errors.Is(err, distribution.ErrInvalid):
 			message = "Invalid client installation input or unsafe path; use self install --help"
 		case errors.Is(err, distribution.ErrConflict):
@@ -113,7 +122,7 @@ func interruptionMessage(args []string) string {
 
 func run(parent context.Context, args []string, input io.Reader, output, diagnostic io.Writer) error {
 	if len(args) == 0 || args[0] == "--help" || args[0] == "help" {
-		_, err := fmt.Fprintln(output, "Usage: gitmora init | capture | recover-ranges | import | frontier | checkpoint | sync | status | disable | enable | agent | auth | api | mcp | version | self install")
+		_, err := fmt.Fprintln(output, "Usage: gitmora init | capture | recover-ranges | import | frontier | checkpoint | sync | status | disable | enable | agent | auth | search | api | mcp | version | self install")
 		return err
 	}
 	if args[0] == "version" || args[0] == "--version" {
@@ -136,6 +145,9 @@ func run(parent context.Context, args []string, input io.Reader, output, diagnos
 	}
 	if args[0] == "api" {
 		return apiCommand(parent, args[1:], input, output)
+	}
+	if args[0] == "search" {
+		return searchCommand(parent, args[1:], output)
 	}
 	if args[0] == "auth" {
 		return configureAuth(parent, args[1:], output, diagnostic)

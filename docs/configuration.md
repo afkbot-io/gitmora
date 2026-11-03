@@ -71,7 +71,7 @@ Without an OIDC configuration, capture/API/MCP bearer operations can be used for
 | `WORKGRAPH_STATE_DIR`, `WORKGRAPH_IMAGE`, `WORKGRAPH_HTTP_PORT` | Supplied by `deployment` from `--directory`, `--image`, `--port`; do not try to override pinned metadata in `compose.env`. For a deliberate raw Compose command, supply these yourself. |
 | `GITMORA_PUBLIC_HOST` | Required for the identity overlays; hostname only, e.g. `gitmora.example.com`. There is no default public server. Shared-domain API public origin, issuer and private host mapping derive from it. |
 | `GITMORA_REALM`, `GITMORA_CLIENT_ID` | `gitmora`; match `identity-server init --realm/--client-id` and nginx realm route. |
-| `GITMORA_POSTGRES_IMAGE` | `gitmora-postgres:18.6-security1`; prebuild the pinned image. Identity uses its own default unless explicitly exported during identity operations. |
+| `GITMORA_POSTGRES_IMAGE` | `gitmora-postgres:18.6-vector1`; prebuild the pinned image. Identity uses its own default unless explicitly exported during identity operations. |
 | `GITMORA_PRIVATE_SUBNET`, `GITMORA_PRIVATE_GATEWAY` | `172.30.88.0/24`, `172.30.88.1`; choose an unused range before the first start. Used by same-host identity profiles. |
 | `GITMORA_GITLAB_URL`, `GITMORA_GITLAB_AUTHORITY`, `GITMORA_GITLAB_VISIBILITY` | Custom GitLab web base, exact `host:port`, and `private`/`public` relay policy. |
 | `GITMORA_GITLAB_CA_BUNDLE` | Absolute public CA bundle for the optional CA overlay. Although named for GitLab, it sets the process-wide `SSL_CERT_FILE` for all provider clients. |
@@ -84,7 +84,7 @@ Without an OIDC configuration, capture/API/MCP bearer operations can be used for
 
 ## Source-build settings
 
-`make build build-image RELEASE_VERSION=0.8.0 RELEASE_REVISION="$(git rev-parse HEAD)"` stamps host binaries and the application image. Defaults are `development` and an empty revision. These are build inputs, not runtime env values. Tag the resulting local images immutably as described in [deployment](deployment.md); application and identity images are pinned independently.
+`make build build-image RELEASE_VERSION=0.9.0 RELEASE_REVISION="$(git rev-parse HEAD)"` stamps host binaries and the application image. Defaults are `development` and an empty revision. These are build inputs, not runtime env values. Tag the resulting local images immutably as described in [deployment](deployment.md); application and identity images are pinned independently.
 
 ## Developer CLI and agent settings
 
@@ -100,3 +100,22 @@ Without an OIDC configuration, capture/API/MCP bearer operations can be used for
 | `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_NOSYSTEM`, `GIT_ALLOW_PROTOCOL`, `GIT_TERMINAL_PROMPT`, `GIT_LITERAL_PATHSPECS`, `GIT_NO_LAZY_FETCH`, `GIT_NO_REPLACE_OBJECTS`, `GIT_OPTIONAL_LOCKS` | Existing Git environment; some are deliberately sanitized or fixed by bounded local Git subprocesses. They are not Gitmora server settings. |
 
 Test-only `WORKGRAPH_TEST_*`, `GITMORA_*TEST*` and browser switches are described in [development](development.md). `HTTP_PROXY`/`HTTPS_PROXY` do not select provider destinations; use the explicit provider proxy settings. There is no model key or GPU requirement.
+
+## Optional local embeddings
+
+See [semantic search setup and upgrade](semantic-search.md). These settings must
+match on the API and the separate `embedding-worker`; ordinary workers do not
+invoke the model. No cloud API key is accepted.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `WORKGRAPH_EMBEDDING_URL` | unset: disabled | Operator-owned Ollama origin, e.g. `http://embeddings:11434`; no path, credentials or redirects. |
+| `WORKGRAPH_EMBEDDING_MODEL` | unset | Exact provisioned model name; required with URL. |
+| `WORKGRAPH_EMBEDDING_REVISION` | unset | Full 64-character model digest; required with URL; changing it selects a new vector profile. |
+| `WORKGRAPH_EMBEDDING_DIMENSIONS` | unset | Exact model output dimensions, 1–2048; required with URL. |
+
+| `WORKGRAPH_EMBEDDING_QUERY_PREFIX` | empty | Model-specific query prompt, at most 200 bytes; included in the profile. |
+| `WORKGRAPH_EMBEDDING_PASSAGE_PREFIX` | empty | Model-specific document prompt, at most 200 bytes; included in the profile. |
+
+Partially configured required settings fail startup. The optional model service has no
+published ports and stays on the internal network after initial provisioning.

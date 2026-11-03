@@ -51,6 +51,10 @@ func (m Metadata) Validate() error {
 // SearchCursor pins the query and indexing cutoff, with a stable keyset instead of growing OFFSET.
 // Current source permissions and availability are still rechecked on every page.
 type SearchCursor struct {
+	SnapshotID        string    `json:"snapshot_id,omitempty"`
+	SearchMode        string    `json:"search_mode,omitempty"`
+	SemanticProfile   string    `json:"semantic_profile,omitempty"`
+	VectorDigest      string    `json:"vector_digest,omitempty"`
 	ResolvedCommitSHA string    `json:"resolved_commit_sha,omitempty"`
 	Literal           bool      `json:"literal,omitempty"`
 	QueryDigest       string    `json:"query_digest"`
@@ -75,6 +79,19 @@ func (q Query) Fingerprint() string {
 
 // Validate rejects cross-query cursors and incompatible prefix/literal modes before storage work.
 func (c SearchCursor) Validate(q Query) error {
+	if !slices.Contains([]string{"", "lexical", "hybrid", "semantic"}, c.SearchMode) {
+		return ErrInvalid
+	}
+	semantic := c.SearchMode == "hybrid" || c.SearchMode == "semantic"
+	if semantic && !identifier.Valid(c.SnapshotID) || !semantic && c.SnapshotID != "" {
+		return ErrInvalid
+	}
+	if semantic && (!Digest(c.SemanticProfile) || !Digest(c.VectorDigest)) || !semantic && (c.SemanticProfile != "" || c.VectorDigest != "") {
+		return ErrInvalid
+	}
+	if q.Mode == "lexical" && semantic || q.Mode == "semantic" && c.SearchMode != "semantic" {
+		return ErrInvalid
+	}
 	if c.Literal && (q.PrefixText == "" || c.ResolvedCommitSHA != "") {
 		return ErrInvalid
 	}

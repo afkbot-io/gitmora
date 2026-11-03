@@ -87,6 +87,9 @@ def main():
             newcomer_key=api.command(["issue-token","--user-id",newcomer,"--scopes","directory:read,integration:read,capture:read"],environment)
             assert newcomer_key.returncode==0
             payload["new_user_token"]=json.loads(newcomer_key.stdout)["token"]
+            newcomer_manage = api.command(["issue-token", "--user-id", newcomer, "--scopes", "integration:manage"], environment)
+            assert newcomer_manage.returncode == 0
+            payload["new_user_manage_token"] = json.loads(newcomer_manage.stdout)["token"]
             write_key = api.command(["issue-token", "--user-id", identity["user_id"], "--scopes", "directory:read,integration:manage"], environment)
             assert write_key.returncode == 0
             payload["write_only_token"] = json.loads(write_key.stdout)["token"]

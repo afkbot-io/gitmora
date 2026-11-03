@@ -74,9 +74,16 @@ class GitLabFixture(http.server.BaseHTTPRequestHandler):
             return
         parsed = urllib.parse.urlparse(self.path)
         query = urllib.parse.parse_qs(parsed.query)
-        if parsed.path == "/api/v4/projects/example%2Fproject":
-            raw=json.dumps(dict(id=42,web_url="http://"+self.headers["Host"]+self.installation_prefix+"/example/project",path_with_namespace="example/project")).encode()
-            self.send_response(200);self.send_header("Content-Type","application/json");self.end_headers();self.wfile.write(raw);return
+        lookup_paths = {"/api/v4/projects/example%2Fproject": (42, "example/project"),
+                        "/api/v4/projects/example%2Fsecond": (43, "example/second")}
+        if parsed.path in lookup_paths:
+            repository_id, repository_path = lookup_paths[parsed.path]
+            raw = json.dumps(dict(id=repository_id, web_url="http://" + self.headers["Host"] + self.installation_prefix + "/" + repository_path, path_with_namespace=repository_path)).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(raw)
+            return
         if parsed.path.startswith("/api/v4/projects/42/repository/files/"):
             if not self.code_allowed:
                 self.send_error(401)
@@ -95,8 +102,8 @@ class GitLabFixture(http.server.BaseHTTPRequestHandler):
             return
         more = None
         updated = "2026-10-29T10:00:00Z"
-        if parsed.path == "/api/v4/projects/42":
-            result = {"id": 42}
+        if parsed.path in {"/api/v4/projects/42", "/api/v4/projects/43"}:
+            result = {"id": int(parsed.path.rsplit("/", 1)[1])}
         elif parsed.path == "/api/v4/projects/42/merge_requests":
             result = [{"iid": 7, "project_id": 42, "updated_at": updated}] if query.get("page") == ["1"] else []
             more = "2" if result else ""

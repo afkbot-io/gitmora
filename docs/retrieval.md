@@ -1,6 +1,6 @@
 # Search and exact evidence
 
-Search covers recorded agent messages, capture-reported file references and provider-verified retained code. It runs in PostgreSQL without a model. Code follows provider-reported changed paths at confirmed SHAs; it is not a full repository inventory.
+Search covers recorded agent messages, capture-reported file references and provider-verified retained code. The base lexical search runs in PostgreSQL without a model. Optional [local semantic search](semantic-search.md) combines pgvector and a local embedding service; exact source expansion remains unchanged. Code follows provider-reported changed paths at confirmed SHAs; it is not a full repository inventory.
 
 Run migrations, the API and `gitmorad worker`. Capture events and provider code jobs feed a durable index queue. Provider metadata, code and indexing have separate durable progress. `worker --once` attempts one due provider metadata unit, one code unit and one index source. Retries are lease-fenced and idempotent. Index reads have a 40-second budget, atomic projection writes have a separate 30-second budget within a 120-second lease, and write failures retain the old projection with durable retry health. Interactive search/expansion keeps its five-second deadline.
 

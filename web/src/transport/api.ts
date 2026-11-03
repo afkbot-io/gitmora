@@ -26,7 +26,12 @@ export const integrationErrors: Record<string, string> = {
     "Сервис вернул неподдерживаемый ответ. Проверьте адрес сервера и его версию.",
 };
 const diagnostics: Record<string, string> = {
+  search_expired: "Результаты устарели. Повторите поиск.",
   ...integrationErrors,
+  credential_unavailable:
+    "Токен больше недоступен. Обновите список или введите новый.",
+  credential_endpoint_mismatch:
+    "Выбранный токен относится к другому серверу. Выберите другой доступ.",
   username_taken: "Этот ник уже занят. Выберите другой.",
   cli_fresh_login_required:
     "Для подтверждения CLI войдите через организацию заново по ссылке из терминала.",

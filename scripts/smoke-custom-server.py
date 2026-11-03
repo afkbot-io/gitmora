@@ -187,7 +187,7 @@ def main():
                     "inspect",
                     "--format",
                     "{{.Architecture}}",
-                    "gitmora-postgres:18.6-security1",
+                    "gitmora-postgres:18.6-vector1",
                 ],
                 text=True,
             ).strip()
@@ -240,7 +240,7 @@ def main():
                 "type=bind,source=" + str(cert) + ",target=/fixture-ca.pem,readonly",
                 "--entrypoint",
                 "/gitmora",
-                "gitmora-postgres:18.6-security1",
+                "gitmora-postgres:18.6-vector1",
             ]
 
             def cli(*args, success=True):

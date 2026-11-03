@@ -84,7 +84,10 @@ export function CreateProject({
             {translate("Отмена")}
           </button>
         )}
-        <button className={buttonStyles.primary + (onClose ? "" : " w-full")}>
+        <button
+          disabled={!name.trim() && !createdID}
+          className={buttonStyles.primary + (onClose ? "" : " w-full")}
+        >
           {action.pending || opening
             ? translate("Создаём…")
             : translate(createdID ? "Открыть проект" : "Создать проект")}
@@ -102,9 +105,12 @@ export function CreateProject({
       }}
       className="w-120 max-w-[calc(100vw-2rem)] rounded-lg border border-line p-6 shadow-dialog backdrop:bg-brand/60"
     >
-      <h2 id="new-project-title" className="mb-5">
+      <h2 id="new-project-title" className="mb-2">
         {translate("Новый проект")}
       </h2>
+      <p className="text-sm text-muted mb-5">
+        {translate("Затем подключите репозиторий и пригласите команду.")}
+      </p>
       {form}
     </dialog>
   ) : (

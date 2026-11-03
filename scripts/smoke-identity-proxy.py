@@ -21,7 +21,7 @@ from identity_proxy_fixture import owned_http_paths
 
 ROOT = Path(__file__).resolve().parent.parent
 HOST = "gitmora.example.test"
-PG_IMAGE = "gitmora-postgres:18.6-security1"
+PG_IMAGE = "gitmora-postgres:18.6-vector1"
 
 
 def free_port():
