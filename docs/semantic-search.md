@@ -82,7 +82,7 @@ no host port; the overlay sets `WORKGRAPH_EMBEDDING_QUERY_URL=http://embedding-q
 only on the API. For a custom deployment, set this optional variable to an isolated
 replica serving the identical model/digest. It changes routing without invalidating
 existing vectors. Both endpoints validate the pinned digest, including cached queries.
-After startup or idle eviction, initial model loading can cause a bounded first-request fallback. If inference times out, one coalesced warmup per client lets the pinned model load independently for up to 90 seconds, using fixed probe text rather than retaining the user query. A 15-second cooldown bounds retries. Ordinary search/indexing deadlines stay unchanged; subsequent requests recover after loading completes. A separate `embedding-worker` backfills two chunks per batch and
+After startup or idle eviction, initial model loading can cause a bounded first-request fallback. If inference times out, one coalesced warmup per client lets the pinned model load independently for up to 90 seconds, using fixed probe text rather than retaining the user query. A 15-second cooldown bounds retries. Embedding inference remains bounded to 1.5 seconds for a query and 30 seconds for indexing; subsequent requests recover after loading completes. Semantic-enabled searches allow up to eight seconds overall, with at most six seconds for database ranking/expansion. Ordinary lexical reads retain their five-second database limit. A separate `embedding-worker` backfills two chunks per batch and
 continues after restarts. Ordinary capture, provider synchronization and lexical
 indexing use their existing worker and do not wait for model inference.
 

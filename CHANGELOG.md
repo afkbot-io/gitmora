@@ -1,5 +1,9 @@
 # Changes
 
+## 0.9.5 — 2026-11-04
+
+- Keep only ID, grouping, time and score in ranking projections. Give optional semantic inference and fused retrieval separate bounded phase budgets: up to eight seconds overall and six seconds for database ranking; ordinary lexical reads remain bounded to five seconds. This preserves whole-history searches across all source kinds on smaller hosts.
+
 ## 0.9.4 — 2026-11-04
 
 - Recover automatically when cold model loading exceeds a query or indexing deadline. One bounded warmup per client uses fixed non-user text and a retry cooldown, while ordinary request deadlines remain unchanged.

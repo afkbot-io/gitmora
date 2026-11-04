@@ -168,6 +168,12 @@ func retrievalStatement(mode string, commitScoped, candidatesOnly bool) string {
 	} else if semantic {
 		score = "embedding.similarity"
 	}
+	projection := `d.id,d.job_id,d.part,` + sourceIdentityProjection + `,
+ CASE WHEN j.source_kind='capture' THEN j.latest_revision=j.revision ELSE true END AS current,
+ j.source_observed_at AS observed_at,`
+	if candidatesOnly {
+		projection = `d.id,d.job_id,d.part,j.source_observed_at AS observed_at,`
+	}
 	statement := `WITH forms AS (
  SELECT plainto_tsquery('simple',$8) AS simple_terms,plainto_tsquery('english',$8) AS english_terms,plainto_tsquery('russian',$8) AS russian_terms
  ), terms AS MATERIALIZED (
@@ -180,10 +186,7 @@ func retrievalStatement(mode string, commitScoped, candidatesOnly bool) string {
  WHERE ` + eligibleSources + ` AND j.completed_at IS NOT NULL
  AND ($12::text='' OR (j.source_kind='capture' AND j.session_id::text=$12))
  )` + vectorScores + candidates + `, allowed AS MATERIALIZED (
- SELECT d.id,d.job_id,d.part,` + sourceIdentityProjection + `,
- CASE WHEN j.source_kind='capture' THEN j.latest_revision=j.revision ELSE true END AS current,
- j.source_observed_at AS observed_at,
- ` + score + ` AS score
+ SELECT ` + projection + score + ` AS score
  FROM ` + chunks + ` JOIN authorized_jobs j ON j.id=d.job_id CROSS JOIN terms
  WHERE d.indexed_at<=COALESCE($16::timestamptz,transaction_timestamp())` + similarityFilter + `
  AND (COALESCE(cardinality($7::text[]),0)=0 OR d.kind=ANY($7::text[]))

@@ -16,7 +16,7 @@ case "$(uname -s)" in Darwin) gitmora_os=darwin ;; Linux) gitmora_os=linux ;; *)
 case "$(uname -m)" in arm64|aarch64) gitmora_arch=arm64 ;; x86_64|amd64) gitmora_arch=amd64 ;; *) printf '%s\n' 'Supported architectures: arm64 and amd64.' >&2; exit 1 ;; esac
 command -v curl >/dev/null || { printf '%s\n' 'Install curl first.' >&2; exit 1; }
 gitmora_file=gitmora_${gitmora_os}_${gitmora_arch}
-gitmora_version=0.9.4
+gitmora_version=0.9.5
 gitmora_temp=$(mktemp -d)
 trap 'rm -rf "$gitmora_temp"' EXIT HUP INT TERM
 (

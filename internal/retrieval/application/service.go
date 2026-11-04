@@ -42,7 +42,13 @@ func (s *Service) Search(ctx context.Context, p access.Principal, q domain.Query
 	if err != nil {
 		return domain.Result{}, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	// Optional inference and two independent ranking lanes need separate budgets.
+	// A cold/uncached vector must not consume the ordinary database-read allowance.
+	budget := 5 * time.Second
+	if q.Terms != "" && s.embeddings != nil && q.Mode != "lexical" {
+		budget = 8 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
 	if q.Terms != "" && (s.embeddings != nil || q.Mode == "semantic") && q.Mode != "lexical" {
 		if err := s.reader.Authorize(ctx, p, q); err != nil {
@@ -53,7 +59,13 @@ func (s *Service) Search(ctx context.Context, p access.Principal, q domain.Query
 	if err != nil {
 		return domain.Result{}, err
 	}
-	result, err := s.reader.Search(ctx, p, q)
+	readBudget := 5 * time.Second
+	if q.SemanticProfile != "" {
+		readBudget = 6 * time.Second
+	}
+	readCtx, cancelRead := context.WithTimeout(ctx, readBudget)
+	defer cancelRead()
+	result, err := s.reader.Search(readCtx, p, q)
 	if err != nil {
 		return domain.Result{}, err
 	}
