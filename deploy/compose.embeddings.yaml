@@ -1,6 +1,11 @@
 # Optional CPU-only semantic retrieval. Provision the model cache before starting.
 # No model/API ports are published; runtime inference has no external network.
 services:
+  postgres:
+    command: [postgres, -c, shared_buffers=512MB]
+    shm_size: 512m
+    mem_limit: 2g
+
   api:
     environment:
       WORKGRAPH_EMBEDDING_QUERY_URL: http://embedding-queries:11434

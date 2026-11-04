@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -80,6 +81,123 @@ func TestLocalEmbeddingContractAndInvalidResponses(t *testing.T) {
 	config.URL = "http://user:secret@localhost"
 	if _, err := ollama.New(config); err == nil {
 		t.Fatal("credential URL accepted")
+	}
+}
+
+func TestColdModelsWarmAfterDeadlineWithoutRetainingSourceText(t *testing.T) {
+	for _, query := range []bool{true, false} {
+		name := "indexing"
+		if query {
+			name = "query"
+		}
+		t.Run(name, func(t *testing.T) {
+			var loaded atomic.Bool
+			var warmCalls atomic.Int32
+			started, release, finished := make(chan struct{}), make(chan struct{}), make(chan struct{})
+			canceled := make(chan struct{}, 1)
+			queryServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/api/tags" {
+					json.NewEncoder(w).Encode(map[string]any{"models": []map[string]string{{"name": "test", "digest": strings.Repeat("a", 64)}}})
+					return
+				}
+				var input struct{ Input []string }
+				if r.URL.Path != "/api/embed" || json.NewDecoder(r.Body).Decode(&input) != nil || len(input.Input) != 1 {
+					t.Error("unexpected model request")
+					w.WriteHeader(400)
+					return
+				}
+				if input.Input[0] == "query: Gitmora model warmup" {
+					if warmCalls.Add(1) == 1 {
+						close(started)
+					} else {
+						t.Error("concurrent timeouts created multiple warmups")
+					}
+					select {
+					case <-release:
+						loaded.Store(true)
+					case <-r.Context().Done():
+						canceled <- struct{}{}
+						return
+					}
+					defer close(finished)
+				} else if !loaded.Load() {
+					<-r.Context().Done()
+					return
+				}
+				json.NewEncoder(w).Encode(map[string]any{"model": "test", "embeddings": [][]float32{{3, 4}}})
+			}))
+			defer queryServer.Close()
+			defer close(release)
+			background := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				t.Error("warmup contacted the wrong endpoint")
+				w.WriteHeader(500)
+			}))
+			defer background.Close()
+			config := ollama.Config{URL: background.URL, QueryURL: queryServer.URL, Model: "test", Revision: strings.Repeat("a", 64), Dimensions: 2, QueryPrefix: "query: "}
+			if !query {
+				config.URL, config.QueryURL = queryServer.URL, background.URL
+			}
+			client, err := ollama.New(config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			parent, cancelParent := context.WithCancel(context.Background())
+			defer cancelParent()
+			ctx, cancel := context.WithTimeout(parent, 50*time.Millisecond)
+			defer cancel()
+			result := make(chan error, 1)
+			go func() {
+				_, err := client.Embed(ctx, []string{"private first question"}, query)
+				result <- err
+			}()
+			select {
+			case err := <-result:
+				if err == nil {
+					t.Fatal("cold inference unexpectedly completed")
+				}
+			case <-time.After(2 * time.Second):
+				t.Fatal("warmup blocked the search deadline")
+			}
+			select {
+			case <-started:
+			case <-time.After(2 * time.Second):
+				t.Fatal("timeout did not initiate a bounded warmup")
+			}
+			cancelParent()
+			var concurrent sync.WaitGroup
+			for i := 0; i < 8; i++ {
+				concurrent.Go(func() {
+					short, done := context.WithTimeout(context.Background(), 50*time.Millisecond)
+					defer done()
+					if _, err := client.Embed(short, []string{"another private question"}, query); err == nil {
+						t.Error("blocked cold request unexpectedly completed")
+					}
+				})
+			}
+			concurrent.Wait()
+			if warmCalls.Load() != 1 {
+				t.Fatal("warmup was not coalesced")
+			}
+			select {
+			case <-canceled:
+				t.Fatal("request cancellation canceled model warmup")
+			default:
+			}
+			// Release exactly once, including cleanup paths above.
+			release <- struct{}{}
+			select {
+			case <-finished:
+			case <-time.After(2 * time.Second):
+				t.Fatal("warm model did not finish")
+			}
+			fresh, done := context.WithTimeout(context.Background(), time.Second)
+			defer done()
+			vectors, err := client.Embed(fresh, []string{"an uncached fresh question"}, query)
+			if err != nil || len(vectors) != 1 || vectors[0][0] != 0.6 {
+				t.Fatal("fresh search did not recover after cold start", err)
+			}
+
+		})
 	}
 }
 

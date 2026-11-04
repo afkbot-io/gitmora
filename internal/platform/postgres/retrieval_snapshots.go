@@ -11,14 +11,10 @@ import (
 	"workgraph.local/platform/internal/retrieval/domain"
 )
 
-func saveSearchSnapshot(ctx context.Context, tx pgx.Tx, p access.Principal, q domain.Query, items []domain.Hit) (string, error) {
+func saveSearchSnapshot(ctx context.Context, tx pgx.Tx, p access.Principal, q domain.Query, positions []domain.SearchPosition) (string, error) {
 	id, err := identifier.New()
 	if err != nil {
 		return "", err
-	}
-	positions := make([]domain.SearchPosition, len(items))
-	for i, h := range items {
-		positions[i] = domain.SearchPosition{ID: h.ID, Score: h.Score}
 	}
 	raw, _ := json.Marshal(positions)
 	// Serialize only this user's tiny cache edit, never inference or ranking.

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sort"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"workgraph.local/platform/internal/access"
@@ -90,11 +92,11 @@ var pathQueryPrefix = retrievalQuery("path", false)
 var commitQueryPrefix = retrievalQuery("plain", true)
 var commitLexicalQueryPrefix = retrievalQuery("lexical", true)
 var commitPathQueryPrefix = retrievalQuery("path", true)
-var hybridQueryPrefix = retrievalQuery("hybrid", false)
-var semanticQueryPrefix = retrievalQuery("semantic", false)
-var commitHybridQueryPrefix = retrievalQuery("hybrid", true)
-var commitSemanticQueryPrefix = retrievalQuery("semantic", true)
 var snapshotQueryPrefix = retrievalQuery("snapshot", false)
+var lexicalCandidatesQuery = retrievalStatement("lexical", false, true)
+var semanticCandidatesQuery = retrievalStatement("semantic", false, true)
+var commitLexicalCandidatesQuery = retrievalStatement("lexical", true, true)
+var commitSemanticCandidatesQuery = retrievalStatement("semantic", true, true)
 
 // Resolve commit membership once per source before examining its message ranges. A
 // correlated source-membership probe per chunk grows with unrelated chat history.
@@ -118,8 +120,13 @@ const commitCandidates = `, commit_sources AS MATERIALIZED (
 // Bitmap OR keeps each matching row once without sorting a UNION of duplicate IDs.
 // A single lexeme has no inter-word proximity to evaluate, so its rank uses frequency.
 func retrievalQuery(mode string, commitScoped bool) string {
-	semantic := mode == "hybrid" || mode == "semantic"
+	return retrievalStatement(mode, commitScoped, false)
+}
+
+func retrievalStatement(mode string, commitScoped, candidatesOnly bool) string {
+	semantic := mode == "semantic"
 	candidates := ""
+	vectorScores := ""
 	chunks := "retrieval_chunks d"
 	if mode == "lexical" {
 		candidates = ", matched AS MATERIALIZED (SELECT id FROM retrieval_chunks WHERE lexical@@(SELECT query FROM terms) OR (part_lexical IS NOT NULL AND part_lexical@@(SELECT query FROM terms)))"
@@ -129,49 +136,27 @@ func retrievalQuery(mode string, commitScoped bool) string {
 		chunks = "paths candidates JOIN retrieval_chunks d ON (d.job_id,d.part)=(candidates.job_id,candidates.part)"
 	}
 	if semantic {
-		// Backfill can leave most historical chunks without a vector. Consider only
-		// actual lexical matches or completed vectors before the expensive source
-		// joins. Authorization still precedes every distance ranking and LIMIT.
-		lexical := ""
-		if mode == "hybrid" {
-			lexical = `SELECT id FROM retrieval_chunks WHERE lexical@@(SELECT query FROM terms) OR (part_lexical IS NOT NULL AND part_lexical@@(SELECT query FROM terms)) UNION `
-		}
-		candidates = `, matched AS MATERIALIZED (` + lexical + `SELECT chunk_id AS id FROM retrieval_embeddings WHERE profile=$22 AND completed_at<=COALESCE($16::timestamptz,transaction_timestamp()))`
-		chunks = "matched candidates JOIN retrieval_chunks d ON d.id=candidates.id"
+		// Materialize distances once for the authorized jobs/profile. Keeping this
+		// scan separate from lexical matches avoids random vector reads per match.
+		vectorScores = `, vector_scores AS MATERIALIZED (
+ SELECT embedding.chunk_id AS id,1-(embedding.embedding OPERATOR(public.<=>) $21::public.vector) AS similarity
+ FROM retrieval_embeddings embedding JOIN retrieval_chunks d ON d.id=embedding.chunk_id JOIN authorized_jobs j ON j.id=d.job_id
+ WHERE embedding.profile=$22 AND embedding.completed_at<=COALESCE($16::timestamptz,transaction_timestamp())
+ AND (COALESCE(cardinality($7::text[]),0)=0 OR d.kind=ANY($7::text[]))
+ )`
+		chunks = "vector_scores embedding JOIN retrieval_chunks d ON d.id=embedding.id"
 	}
+
 	if commitScoped {
 		candidates = commitCandidates + candidates
 		chunks += " JOIN commit_matches commit_hits ON commit_hits.id=d.id"
 	}
-	scoreName := "score"
-	extra := ""
 	ranking := `ranked AS (SELECT *,row_number() OVER(PARTITION BY job_id,part ORDER BY score DESC,id) AS position FROM allowed)`
+	similarityFilter := ""
 	if semantic {
-		chunks += ` LEFT JOIN retrieval_embeddings embedding ON embedding.chunk_id=d.id AND embedding.profile=$22 AND embedding.completed_at<=COALESCE($16::timestamptz,transaction_timestamp())`
-		scoreName = "lexical_score"
-		extra = `, (d.lexical@@terms.query OR COALESCE(d.part_lexical@@terms.query,false)) AS lexical_match,
- CASE WHEN embedding.embedding IS NOT NULL THEN 1-(embedding.embedding OPERATOR(public.<=>) $21::public.vector) END AS similarity`
-		lexicalEnabled := "true"
-		if mode == "semantic" {
-			lexicalEnabled = "false"
-		}
-		// RRF combines independently ranked authorized parts. Each lane contributes at
-		// most 200 parts, bounding work/response traversal without letting one long tool
-		// record occupy the result window. Source text is fetched only after fusion.
-		ranking = `lexical_best AS MATERIALIZED (
- SELECT DISTINCT ON(job_id,part) id,job_id,part,lexical_score,observed_at FROM allowed WHERE lexical_match AND ` + lexicalEnabled + ` ORDER BY job_id,part,lexical_score DESC,id
- ), semantic_best AS MATERIALIZED (
- SELECT DISTINCT ON(job_id,part) id,job_id,part,similarity,observed_at FROM allowed WHERE similarity>=0.35 ORDER BY job_id,part,similarity DESC,id
- ), lexical_lane AS (
- SELECT *,row_number() OVER(ORDER BY lexical_score DESC,observed_at DESC,id) AS rank FROM lexical_best ORDER BY lexical_score DESC,observed_at DESC,id LIMIT 200
- ), semantic_lane AS (
- SELECT *,row_number() OVER(ORDER BY similarity DESC,observed_at DESC,id) AS rank FROM semantic_best ORDER BY similarity DESC,observed_at DESC,id LIMIT 200
- ), fused AS (
- SELECT job_id,part,(array_agg(id ORDER BY lane,id))[1] AS id,sum(1.0/(60+rank))::double precision AS score FROM (
- SELECT id,job_id,part,rank,0 AS lane FROM lexical_lane UNION ALL SELECT id,job_id,part,rank,1 AS lane FROM semantic_lane
- ) lanes GROUP BY job_id,part
- ), ranked AS (SELECT allowed.*,fused.score,1 AS position FROM fused JOIN allowed ON allowed.id=fused.id)`
+		similarityFilter = " AND embedding.similarity>=0.35"
 	}
+
 	if mode == "snapshot" {
 		candidates = `, snapshot_positions AS MATERIALIZED (SELECT * FROM jsonb_to_recordset($21::jsonb) AS p(id text,score double precision))`
 		chunks = `snapshot_positions snapshot JOIN retrieval_chunks d ON d.id=snapshot.id`
@@ -180,21 +165,30 @@ func retrievalQuery(mode string, commitScoped bool) string {
  ELSE (CASE WHEN numnode(terms.query)=1 THEN ts_rank(d.lexical,terms.query,32) ELSE ts_rank_cd(d.lexical,terms.query,32) END)+(CASE WHEN position(lower($8) IN lower(d.title_terms))>0 THEN 1.0 ELSE 0.0 END) END::double precision`
 	if mode == "snapshot" {
 		score = "snapshot.score"
+	} else if semantic {
+		score = "embedding.similarity"
 	}
-	return `WITH forms AS (
+	projection := `d.id,d.job_id,d.part,` + sourceIdentityProjection + `,
+ CASE WHEN j.source_kind='capture' THEN j.latest_revision=j.revision ELSE true END AS current,
+ j.source_observed_at AS observed_at,`
+	if candidatesOnly {
+		projection = `d.id,d.job_id,d.part,j.source_observed_at AS observed_at,`
+	}
+	statement := `WITH forms AS (
  SELECT plainto_tsquery('simple',$8) AS simple_terms,plainto_tsquery('english',$8) AS english_terms,plainto_tsquery('russian',$8) AS russian_terms
  ), terms AS MATERIALIZED (
  SELECT simple_terms || CASE WHEN english_terms=simple_terms THEN ''::tsquery ELSE english_terms END
  || CASE WHEN russian_terms=simple_terms OR russian_terms=english_terms THEN ''::tsquery ELSE russian_terms END AS query FROM forms
- )` + candidates + `,
- allowed AS MATERIALIZED (
- SELECT d.id,d.job_id,d.part,` + sourceIdentityProjection + `,
- CASE WHEN j.source_kind='capture' THEN cs.latest_revision=j.revision ELSE true END AS current,
- j.source_observed_at AS observed_at,
- ` + score + ` AS ` + scoreName + extra + `
- FROM ` + chunks + ` JOIN retrieval_jobs j ON j.id=d.job_id ` + sourceJoins + ` CROSS JOIN terms
+ ),
+ authorized_jobs AS MATERIALIZED (
+ SELECT j.id,` + sourceIdentityProjection + `,j.source_observed_at,cs.latest_revision
+ FROM retrieval_jobs j ` + sourceJoins + `
  WHERE ` + eligibleSources + ` AND j.completed_at IS NOT NULL
- AND d.indexed_at<=COALESCE($16::timestamptz,transaction_timestamp())
+ AND ($12::text='' OR (j.source_kind='capture' AND j.session_id::text=$12))
+ )` + vectorScores + candidates + `, allowed AS MATERIALIZED (
+ SELECT ` + projection + score + ` AS score
+ FROM ` + chunks + ` JOIN authorized_jobs j ON j.id=d.job_id CROSS JOIN terms
+ WHERE d.indexed_at<=COALESCE($16::timestamptz,transaction_timestamp())` + similarityFilter + `
  AND (COALESCE(cardinality($7::text[]),0)=0 OR d.kind=ANY($7::text[]))
  AND ($10::text='' OR d.id=$10)
  AND ($11::text='' OR EXISTS(SELECT 1 FROM retrieval_chunks paths WHERE paths.job_id=d.job_id AND paths.part=d.part AND cardinality(paths.file_paths)>0 AND paths.file_paths@>ARRAY[$11::text]))
@@ -213,7 +207,11 @@ func retrievalQuery(mode string, commitScoped bool) string {
  SELECT * FROM ranked WHERE position=1
  AND (NOT $17::boolean OR score<$18::double precision OR(score=$18 AND(observed_at<$19::timestamptz OR(observed_at=$19 AND id>$20::text))))
  ORDER BY score DESC,observed_at DESC,id LIMIT $9
- )
+ )`
+	if candidatesOnly {
+		return statement + ` SELECT id,score,job_id,part,observed_at FROM selected ORDER BY score DESC,observed_at DESC,id`
+	}
+	return statement + `
  SELECT s.id,d.kind,d.part,d.start_rune,d.end_rune,d.title,d.content,d.content_digest,
  s.source_kind,s.project_id::text,COALESCE(s.repository_id::text,''),COALESCE(s.session_id::text,''),COALESCE(s.revision,0),s.source_digest,COALESCE(s.code_sha,''),COALESCE(s.code_path,''),COALESCE(s.code_blob_id,''),d.line_start,d.line_end,
  s.current,s.observed_at,d.indexed_at,s.score,
@@ -241,39 +239,10 @@ func readChunks(ctx context.Context, tx pgx.Tx, p access.Principal, q domain.Que
 			statement = commitPathQueryPrefix
 		}
 	}
-	if len(q.Vector) > 0 {
-		statement = hybridQueryPrefix
-		if q.Engine == "semantic" {
-			statement = semanticQueryPrefix
-		}
-		if q.CommitSHA != "" {
-			statement = commitHybridQueryPrefix
-			if q.Engine == "semantic" {
-				statement = commitSemanticQueryPrefix
-			}
-		}
-	}
 	if q.Snapshot != nil {
 		statement = snapshotQueryPrefix
 	}
-	after := domain.SearchCursor{}
-	if q.After != nil {
-		after = *q.After
-	}
-	var cutoff any
-	if !q.ReadAt.IsZero() {
-		cutoff = q.ReadAt
-	}
-	args := []any{q.ProjectID, p.Has(access.ReadCapture), p.Has(access.ReadIntegration), q.RepositoryID, q.History, q.CommitSHA, q.Kinds, q.Terms, q.Limit + 1, id, q.FilePath, q.SessionID, q.Agent, q.Model, q.Role, cutoff, q.After != nil, after.Score, after.ObservedAt, after.ID}
-	if len(q.Vector) > 0 {
-		raw, _ := json.Marshal(q.Vector)
-		args = append(args, string(raw), q.SemanticProfile)
-	}
-	if q.Snapshot != nil {
-		raw, _ := json.Marshal(q.Snapshot)
-		args = append(args[:20], string(raw))
-	}
-	rows, err := tx.Query(ctx, statement, args...)
+	rows, err := tx.Query(ctx, statement, retrievalArgs(p, q, id)...)
 	if err != nil {
 		return nil, err
 	}
@@ -293,6 +262,113 @@ func readChunks(ctx context.Context, tx pgx.Tx, p access.Principal, q domain.Que
 			return nil, errors.New("invalid retrieval projection")
 		}
 		result = append(result, hit)
+	}
+	return result, rows.Err()
+}
+
+func retrievalArgs(p access.Principal, q domain.Query, id string) []any {
+	after := domain.SearchCursor{}
+	if q.After != nil {
+		after = *q.After
+	}
+	var cutoff any
+	if !q.ReadAt.IsZero() {
+		cutoff = q.ReadAt
+	}
+	args := []any{q.ProjectID, p.Has(access.ReadCapture), p.Has(access.ReadIntegration), q.RepositoryID, q.History, q.CommitSHA, q.Kinds, q.Terms, q.Limit + 1, id, q.FilePath, q.SessionID, q.Agent, q.Model, q.Role, cutoff, q.After != nil, after.Score, after.ObservedAt, after.ID}
+	if len(q.Vector) > 0 {
+		raw, _ := json.Marshal(q.Vector)
+		args = append(args, string(raw), q.SemanticProfile)
+	}
+	if q.Snapshot != nil {
+		raw, _ := json.Marshal(q.Snapshot)
+		args = append(args[:20], string(raw))
+	}
+	return args
+}
+
+// searchCandidate retains only identity, grouping, score and tie-breaking time.
+type searchCandidate struct {
+	domain.SearchPosition
+	jobID      string
+	part       string
+	observedAt time.Time
+}
+
+// readSearchCandidates ranks each lane independently, then fuses at most 400
+// authorized parts. Keeping vector and text plans separate avoids a broad UNION
+// forcing repeated random chunk/vector reads during historical backfill.
+func readSearchCandidates(ctx context.Context, tx pgx.Tx, p access.Principal, q domain.Query) ([]domain.SearchPosition, error) {
+	statements := []string{semanticCandidatesQuery}
+	if q.CommitSHA != "" {
+		statements[0] = commitSemanticCandidatesQuery
+	}
+	if q.Engine != "semantic" {
+		lexical := lexicalCandidatesQuery
+		if q.CommitSHA != "" {
+			lexical = commitLexicalCandidatesQuery
+		}
+		statements = append([]string{lexical}, statements...)
+	}
+	combined := make(map[string]searchCandidate)
+	for _, statement := range statements {
+		lane, err := readSearchLane(ctx, tx, p, q, statement)
+		if err != nil {
+			return nil, err
+		}
+		for i, candidate := range lane {
+			key := candidate.jobID + "/" + candidate.part
+			score := 1.0 / float64(61+i)
+			if previous, exists := combined[key]; exists {
+				previous.Score += score
+				combined[key] = previous
+			} else {
+				candidate.Score = score
+				combined[key] = candidate
+			}
+		}
+	}
+	ranked := make([]searchCandidate, 0, len(combined))
+	for _, candidate := range combined {
+		ranked = append(ranked, candidate)
+	}
+	sort.Slice(ranked, func(i, j int) bool {
+		if ranked[i].Score != ranked[j].Score {
+			return ranked[i].Score > ranked[j].Score
+		}
+		if !ranked[i].observedAt.Equal(ranked[j].observedAt) {
+			return ranked[i].observedAt.After(ranked[j].observedAt)
+		}
+		return ranked[i].ID < ranked[j].ID
+	})
+	result := make([]domain.SearchPosition, 0, len(ranked))
+	for _, candidate := range ranked {
+		result = append(result, candidate.SearchPosition)
+	}
+	return result, nil
+}
+
+func readSearchLane(ctx context.Context, tx pgx.Tx, p access.Principal, q domain.Query, statement string) ([]searchCandidate, error) {
+	q.Limit = 199 // retrieval statements request limit+1; each RRF lane is bounded to 200.
+	args := retrievalArgs(p, q, "")
+	if statement == lexicalCandidatesQuery || statement == commitLexicalCandidatesQuery {
+		args = args[:20]
+	}
+	rows, err := tx.Query(ctx, statement, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := []searchCandidate{}
+	for rows.Next() {
+		var candidate searchCandidate
+		if err = rows.Scan(&candidate.ID, &candidate.Score, &candidate.jobID, &candidate.part, &candidate.observedAt); err != nil {
+			return nil, err
+		}
+		if !domain.Digest(candidate.ID) || !(candidate.Score >= 0) || len(result) >= 200 {
+			return nil, domain.ErrInvalid
+		}
+		result = append(result, candidate)
 	}
 	return result, rows.Err()
 }
@@ -353,7 +429,17 @@ func (s *RetrievalStore) Search(ctx context.Context, p access.Principal, q domai
 		readQuery := q
 		if q.SemanticProfile != "" {
 			if q.After == nil {
-				readQuery.Limit = 400
+				var err error
+				readQuery.Snapshot, err = readSearchCandidates(ctx, tx, p, q)
+				if err != nil {
+					return err
+				}
+				if len(readQuery.Snapshot) > q.Limit {
+					snapshotID, err = saveSearchSnapshot(ctx, tx, p, q, readQuery.Snapshot)
+					if err != nil {
+						return err
+					}
+				}
 			} else {
 				var err error
 				readQuery.Snapshot, err = loadSearchSnapshot(ctx, tx, p, q)
@@ -367,12 +453,6 @@ func (s *RetrievalStore) Search(ctx context.Context, p access.Principal, q domai
 		if err != nil {
 			return err
 		}
-		if q.SemanticProfile != "" && q.After == nil && len(items) > q.Limit {
-			snapshotID, err = saveSearchSnapshot(ctx, tx, p, q, items)
-			if err != nil {
-				return err
-			}
-		}
 		if len(items) > q.Limit {
 			result.HasMore = true
 			items = items[:q.Limit]
@@ -381,7 +461,13 @@ func (s *RetrievalStore) Search(ctx context.Context, p access.Principal, q domai
 		}
 		result.Items = items
 		if q.SemanticProfile != "" {
-			if err := tx.QueryRow(ctx, `SELECT count(*) FILTER(WHERE embedding.completed_at IS NULL),count(*) FILTER(WHERE embedding.last_error_code IS NOT NULL) FROM retrieval_chunks d JOIN retrieval_jobs j ON j.id=d.job_id `+sourceJoins+` LEFT JOIN retrieval_embeddings embedding ON embedding.chunk_id=d.id AND embedding.profile=$6 WHERE `+eligibleSources+` AND j.completed_at IS NOT NULL AND d.indexed_at<=$7`, q.ProjectID, p.Has(access.ReadCapture), p.Has(access.ReadIntegration), q.RepositoryID, q.History, q.SemanticProfile, q.ReadAt).Scan(&result.SemanticPending, &result.SemanticFailed); err != nil {
+			// Availability is a job property. Check its provider/catalog joins once
+			// per job, rather than repeating them for every retained text fragment.
+			if err := tx.QueryRow(ctx, `WITH authorized_jobs AS MATERIALIZED (
+ SELECT j.id FROM retrieval_jobs j `+sourceJoins+` WHERE `+eligibleSources+` AND j.completed_at IS NOT NULL
+ ) SELECT count(*) FILTER(WHERE embedding.completed_at IS NULL),count(*) FILTER(WHERE embedding.last_error_code IS NOT NULL)
+ FROM authorized_jobs j JOIN retrieval_chunks d ON d.job_id=j.id
+ LEFT JOIN retrieval_embeddings embedding ON embedding.chunk_id=d.id AND embedding.profile=$6 WHERE d.indexed_at<=$7`, q.ProjectID, p.Has(access.ReadCapture), p.Has(access.ReadIntegration), q.RepositoryID, q.History, q.SemanticProfile, q.ReadAt).Scan(&result.SemanticPending, &result.SemanticFailed); err != nil {
 				return err
 			}
 		}

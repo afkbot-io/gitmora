@@ -1,5 +1,21 @@
 # Changes
 
+## 0.9.6 — 2026-11-04
+
+- Match the optional PostgreSQL shared buffer cache to its 2 GB memory profile: use 512 MB buffers/shared memory to retain history/vector pages between searches.
+- Stop all owned native-fixture descendants before deleting their temporary files. Verify three successful authenticated reads within a bounded 30-second database recovery window instead of assuming the first ready connection means the entire pool recovered.
+
+## 0.9.5 — 2026-11-04
+
+- Keep only ID, grouping, time and score in ranking projections. Give optional semantic inference and fused retrieval separate bounded phase budgets: up to eight seconds overall and six seconds for database ranking; ordinary lexical reads remain bounded to five seconds. This preserves whole-history searches across all source kinds on smaller hosts.
+
+## 0.9.4 — 2026-11-04
+
+- Recover automatically when cold model loading exceeds a query or indexing deadline. One bounded warmup per client uses fixed non-user text and a retry cooldown, while ordinary request deadlines remain unchanged.
+- Rank lexical and semantic lanes independently before bounded RRF fusion; check source availability once per job. Freeze only candidate IDs/scores and expand source bodies for the requested page, avoiding repeated vector reads and expansion of all 400 candidates.
+- Allow 2 GB PostgreSQL memory in the optional embedding profile to reduce cache eviction during history indexing.
+- Clarify that optional semantic search invokes local embeddings while other context reads use stored observations.
+
 ## 0.9.3 — 2026-11-04
 
 - Preserve PostgreSQL UUID statistics and indexes when filtering search by repository. Common-word searches remain within the existing deadline for both current and historical records.
