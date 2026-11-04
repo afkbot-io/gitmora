@@ -1,5 +1,12 @@
 # Changes
 
+## 0.9.4 — 2026-11-04
+
+- Recover automatically when cold model loading exceeds a query or indexing deadline. One bounded warmup per client uses fixed non-user text and a retry cooldown, while ordinary request deadlines remain unchanged.
+- Rank lexical and semantic lanes independently before bounded RRF fusion; check source availability once per job. Freeze only candidate IDs/scores and expand source bodies for the requested page, avoiding repeated vector reads and expansion of all 400 candidates.
+- Allow 2 GB PostgreSQL memory in the optional embedding profile to reduce cache eviction during history indexing.
+- Clarify that optional semantic search invokes local embeddings while other context reads use stored observations.
+
 ## 0.9.3 — 2026-11-04
 
 - Preserve PostgreSQL UUID statistics and indexes when filtering search by repository. Common-word searches remain within the existing deadline for both current and historical records.

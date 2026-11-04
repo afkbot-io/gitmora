@@ -325,6 +325,7 @@ func TestSparseEmbeddingsPreserveUnindexedLexicalMatches(t *testing.T) {
 		{Role: "assistant", Text: "needle is present before this message is embedded", Model: "lexical"},
 		{Role: "assistant", Text: "a semantically relevant decision", Model: "semantic"},
 		{Role: "assistant", Text: "an unrelated historical message", Model: "neither"},
+		{Role: "assistant", Text: "needle with both lexical and semantic evidence", Model: "both"},
 	}
 	if _, err := captureapp.NewService(postgres.NewCaptureStore(pool)).Ingest(ctx, subject, snap); err != nil {
 		t.Fatal(err)
@@ -335,7 +336,7 @@ func TestSparseEmbeddingsPreserveUnindexedLexicalMatches(t *testing.T) {
 	}
 	model := &testEmbeddings{}
 	if _, err := pool.Exec(ctx, `INSERT INTO retrieval_embeddings(profile,chunk_id,embedding,completed_at)
- SELECT $1,id,'[1,0]'::public.vector,now() FROM retrieval_chunks WHERE metadata->>'model'='semantic'`, model.Profile()); err != nil {
+ SELECT $1,id,'[1,0]'::public.vector,now() FROM retrieval_chunks WHERE metadata->>'model' IN ('semantic','both')`, model.Profile()); err != nil {
 		t.Fatal(err)
 	}
 	// An obsolete profile may have another dimension; it must never enter distance calculations.
@@ -347,8 +348,11 @@ func TestSparseEmbeddingsPreserveUnindexedLexicalMatches(t *testing.T) {
 	principal := access.Principal{UserID: reader, Scopes: []access.Permission{access.ReadCapture}}
 	query := domain.Query{ProjectID: project, Text: "needle", Mode: "hybrid", History: true, Kinds: []string{"session"}, Limit: 20}
 	hybrid, err := service.Search(ctx, principal, query)
-	if err != nil || len(hybrid.Items) != 2 {
+	if err != nil || len(hybrid.Items) != 3 {
 		t.Fatal("partial backfill lost a lexical match or included an unrelated chunk", hybrid, err)
+	}
+	if hybrid.Items[0].Metadata.Model != "both" || hybrid.Items[0].Score <= hybrid.Items[1].Score {
+		t.Fatal("overlapping lanes were not fused into one preferred part", hybrid)
 	}
 	seen := map[string]bool{}
 	for _, hit := range hybrid.Items {
@@ -359,7 +363,7 @@ func TestSparseEmbeddingsPreserveUnindexedLexicalMatches(t *testing.T) {
 	}
 	query.Mode = "semantic"
 	semantic, err := service.Search(ctx, principal, query)
-	if err != nil || len(semantic.Items) != 1 || semantic.Items[0].Metadata.Model != "semantic" {
+	if err != nil || len(semantic.Items) != 2 {
 		t.Fatal("semantic search included an unembedded or wrong-profile message", semantic, err)
 	}
 }

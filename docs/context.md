@@ -1,6 +1,6 @@
 # Agent context
 
-Gitmora exposes six read-only MCP tools and matching JSON APIs. These read stored authorized observations; reading does not invoke a model or mutate a provider.
+Gitmora exposes six read-only MCP tools and matching JSON APIs. They read stored authorized observations and do not mutate providers. Optional semantic search uses the configured local embedding model; other context reads do not perform inference.
 
 | MCP tool | JSON API | Purpose |
 | --- | --- | --- |

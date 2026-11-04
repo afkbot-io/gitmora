@@ -18,7 +18,7 @@ type Reader interface {
 	Get(context.Context, access.Principal, string) (domain.Hit, error)
 }
 
-// Service exposes source references and excerpts, never an inference or an instruction to execute.
+// Service exposes source references and excerpts, never generated answers or instructions to execute.
 type Service struct {
 	reader     Reader
 	embeddings Embeddings

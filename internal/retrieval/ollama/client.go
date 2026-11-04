@@ -28,11 +28,13 @@ type Config struct {
 	QueryURL string
 }
 type Client struct {
-	config  Config
-	profile string
-	http    *http.Client
-	mu      sync.Mutex
-	queries map[string]cachedQuery
+	config    Config
+	profile   string
+	http      *http.Client
+	mu        sync.Mutex
+	queries   map[string]cachedQuery
+	warming   bool
+	warmAfter time.Time
 }
 
 type cachedQuery struct {
@@ -63,7 +65,9 @@ func New(c Config) (*Client, error) {
 	t := http.DefaultTransport.(*http.Transport).Clone()
 	t.Proxy = nil
 	t.MaxResponseHeaderBytes = 16384
-	return &Client{config: c, profile: domain.Hash(raw), http: &http.Client{Transport: t, Timeout: 30 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, queries: map[string]cachedQuery{}}, nil
+	// Search and indexing supply their own shorter deadlines. The transport ceiling
+	// also permits a bounded cold-model warmup independent of an expired request.
+	return &Client{config: c, profile: domain.Hash(raw), http: &http.Client{Transport: t, Timeout: 90 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}, queries: map[string]cachedQuery{}}, nil
 }
 func (c *Client) Profile() string { return c.profile }
 
@@ -108,6 +112,56 @@ func (c *Client) Embed(ctx context.Context, texts []string, query bool) ([][]flo
 	for i, text := range texts {
 		formatted[i] = prefix + text
 	}
+	vectors, err := c.requestVectors(ctx, endpoint, formatted)
+	if err != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			c.warmModel(endpoint)
+		}
+		return nil, err
+	}
+	if query {
+		c.mu.Lock()
+		if len(c.queries) >= 256 {
+			oldest := ""
+			var deadline time.Time
+			for key, value := range c.queries {
+				if oldest == "" || value.expires.Before(deadline) {
+					oldest, deadline = key, value.expires
+				}
+			}
+			delete(c.queries, oldest)
+		}
+		c.queries[cacheKey] = cachedQuery{append([]float32(nil), vectors[0]...), time.Now().Add(5 * time.Minute)}
+		c.mu.Unlock()
+	}
+	return vectors, nil
+}
+
+// warmModel lets a cold model finish loading after a search/indexing budget expires.
+// Only one bounded warmup runs per client, using fixed text rather than a retained
+// user query. A cooldown prevents an unavailable service from creating request storms.
+func (c *Client) warmModel(endpoint string) {
+	c.mu.Lock()
+	if c.warming || time.Now().Before(c.warmAfter) {
+		c.mu.Unlock()
+		return
+	}
+	c.warming = true
+	c.mu.Unlock()
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		defer cancel()
+		if c.verifyRevision(ctx, endpoint) == nil {
+			_, _ = c.requestVectors(ctx, endpoint, []string{c.config.QueryPrefix + "Gitmora model warmup"})
+		}
+		c.mu.Lock()
+		c.warming = false
+		c.warmAfter = time.Now().Add(15 * time.Second)
+		c.mu.Unlock()
+	}()
+}
+
+func (c *Client) requestVectors(ctx context.Context, endpoint string, formatted []string) ([][]float32, error) {
 	raw, _ := json.Marshal(struct {
 		Model     string         `json:"model"`
 		Input     []string       `json:"input"`
@@ -136,7 +190,7 @@ func (c *Client) Embed(ctx context.Context, texts []string, query bool) ([][]flo
 		Model      string      `json:"model"`
 		Embeddings [][]float32 `json:"embeddings"`
 	}
-	if json.Unmarshal(raw, &v) != nil || v.Model != c.config.Model || len(v.Embeddings) != len(texts) {
+	if json.Unmarshal(raw, &v) != nil || v.Model != c.config.Model || len(v.Embeddings) != len(formatted) {
 		return nil, ErrUnavailable
 	}
 	for i := range v.Embeddings {
@@ -144,21 +198,6 @@ func (c *Client) Embed(ctx context.Context, texts []string, query bool) ([][]flo
 		if e != nil {
 			return nil, ErrUnavailable
 		}
-	}
-	if query {
-		c.mu.Lock()
-		if len(c.queries) >= 256 {
-			oldest := ""
-			var deadline time.Time
-			for key, value := range c.queries {
-				if oldest == "" || value.expires.Before(deadline) {
-					oldest, deadline = key, value.expires
-				}
-			}
-			delete(c.queries, oldest)
-		}
-		c.queries[cacheKey] = cachedQuery{append([]float32(nil), v.Embeddings[0]...), time.Now().Add(5 * time.Minute)}
-		c.mu.Unlock()
 	}
 	return v.Embeddings, nil
 }

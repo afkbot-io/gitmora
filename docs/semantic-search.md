@@ -37,7 +37,7 @@ inference work across repeated immutable revisions without merging their history
 
 The optional overlay uses Ollama 0.40.14 and can run `embeddinggemma:300m` on CPU.
 Review the model's own license before redistributing its weights. Its output is
-768-dimensional; the prompt prefixes below follow its model card. Model size is about 622 MB on disk. The overlay runs two isolated model services, each bounded to 2 GB RAM and two CPU cores, sharing the same read-only weights. Allow up to 4 GB RAM plus PostgreSQL space for vectors. Interactive requests use `embedding-queries`; background batches use `embeddings`. Separate queues prevent long backfill inputs from delaying short search queries. Inference concurrency settings alone do not guarantee this isolation. This is a starting profile, not a capacity guarantee for concurrent teams.
+768-dimensional; the prompt prefixes below follow its model card. Model size is about 622 MB on disk. The overlay runs two isolated model services, each bounded to 2 GB RAM and two CPU cores, sharing the same read-only weights. Allow up to 4 GB RAM for the models and 2 GB for PostgreSQL in this profile, plus the ordinary API/identity services and disk space for vectors. Interactive requests use `embedding-queries`; background batches use `embeddings`. Separate queues prevent long backfill inputs from delaying short search queries. Inference concurrency settings alone do not guarantee this isolation. This is a starting profile, not a capacity guarantee for concurrent teams.
 
 Set `GITMORA_STATE` to your private installation directory. Provisioning temporarily
 uses an ordinary Docker network to download weights. It receives no source data:
@@ -82,8 +82,7 @@ no host port; the overlay sets `WORKGRAPH_EMBEDDING_QUERY_URL=http://embedding-q
 only on the API. For a custom deployment, set this optional variable to an isolated
 replica serving the identical model/digest. It changes routing without invalidating
 existing vectors. Both endpoints validate the pinned digest, including cached queries.
-Initial model loading can cause a bounded first-request fallback; repeat after the
-model has loaded. A separate `embedding-worker` backfills two chunks per batch and
+After startup or idle eviction, initial model loading can cause a bounded first-request fallback. If inference times out, one coalesced warmup per client lets the pinned model load independently for up to 90 seconds, using fixed probe text rather than retaining the user query. A 15-second cooldown bounds retries. Ordinary search/indexing deadlines stay unchanged; subsequent requests recover after loading completes. A separate `embedding-worker` backfills two chunks per batch and
 continues after restarts. Ordinary capture, provider synchronization and lexical
 indexing use their existing worker and do not wait for model inference.
 
@@ -130,10 +129,10 @@ not counts of relevant missing answers. While either is nonzero, semantic covera
 is incomplete. Similarity is a ranking signal, not proof that a source answers the
 question. The initial threshold is cosine 0.35; evaluate it with your corpus.
 
-Query vectors use a bounded in-memory cache (256 entries, five-minute expiry); no query text is logged or stored in that cache. Model digest is checked before cached vectors are reused.
+Text and vector lanes use separate bounded query plans and are fused by reciprocal rank over source parts; availability is checked per job before ranking. Query vectors use a bounded in-memory cache (256 entries, five-minute expiry); no query text is logged or stored in that cache. Model digest is checked before cached vectors are reused.
 
 Continuation pins the query, model profile, query-vector digest and index cutoff.
-Late vectors do not enter an existing page sequence. A bounded, user/query-bound snapshot stores only candidate IDs and scores for
+Late vectors do not enter an existing page sequence. A bounded, user/query-bound snapshot stores only candidate IDs and scores. Source bodies, paths and commit summaries are expanded only for the requested page. The snapshot is retained for
 15 minutes (at most 16 per user, with opportunistic expiry cleanup). Later pages
 reauthorize these candidates and do not invoke the model. Even an embedding write
 that began before the first search and committed afterward cannot reorder them.
