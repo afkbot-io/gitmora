@@ -1,5 +1,10 @@
 # Changes
 
+## 0.9.6 — 2026-11-04
+
+- Match the optional PostgreSQL shared buffer cache to its 2 GB memory profile: use 512 MB buffers/shared memory to retain history/vector pages between searches.
+- Stop all owned native-fixture descendants before deleting their temporary files. Verify three successful authenticated reads within a bounded 30-second database recovery window instead of assuming the first ready connection means the entire pool recovered.
+
 ## 0.9.5 — 2026-11-04
 
 - Keep only ID, grouping, time and score in ranking projections. Give optional semantic inference and fused retrieval separate bounded phase budgets: up to eight seconds overall and six seconds for database ranking; ordinary lexical reads remain bounded to five seconds. This preserves whole-history searches across all source kinds on smaller hosts.

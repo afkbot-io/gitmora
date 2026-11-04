@@ -14,9 +14,11 @@ import os
 from pathlib import Path
 import shlex
 import shutil
+import signal
 import subprocess
 import tempfile
 import threading
+import time
 import urllib.request
 import uuid
 
@@ -106,7 +108,27 @@ def main():
             Path(environment["HOME"]).mkdir()
 
             def run(*args, input_value=None, timeout=30):
-                return subprocess.run(args, cwd=repository, env=environment, capture_output=True, text=True, input=input_value, timeout=timeout)
+                # Native plugin refreshes can outlive the foreground CLI. Own the
+                # whole process group so no child writes into a removed fixture.
+                with subprocess.Popen(args, cwd=repository, env=environment, stdout=subprocess.PIPE,
+                                      stderr=subprocess.PIPE, text=True, start_new_session=True) as child:
+                    try:
+                        stdout, stderr = child.communicate(input_value, timeout=timeout)
+                        return subprocess.CompletedProcess(args, child.returncode, stdout, stderr)
+                    finally:
+                        try:
+                            os.killpg(child.pid, signal.SIGTERM)
+                            deadline = time.monotonic() + 2
+                            while time.monotonic() < deadline:
+                                try:
+                                    os.killpg(child.pid, 0)
+                                except ProcessLookupError:
+                                    break
+                                time.sleep(0.05)
+                            else:
+                                os.killpg(child.pid, signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
 
             def git(*args):
                 result = run("git", *args)

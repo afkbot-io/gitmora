@@ -99,11 +99,21 @@ def main():
             compose(["stop", "postgres"])
             assert request("/health/live")[0] == 200 and request("/health/ready")[0] == 503
             compose(["start", "postgres"])
-            for _ in range(30):
-                if request("/health/ready")[0] == 200:
+            # Shared runners can take longer to restart PostgreSQL than the old
+            # six-second polling window. Verify an authenticated read too: one
+            # ready connection does not drain every stale pooled connection.
+            deadline = time.monotonic() + 30
+            recovered = 0
+            while time.monotonic() < deadline:
+                ready = request("/health/ready")[0]
+                assert ready in (200, 503), "Unexpected readiness response during recovery"
+                status = request(source, token)[0] if ready == 200 else 503
+                assert status in (200, 503), "Stored capture/authentication changed during outage"
+                recovered = recovered + 1 if status == 200 else 0
+                if recovered == 3:
                     break
                 time.sleep(0.2)
-            assert request(source, token)[0] == 200, "API did not reconnect after database outage"
+            assert recovered == 3, "API did not reconnect after database outage"
             original = sql("SELECT checksum FROM schema_migrations WHERE name='migrations/0001_capture.sql'")
             sql("UPDATE schema_migrations SET checksum=repeat('f',64) WHERE name='migrations/0001_capture.sql'")
             assert request("/health/ready")[0] == 503
