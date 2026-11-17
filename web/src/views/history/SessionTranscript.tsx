@@ -296,7 +296,7 @@ export function SessionTranscript({
                 {t("Найти в загруженных сообщениях")}
               </span>
               <input
-                className="w-full text-sm"
+                className="w-full text-sm mobile:text-[16px]"
                 type="search"
                 placeholder={t("Найти в загруженных сообщениях")}
                 value={query}

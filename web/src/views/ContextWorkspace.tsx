@@ -288,11 +288,11 @@ export function ContextWorkspace({
             {loading ? t("Ищем…") : t("Найти")}
           </button>
         </div>
-        <div className="filters mt-3 flex flex-wrap items-center gap-3 border-t border-line pt-3 mobile:grid mobile:grid-cols-2">
+        <div className="filters mt-3 flex flex-wrap items-center gap-3 border-t border-line pt-3 mobile:grid mobile:grid-cols-1">
           <label className="m-0">
             <span className="sr-only">{t("Репозиторий")}</span>
             <select
-              className="min-w-45 text-sm mobile:w-full mobile:min-w-0"
+              className="min-w-45 text-sm mobile:text-[16px] mobile:w-full mobile:min-w-0"
               aria-label={t("Репозиторий")}
               value={repository}
               onChange={(e) => {
@@ -313,7 +313,7 @@ export function ContextWorkspace({
           <label className="m-0">
             <span className="sr-only">{t("Источник")}</span>
             <select
-              className="min-w-40 text-sm mobile:w-full mobile:min-w-0"
+              className="min-w-40 text-sm mobile:text-[16px] mobile:w-full mobile:min-w-0"
               aria-label={t("Источник")}
               value={kind}
               onChange={(e) => {
@@ -329,7 +329,7 @@ export function ContextWorkspace({
               ))}
             </select>
           </label>
-          <label className="checkbox m-0 ml-auto flex min-h-11 items-center gap-2 text-sm font-normal text-muted mobile:col-span-2 mobile:ml-0">
+          <label className="checkbox m-0 ml-auto flex min-h-11 items-center gap-2 text-sm font-normal text-muted mobile:col-span-1 mobile:ml-0">
             <input
               type="checkbox"
               checked={history}

@@ -93,6 +93,26 @@ export async function auditUI(
           overflow: document.documentElement.scrollWidth > innerWidth,
           verticalOverflow: document.documentElement.scrollHeight > innerHeight,
           mobileLayout: matchMedia("(max-width: 700px)").matches,
+          smallMobileFields: matchMedia("(max-width: 700px)").matches
+            ? [...document.querySelectorAll("input, select, textarea")]
+                .filter(
+                  (e) =>
+                    e.getClientRects().length &&
+                    ![
+                      "checkbox",
+                      "radio",
+                      "hidden",
+                      "submit",
+                      "button",
+                    ].includes(e.type) &&
+                    parseFloat(getComputedStyle(e).fontSize) < 16,
+                )
+                .map((e) => ({
+                  tag: e.tagName,
+                  id: e.id,
+                  fontSize: getComputedStyle(e).fontSize,
+                }))
+            : [],
           headings: [...document.querySelectorAll("h1")].filter(
             (e) => e.getClientRects().length > 0,
           ).length,
@@ -133,6 +153,11 @@ export async function auditUI(
           layout.overflow,
           false,
           `${key}: page overflows horizontally`,
+        );
+        assert.deepEqual(
+          layout.smallMobileFields,
+          [],
+          `${key}: native mobile fields must avoid focus zoom`,
         );
         if (fitViewport)
           assert.equal(

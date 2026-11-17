@@ -135,7 +135,7 @@
     @apply mt-0 leading-[1.7];
   }
   :is(input, select, textarea) {
-    @apply border border-line rounded-lg bg-paper text-ink text-sm font-medium min-h-10 px-3 py-2 max-w-full min-w-0 hover:border-control focus-visible:border-accent mobile:text-base mobile:min-h-11;
+    @apply border border-line rounded-lg bg-paper text-ink text-sm font-medium min-h-10 px-3 py-2 max-w-full min-w-0 hover:border-control focus-visible:border-accent mobile:text-[16px] mobile:min-h-11;
   }
   :is(input[type="checkbox"], input[type="radio"]) {
     @apply size-4 min-h-0 p-0 shrink-0 accent-accent;
