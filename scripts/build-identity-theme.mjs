@@ -82,7 +82,7 @@ await writeFile(
       `gitmoraLocaleScript=${localeScriptName}`,
     ),
 );
-for (const name of ["ibm-plex-sans", "ibm-plex-mono"]) {
+for (const name of ["manrope", "ibm-plex-mono"]) {
   await copyFile(
     resolve(`node_modules/@fontsource/${name}/LICENSE`),
     resolve(target, `${name}-LICENSE.txt`),

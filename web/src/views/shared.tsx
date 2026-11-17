@@ -3,22 +3,21 @@ import type { ReactNode } from "react";
 
 export function Brand() {
   return (
-    <div
-      translate="no"
-      className="brand flex items-center gap-2 text-xl font-semibold tracking-[-0.6px]"
-    >
-      <svg
-        width="30"
-        height="30"
-        viewBox="0 0 30 30"
-        fill="none"
-        aria-hidden="true"
-      >
-        <path d="M7 7L23 15L7 23V7Z" stroke="currentColor" strokeWidth="2" />
-        <circle cx="7" cy="7" r="3" fill="currentColor" />
-        <circle cx="23" cy="15" r="3" fill="currentColor" />
-        <circle cx="7" cy="23" r="3" fill="currentColor" />
-      </svg>
+    <div translate="no" className="brand">
+      <span className="brand-mark">
+        <svg
+          width="24"
+          height="24"
+          viewBox="0 0 30 30"
+          fill="none"
+          aria-hidden="true"
+        >
+          <path d="M7 7L23 15L7 23V7Z" stroke="currentColor" strokeWidth="2" />
+          <circle cx="7" cy="7" r="3" fill="currentColor" />
+          <circle cx="23" cy="15" r="3" fill="currentColor" />
+          <circle cx="7" cy="23" r="3" fill="currentColor" />
+        </svg>
+      </span>
       <span>Gitmora</span>
     </div>
   );
@@ -27,7 +26,7 @@ export function Brand() {
 export function ErrorNotice({ children }: { children: ReactNode }) {
   return children ? (
     <p
-      className="notice error px-4 py-4 mx-0 my-3 bg-danger-soft [border-left:3px_solid_var(--color-danger)] text-danger rounded-[0_5px_5px_0] wrap-anywhere"
+      className="notice error mx-0 my-3 rounded-lg border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger wrap-anywhere"
       role="alert"
     >
       {typeof children === "string" ? translate(children) : children}

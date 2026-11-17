@@ -155,146 +155,190 @@ export function Workspace({
     { view: "setup", label: "CLI и MCP", icon: "setup" },
   ] as const;
   return (
-    <div className="workspace grid min-h-dvh w-full grid-cols-[232px_minmax(0,1fr)] mobile:block">
+    <div className={`workspace ${project ? "" : "workspace-onboarding"}`}>
       <a
         className="skip absolute -top-25 left-64 z-50 bg-paper p-3 focus:top-3 mobile:left-4"
         href="#workspace-main"
       >
         {translate("К содержимому")}
       </a>
-      <aside className="sidebar sticky top-0 flex h-dvh min-w-0 flex-col overflow-y-auto border-r border-line bg-paper mobile:static mobile:h-auto mobile:overflow-visible mobile:border-r-0 mobile:border-b">
-        <div className="flex items-center justify-between gap-3 px-4 py-4 mobile:py-3">
-          <Brand />
-          <button
-            className="hidden mobile:inline-flex p-2 min-h-10 bg-canvas"
-            aria-label={translate("Разделы проекта")}
-            aria-expanded={menuOpen}
-            aria-controls="project-navigation"
-            onClick={() => setMenuOpen(!menuOpen)}
-          >
-            ☰
-          </button>
-        </div>
-        <div className="px-3 pb-4 mobile:pb-3">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <label
-              htmlFor="project"
-              className="text-xs text-muted mobile:sr-only"
+      <header className="workspace-header">
+        <div className="workspace-brand">
+          {project && (
+            <button
+              className="navigation-toggle"
+              aria-label={translate("Разделы проекта")}
+              aria-expanded={menuOpen}
+              aria-controls="project-navigation"
+              onClick={() => setMenuOpen(!menuOpen)}
             >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                aria-hidden="true"
+              >
+                <path d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+          )}
+          <a
+            href={`#view=context${selected ? "&project=" + selected : ""}`}
+            className="text-ink no-underline"
+          >
+            <Brand />
+          </a>
+        </div>
+        {projects.length > 0 && (
+          <div className="workspace-project">
+            <span className="project-avatar" aria-hidden="true">
+              {Array.from(project?.name ?? "G")[0]?.toUpperCase()}
+            </span>
+            <label htmlFor="project" className="sr-only">
               {translate("Проект")}
             </label>
+            <select
+              id="project"
+              className="project-select"
+              value={selected}
+              disabled={loading || !projects.length}
+              onChange={(e) => {
+                requests.cancel();
+                setLoading(false);
+                remember(e.target.value);
+                navigate(view, e.target.value);
+              }}
+            >
+              {!project && (
+                <option value="">{translate("Выберите проект")}</option>
+              )}
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
             {canCreate && project && (
               <button
-                className="min-h-8 min-w-8 rounded-md border-0 bg-transparent p-1 text-lg text-muted hover:bg-canvas hover:text-ink"
+                className="icon-button"
                 aria-label={translate("Создать проект")}
                 title={translate("Создать проект")}
                 onClick={() => setCreating(true)}
               >
-                ＋
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                  aria-hidden="true"
+                >
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+              </button>
+            )}
+            {next && (
+              <button
+                className={buttonStyles.text}
+                onClick={() => void load(next)}
+              >
+                {translate("Загрузить ещё")}
               </button>
             )}
           </div>
-          <select
-            id="project"
-            className="w-full text-sm font-medium"
-            value={selected}
-            disabled={loading || !projects.length}
-            onChange={(e) => {
-              requests.cancel();
-              setLoading(false);
-              remember(e.target.value);
-              navigate(view, e.target.value);
-            }}
-          >
-            {!project && (
-              <option value="">{translate("Выберите проект")}</option>
-            )}
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-          {next && (
-            <button
-              className={buttonStyles.text}
-              onClick={() => void load(next)}
-            >
-              {translate("Загрузить ещё")}
-            </button>
-          )}
-        </div>
-        <nav
-          id="project-navigation"
-          aria-label={translate("Разделы проекта")}
-          className={`flex flex-col gap-1 px-3 mobile:pb-3 ${menuOpen ? "" : "mobile:hidden"}`}
-        >
-          {project &&
-            navigation.map((item) => (
-              <a
-                key={item.view}
-                href={`#view=${item.view}&project=${selected}`}
-                aria-current={view === item.view ? "page" : undefined}
-                className={`flex min-h-11 items-center gap-3 rounded-md px-3 py-2 text-sm font-medium no-underline ${view === item.view ? "bg-accent-soft text-accent" : "text-muted hover:bg-canvas hover:text-ink"}`}
-                onClick={(event) => {
-                  if (
-                    event.metaKey ||
-                    event.ctrlKey ||
-                    event.shiftKey ||
-                    event.altKey ||
-                    event.button !== 0
-                  )
-                    return;
-                  if (menuOpen)
-                    requestAnimationFrame(() => main.current?.focus());
-                  setCurrentView(item.view);
-                  setMenuOpen(false);
-                }}
-              >
-                <Icon name={item.icon} />
-                {translate(item.label)}
-              </a>
-            ))}
-        </nav>
-        <div className="account mt-auto border-t border-line p-4 mobile:flex mobile:items-center mobile:justify-between mobile:gap-3">
+        )}
+        <div className="account workspace-account">
           <a
             href={`#view=preferences${selected ? "&project=" + selected : ""}`}
-
-            className="flex min-w-0 items-center gap-3 text-ink no-underline hover:text-accent"
-            onClick={() => setCurrentView("preferences")}
+            aria-label={`${me.user.username ? "@" + me.user.username : me.user.display_name} · ${translate("Личные настройки")}`}
+            title={translate("Личные настройки")}
+            className={`account-link ${view === "preferences" || view === "keys" ? "bg-accent-soft" : ""}`}
+            onClick={(event) => {
+              if (
+                event.metaKey ||
+                event.ctrlKey ||
+                event.shiftKey ||
+                event.altKey ||
+                event.button !== 0
+              )
+                return;
+              setCurrentView("preferences");
+              setMenuOpen(false);
+            }}
           >
-            <span
-              aria-hidden="true"
-              className="flex size-9 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent font-semibold"
-            >
-              {Array.from(me.user.display_name)[0]?.toUpperCase() ?? "G"}
+            <span aria-hidden="true" className="account-avatar">
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+              >
+                <circle cx="12" cy="8" r="4" />
+                <path d="M5 21v-2a7 7 0 0 1 14 0v2" />
+              </svg>
             </span>
-            <span className="min-w-0">
-              <strong className="block truncate text-sm">
-                {me.user.username
-                  ? "@" + me.user.username
-                  : me.user.display_name}
-              </strong>
-              <span className="block text-xs text-muted">
-                {translate("Личные настройки")}
-              </span>
+            <span className="max-w-40 truncate compact:hidden">
+              {me.user.username ? "@" + me.user.username : me.user.display_name}
             </span>
           </a>
           <button
-            className={buttonStyles.text + " mt-2 mobile:mt-0"}
+            className={buttonStyles.text + " ml-2 mobile:ml-0"}
             onClick={() => void logout()}
           >
             {translate("Выйти")}
           </button>
         </div>
-      </aside>
+      </header>
+      {project && (
+        <aside className="sidebar">
+          <p className="nav-caption">{translate("Проект")}</p>
+          <nav
+            id="project-navigation"
+            aria-label={translate("Разделы проекта")}
+            className={`project-navigation ${menuOpen ? "" : "mobile:hidden"}`}
+          >
+            {project &&
+              navigation.map((item) => (
+                <a
+                  key={item.view}
+                  href={`#view=${item.view}&project=${selected}`}
+                  aria-current={view === item.view ? "page" : undefined}
+                  className={`nav-link ${view === item.view ? "bg-accent-soft text-accent font-extrabold" : "text-muted hover:bg-canvas hover:text-accent"}`}
+                  onClick={(event) => {
+                    if (
+                      event.metaKey ||
+                      event.ctrlKey ||
+                      event.shiftKey ||
+                      event.altKey ||
+                      event.button !== 0
+                    )
+                      return;
+                    if (menuOpen)
+                      requestAnimationFrame(() => main.current?.focus());
+                    setCurrentView(item.view);
+                    setMenuOpen(false);
+                  }}
+                >
+                  <Icon name={item.icon} />
+                  {translate(item.label)}
+                </a>
+              ))}
+          </nav>
+        </aside>
+      )}
       <main
         id="workspace-main"
         ref={main}
         tabIndex={-1}
-        className="main min-w-0 min-h-dvh"
+        className="main workspace-main"
       >
-        <div className="p-6 mobile:p-4">
+        <div className="workspace-content">
           <ErrorNotice>{error}</ErrorNotice>
           {notice && (
             <div>
@@ -329,7 +373,7 @@ export function Workspace({
           ) : loading && !projects.length ? (
             <p role="status">{translate("Загружаем проекты…")}</p>
           ) : !project ? (
-            <section className="mx-auto grid min-h-[calc(100dvh-3rem)] w-full max-w-5xl grid-cols-2 items-center gap-12 compact:grid-cols-1 compact:content-center compact:gap-6 mobile:min-h-0 mobile:py-6">
+            <section className="mx-auto grid min-h-[calc(100dvh-142px)] w-full max-w-5xl grid-cols-2 items-center gap-12 compact:grid-cols-1 compact:content-center compact:gap-6 mobile:min-h-0 mobile:py-6">
               <div>
                 <h1 className="mb-3 text-3xl mobile:text-2xl">
                   {translate("Создайте первый проект")}

@@ -51,7 +51,7 @@ export async function signInAs(page, fixture, token = fixture.admin) {
   assert.ok(control.ok);
   await page.goto(fixture.url);
   await page.getByRole("link", { name: "Войти", exact: true }).click();
-  await page.locator(".sidebar").waitFor();
+  await page.locator(".workspace").waitFor();
 }
 
 const workspaceSections = new Set([

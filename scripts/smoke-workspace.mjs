@@ -497,6 +497,22 @@ try {
   await audit("mcp");
   await nav("Личные настройки");
   await audit("preferences");
+  for (const [label, theme] of [
+    ["Тёмная тема", "dark"],
+    ["Светлая тема", "light"],
+  ]) {
+    const choice = page.getByRole("button", { name: label, exact: true });
+    await choice.click();
+    assert.equal(await choice.getAttribute("aria-pressed"), "true");
+    await page.reload();
+    assert.equal(await page.locator("html").getAttribute("data-theme"), theme);
+    assert.equal(
+      await page
+        .getByRole("button", { name: label, exact: true })
+        .getAttribute("aria-pressed"),
+      "true",
+    );
+  }
   await page.getByLabel("Язык", { exact: true }).selectOption("en");
   await page
     .getByRole("heading", { name: "Personal settings", exact: true })

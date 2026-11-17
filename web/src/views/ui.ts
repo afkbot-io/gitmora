@@ -1,9 +1,9 @@
 /** Complete shared Tailwind variants; semantic markers support existing browser inspection. */
 export const buttonStyles = {
   secondary:
-    "secondary bg-paper text-ink border-control [&:hover:not(:disabled)]:bg-canvas [&:hover:not(:disabled)]:border-muted",
+    "secondary bg-paper text-ink border-line [&:hover:not(:disabled)]:bg-canvas [&:hover:not(:disabled)]:border-control",
   primary:
-    "primary bg-action text-white [&:hover:not(:disabled)]:bg-action-hover",
+    "primary bg-action text-white shadow-xs [&:hover:not(:disabled)]:bg-action-hover",
   text: "text-button px-0 py-1 min-h-8 bg-transparent border-0 hover:underline hover:text-accent-hover text-accent justify-start text-sm [&.mono]:whitespace-normal [&.mono]:text-left [&.mono]:wrap-anywhere [&.mono]:max-w-full",
   dangerOutline:
     "danger-outline bg-paper text-danger border-danger [&:hover:not(:disabled)]:bg-danger-soft",

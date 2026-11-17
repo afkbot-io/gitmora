@@ -4,6 +4,7 @@ import os
 import pty
 import select
 import subprocess
+import termios
 import time
 from pathlib import Path
 
@@ -28,10 +29,13 @@ def create_user(root: Path, directory: Path, environment: dict, username: str, p
                 if not data:
                     break
                 transcript += data
-                if sent == 0 and b'Password (at least' in transcript:
-                    os.write(master, password.encode() + b'\n'); sent = 1
-                if sent == 1 and b'Repeat password:' in transcript:
-                    os.write(master, password.encode() + b'\n'); sent = 2
+            # A prompt can reach the PTY before ReadPassword disables echo. Wait
+            # for the actual terminal state, rather than racing it with a paste.
+            echo_disabled = not (termios.tcgetattr(master)[3] & termios.ECHO)
+            if echo_disabled and sent == 0 and b'Password (at least' in transcript:
+                os.write(master, password.encode() + b'\n'); sent = 1
+            elif echo_disabled and sent == 1 and b'Repeat password:' in transcript:
+                os.write(master, password.encode() + b'\n'); sent = 2
             if process.poll() is not None:
                 break
         stdout, _ = process.communicate(timeout=5)
