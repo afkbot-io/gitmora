@@ -40,7 +40,7 @@ export function MutationNotice({
       <ErrorNotice>{action.error}</ErrorNotice>
       {action.message && (
         <p
-          className="notice success px-4 py-4 mx-0 my-3 bg-success-soft text-success rounded-md"
+          className="notice success mx-0 my-3 rounded-lg border border-success/30 bg-success-soft px-4 py-3 text-sm text-success"
           role="status"
         >
           {translate(action.message)}
@@ -80,7 +80,7 @@ export function ConfirmAction({
     <dialog
       ref={dialog}
       className={`
-        confirm-dialog border border-line rounded-lg p-7 max-w-[min(540px,_calc(100vw_-_36px))]
+        confirm-dialog border border-line rounded-dialog p-7 max-w-[min(540px,_calc(100vw_-_36px))]
         bg-paper text-ink shadow-dialog [&::backdrop]:bg-brand/60 [&_h2]:text-2xl [&_h2]:mb-4
         [&_.actions]:mt-6 [&_.actions]:justify-end mobile:p-6
       `}

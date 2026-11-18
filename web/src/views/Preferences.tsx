@@ -20,7 +20,7 @@ export function Preferences({
   const [username, setUsername] = useState(me.user.username ?? "");
   const action = useMutation(client);
   return (
-    <section className="pb-8 max-w-180">
+    <section className="pb-8 max-w-210">
       <h1 className="mb-8">{translate("Личные настройки")}</h1>
       <section className="border-b border-line pb-8 mb-8">
         <h2>{translate("Профиль")}</h2>
@@ -41,10 +41,10 @@ export function Preferences({
             }
           }}
         >
-          <label>
+          <label className="block max-w-lg">
             {translate("Ник для приглашений")}
             <input
-              className="mt-2 w-full"
+              className="mt-2 block w-full"
               name="username"
               value={username}
               required

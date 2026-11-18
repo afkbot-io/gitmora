@@ -88,7 +88,7 @@ export function Keys({ client, me }: { client: ApiClient; me: Me }) {
         <h2>{translate("Текущее подключение")}</h2>
         <dl className={sharedStyles.connectionScope}>
           <dt>{translate("Идентификатор")}</dt>
-          <dd className="mono font-mono text-xs wrap-anywhere">
+          <dd className="mono font-mono text-xs mobile:text-[16px] wrap-anywhere">
             {me.token_id}
           </dd>
           <dt>{translate("Действует до")}</dt>
@@ -284,7 +284,7 @@ function KeyIssue({
                 />
                 <span>
                   {translate(item.label)}
-                  <small className="mono font-mono text-xs wrap-anywhere">
+                  <small className="mono font-mono text-xs mobile:text-[16px] wrap-anywhere">
                     {item.id}
                     {!me.scopes.includes(item.id)
                       ? translate(" — недоступно родителю")
@@ -361,13 +361,15 @@ function KeyDisclosure({
           {translate("Скрыть результат выпуска")}
         </button>
       </div>
-      <p className="mono font-mono text-xs wrap-anywhere">{value.token.id}</p>
+      <p className="mono font-mono text-xs mobile:text-[16px] wrap-anywhere">
+        {value.token.id}
+      </p>
       {value.secret && value.created ? (
         <>
           <label>
             {translate("Новый API-ключ")}
             <input
-              className="mono font-mono text-xs wrap-anywhere"
+              className="mono font-mono text-xs mobile:text-[16px] wrap-anywhere"
               value={value.secret}
               readOnly
               autoComplete="off"
@@ -390,7 +392,7 @@ function KeyDisclosure({
       <p className="small text-sm">
         {translate("Действует до")} {date(value.token.expires_at)}
         {translate(". Родитель:")}{" "}
-        <span className="mono font-mono text-xs wrap-anywhere">
+        <span className="mono font-mono text-xs mobile:text-[16px] wrap-anywhere">
           {value.token.parent_id ?? translate("корневой ключ")}
         </span>
         .
@@ -487,9 +489,11 @@ function KeyRow({
       </div>
       <dl className={sharedStyles.connectionScope}>
         <dt>{translate("Идентификатор")}</dt>
-        <dd className="mono font-mono text-xs wrap-anywhere">{item.id}</dd>
+        <dd className="mono font-mono text-xs mobile:text-[16px] wrap-anywhere">
+          {item.id}
+        </dd>
         <dt>{translate("Родитель")}</dt>
-        <dd className="mono font-mono text-xs wrap-anywhere">
+        <dd className="mono font-mono text-xs mobile:text-[16px] wrap-anywhere">
           {item.parent_id ?? translate("Корневой ключ")}
         </dd>
         <dt>{translate("Действует до")}</dt>

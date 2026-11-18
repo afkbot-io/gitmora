@@ -105,21 +105,33 @@
 
 <body class="${properties.kcBodyClass!}" data-page-id="login-${pageId}">
 <div class="auth-shell ${properties.kcLoginClass!}">
-    <header class="auth-header">
-        <a href="/" aria-label="${msg('gitmoraHome')}" class="brand flex items-center gap-3 text-2xl font-semibold text-ink no-underline" translate="no">
-          <svg width="30" height="30" viewBox="0 0 30 30" fill="none" aria-hidden="true"><path d="M7 7L23 15L7 23V7Z" stroke="currentColor" stroke-width="2"/><circle cx="7" cy="7" r="3" fill="currentColor"/><circle cx="23" cy="15" r="3" fill="currentColor"/><circle cx="7" cy="23" r="3" fill="currentColor"/></svg>Gitmora
+    <aside class="auth-aside">
+        <a href="/" aria-label="${msg('gitmoraHome')}" class="brand relative z-1 w-fit text-ink no-underline" translate="no">
+          <span class="brand-mark"><svg width="24" height="24" viewBox="0 0 30 30" fill="none" aria-hidden="true"><path d="M7 7L23 15L7 23V7Z" stroke="currentColor" stroke-width="2"/><circle cx="7" cy="7" r="3" fill="currentColor"/><circle cx="23" cy="15" r="3" fill="currentColor"/><circle cx="7" cy="23" r="3" fill="currentColor"/></svg></span>Gitmora
         </a>
-            <#if realm.internationalizationEnabled && locale.supported?size gt 1>
-              <details class="relative text-sm text-muted">
-                <summary class="cursor-pointer w-fit ml-auto rounded-md border border-control px-3 py-2 min-h-11">${locale.current}</summary>
-                <nav aria-label="${msg('languages')}" class="absolute right-0 z-10 mt-2 min-w-40 rounded-md border border-line bg-paper p-2 shadow-sm grid gap-1">
-                  <#list locale.supported as l><a class="rounded px-3 py-2 min-h-11 flex items-center no-underline hover:bg-canvas" href="${l.url}">${l.label}</a></#list>
-                </nav>
-              </details>
-            </#if>
-    </header>
-    <main class="auth-panel">
+        <div class="auth-story">
+          <span class="auth-pill">${msg('gitmoraStoryPill')}</span>
+          <h2>${msg('gitmoraStoryLine1')}<br/>${msg('gitmoraStoryLine2')}<br/><em>${msg('gitmoraStoryLine3')}</em></h2>
+          <p>${msg('gitmoraStoryDescription')}</p>
+          <ol class="auth-diagram list-none p-0">
+            <li><span>01</span><strong>${msg('gitmoraDialogue')}</strong><small>${msg('gitmoraDialogueDescription')}</small></li>
+            <li><span>02</span><strong>${msg('gitmoraCommit')}</strong><small>${msg('gitmoraCommitDescription')}</small></li>
+            <li><span>03</span><strong>MR / PR</strong><small>${msg('gitmoraChangeDescription')}</small></li>
+          </ol>
+        </div>
+        <span class="auth-footer">${msg('gitmoraStoryFooter')}</span>
+    </aside>
+    <main class="auth-main">
+        <#if realm.internationalizationEnabled && locale.supported?size gt 1>
+          <details class="auth-language">
+            <summary class="cursor-pointer w-fit ml-auto rounded-lg border border-transparent px-3 py-2 min-h-10">${locale.current}</summary>
+            <nav aria-label="${msg('languages')}" class="absolute right-0 z-10 mt-2 min-w-40 rounded-lg border border-line bg-paper p-2 shadow-sm grid gap-1">
+              <#list locale.supported as l><a class="rounded-md px-3 py-2 min-h-10 flex items-center no-underline hover:bg-canvas" href="${l.url}">${l.label}</a></#list>
+            </nav>
+          </details>
+        </#if>
       <div class="auth-card ${properties.kcFormCardClass!}">
+        <div class="auth-icon" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></svg></div>
         <header class="${properties.kcFormHeaderClass!}">
         <#if !(auth?has_content && auth.showUsername() && !auth.showResetCredentials())>
             <#if displayRequiredFields>
@@ -167,6 +179,8 @@
             </#if>
         </#if>
       </header>
+      <#if pageId == 'login'><p class="auth-description">${msg('gitmoraLoginDescription')}</p>
+      <#elseif pageId == 'register'><p class="auth-description">${msg('gitmoraRegisterDescription')}</p></#if>
       <div id="kc-content">
         <div id="kc-content-wrapper">
 

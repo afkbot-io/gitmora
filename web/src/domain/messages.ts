@@ -107,7 +107,6 @@ export const english: Readonly<Record<string, string>> = {
   "Выпустить личный ключ": "Issue personal key",
   "Выше — предыдущая переписка, вне выбранного изменения":
     "Earlier session history above is outside this change",
-  "Готово к проверке": "Ready for review",
   "Данные изменились. Обновите страницу и повторите действие.":
     "The data has changed. Refresh and try again.",
   "Данные источника. Авторство указано внешним инструментом; строки без меток имеют неизвестное происхождение.":
@@ -189,7 +188,6 @@ export const english: Readonly<Record<string, string>> = {
   "Идентификатор проекта": "Project ID",
   "Идентификаторы источника": "Source identifiers",
   "Изменение файла": "File change",
-  "Изменения в коде": "Code changes",
   "Изменить доступ": "Edit access",
   "Импорт:": "Import:",
   "Импортированный отчёт": "Imported report",
@@ -304,7 +302,6 @@ export const english: Readonly<Record<string, string>> = {
   "Обновить список ключей": "Refresh keys",
   "Обновить участников": "Refresh members",
   Обновлено: "Updated",
-  "Обсуждение и изменения": "Discussion and changes",
   "Обсуждение этого изменения": "Discussion of this change",
   "Объедините репозитории и команду в одном проекте.":
     "Bring your repositories and team together in one project.",
@@ -398,9 +395,6 @@ export const english: Readonly<Record<string, string>> = {
   "Предыдущие сообщения сессии": "Earlier session messages",
   "Привязка уже существует или её версия изменилась. Обновите OIDC-привязки перед новым изменением.":
     "The binding already exists or has changed. Refresh the list before editing.",
-  "Пример: проект, сессия агента, коммит и merge request":
-    "Example: project, agent session, commit and merge request",
-  "Пример: работа над входом": "Example: updating sign-in",
   Провайдер: "Provider",
   "Проверить подключение": "Check connection",
   "Проверки CI": "CI checks",
@@ -650,4 +644,15 @@ export const english: Readonly<Record<string, string>> = {
     "GitLab → Settings → Access tokens. Create a token with read_api and access to the projects.",
   "GitHub → Settings → Developer settings → Fine-grained tokens. Выберите нужные репозитории и разрешите Contents, Pull requests и Actions: Read-only.":
     "GitHub → Settings → Developer settings → Fine-grained tokens. Select the repositories and grant Contents, Pull requests and Actions: Read-only.",
+  "Контекст вашей команды": "Your team’s context",
+  "От диалога": "From conversation",
+  "к коммиту.": "to commit.",
+  "Вся история рядом.": "Every detail connected.",
+  "Находите решения в переписке с агентами и возвращайтесь к коду с нужным контекстом.":
+    "Find decisions in agent conversations and return to the code with the context you need.",
+  "Запросы, ответы и действия агента": "Prompts, replies and agent actions",
+  "Код и история его появления": "The code and how it came to be",
+  "Переписка к конкретному изменению": "Conversations behind a specific change",
+  "Сессии. Коммиты. Контекст.": "Sessions. Commits. Context.",
+  "Светлая тема": "Light theme",
 };

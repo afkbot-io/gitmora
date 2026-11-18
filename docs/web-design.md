@@ -1,17 +1,17 @@
 # Gitmora interface contract
 
-The workspace serves engineers who need to find the exact task, agent session, commit and MR behind a change. Search and original evidence take priority; settings are secondary.
+The workspace serves engineers who need to find the exact agent session, commit and MR behind a change. Search and original evidence take priority; settings are secondary.
 
 Mutation forms keep a normal disabled fieldset and apply their supplied layout to that fieldset. Base resets remove native border/padding; utility classes supply the intended panel/grid. Do not use `display: contents` on the fieldset: WebKit can retain inherited dark label colors after a theme switch. The actual iPhone settings matrix covers this regression. Hosted account pages must supply exactly one device-width viewport; desktop resizing alone does not verify phone rendering.
 
-Palette: ink `#172B46`, canvas `#F5F7FB`, paper `#FFFFFF`, accent `#335CDE`, boundary `#DEE5F0`, muted text `#52647C`. Semantic danger/success colors indicate real outcomes only. IBM Plex Sans carries Russian/English interface prose; IBM Plex Mono is used for source, commands and hashes. Fonts ship locally.
+Palette: ink `#172B46`, canvas `#F5F7FB`, paper `#FFFFFF`, accent `#335CDE`, boundary `#DEE5F0`, muted text `#52647C`. Semantic danger/success colors indicate real outcomes only. Manrope carries Russian/English interface prose; IBM Plex Mono is used for source, commands and hashes. Fonts ship locally.
 
-Left-aligned project rail, query/results surface, exact evidence inspector. Mobile stacks the inspector below results and wraps navigation without horizontal overflow. Login and registration reuse the same foundations; a developer should recognize the same account through browser login and CLI consent.
+A 66px top bar holds the brand, project selector and personal account. A 218px navigation rail sits below it; the query/results surface and exact evidence inspector fill the rest of the screen. Mobile stacks the inspector below results and wraps navigation without horizontal overflow. The landing and hosted account forms share a split layout: a quiet accent story panel on the left, a 370px form column on the right. On phones only the brand and form remain. Login and registration reuse the same foundations; a developer should recognize the same account through browser login and CLI consent.
 
 ```text
-Project rail | Search / sessions / tasks / MR | Exact source
-             | Repositories / integrations  | Commit and task links
-             | Team / access / account       |
+Project bar  | Project selector              | Personal account
+Project rail | Search / sessions / commits   | Exact source
+             | Repositories / team / setup   | MR / PR links
 ```
 
 Review of the plan: keep the useful repository structure and restrained palette, remove ornamental product claims and advanced AI panels, expose the actual engineering artifacts. Do not add metric cards without real data. Login should identify Gitmora directly; the identity engine is an implementation detail.
@@ -23,7 +23,7 @@ Tailwind owns layout and styles. Shared tokens and typed variants define control
 
 Both `light` and `dark` use the same semantic tokens: canvas, paper, ink, muted, line, control, accent/action, danger and success. Light remains white/cool grey with blue actions; dark uses navy surfaces, pale text and an independently contrast-checked action fill. Status colors convey actual state. Inputs, dialogs, tables, code/evidence panels and native account controls inherit these tokens; hard-coded white surfaces are excluded from active components.
 
-Spacing follows Tailwind's 4px scale (8/12/16/24/32/40/56px by purpose). Primary controls have a 44px minimum height; compact text actions retain a 32px target; form panels use 24px padding and 16px on mobile. The rail is 240px (224px compact); the content uses 40px desktop / 24px compact / 16px mobile gutters. Typography uses a shared 12/14/16/18/20/24/30px scale. Body/source text keeps bounded line lengths; identifiers and long external content wrap without widening the viewport. Shared `buttonStyles` and `sharedStyles` own action, heading, form-grid, notice and panel primitives.
+Spacing follows Tailwind's 4px scale (8/12/16/24/32/40/56px by purpose). Desktop buttons have a 38px minimum height, fields 40px, and mobile controls 44px with 16px text to avoid native focus zoom; compact text actions retain a 32px target. Controls use 8px corners, form panels 20/24px padding and 16px on mobile. The rail is 218px; the content uses 32px desktop / 16px mobile gutters. Typography uses a shared 12/13/14/18/20/28px scale, with 14px body text and stronger headings. Body/source text keeps bounded line lengths; identifiers and long external content wrap without widening the viewport. Shared `buttonStyles` and `sharedStyles` own action, heading, form-grid, notice and panel primitives.
 
 The same tiny external bootstrap runs before React or account styles, under the existing CSP. It restores the validated `gitmora.theme` preference, defaults to the system, works when storage is blocked and synchronizes other tabs/system changes without overriding an explicit choice. Credentials never enter storage. React subscribes through `useSyncExternalStore`; the hosted FreeMarker adapter uses the same runtime, tokens, labels and control styles. `color-scheme` and browser chrome follow the selection.
 
@@ -38,7 +38,7 @@ The identity build writes an isolated bundle to `build/identity-theme/gitmora`, 
 
 The main artifact is one human–agent conversation. A storage window is a part of that conversation, never a separate conversation in the related list. Group only server-verified chains by repository and root; unverified windows stay separate. Cards show the original request, agent, date and available parts. Open a selected part without losing its identity.
 
-Keep the existing palette (ink #172B46, canvas #F5F7FB, paper #FFFFFF, accent #335CDE, boundary #DEE5F0, muted #52647C) and both semantic themes. IBM Plex Sans is for conversation text; Mono is for commands and code. The workspace stays full width, with a readable 80-character conversation column and aligned, quiet metadata. Use 16/24px panel padding, 12/16px internal gaps and 24/32px section spacing through Tailwind utilities.
+Keep the existing palette (ink #172B46, canvas #F5F7FB, paper #FFFFFF, accent #335CDE, boundary #DEE5F0, muted #52647C) and both semantic themes. Manrope is for conversation text; Mono is for commands and code. The workspace stays full width, with a readable 80-character conversation column and aligned, quiet metadata. Use 16/24px panel padding, 12/16px internal gaps and 24/32px section spacing through Tailwind utilities.
 
 Compare three directions: a raw log table helps debugging but hides intent; separate chat bubbles for every tool call create thousands of noisy items; a conversation timeline with compact tool disclosures preserves chronology and keeps requests and responses readable. Use the third. User requests have a restrained accent surface, assistant prose uses the page, consecutive tools share an activity disclosure. Commands, outputs and raw source remain available without automatic execution or remote image loads. Markdown uses a maintained safe renderer, not handwritten HTML parsing. Technical identity/revision controls live under details.
 
@@ -48,4 +48,9 @@ Review against the brief: this is a source-history reader, not a chatbot compose
 
 ## PR-scoped reading
 
-Keep the existing semantic palette and Plex typography. The navigation path is Search → PR/MR number → Dialogue for that change; the PR selector remains in the URL while reading. The default PR view never opens other PRs from the same native session. A dialogue card represents a family, not a storage window; metadata pages are consumed internally. The transcript uses message ranges tied to selected confirmed source commits. Missing range data is a visible gap with an explicit full-history escape hatch, never an automatic whole-session fallback. Use one document scroll owner with a sticky desktop project rail. Internal overflow belongs only to bounded code/output blocks. Append controls preserve the document reading anchor.
+Keep the existing semantic palette and Manrope typography. The navigation path is Search → PR/MR number → Dialogue for that change; the PR selector remains in the URL while reading. The default PR view never opens other PRs from the same native session. A dialogue card represents a family, not a storage window; metadata pages are consumed internally. The transcript uses message ranges tied to selected confirmed source commits. Missing range data is a visible gap with an explicit full-history escape hatch, never an automatic whole-session fallback. Use one document scroll owner with a sticky desktop project rail. Internal overflow belongs only to bounded code/output blocks. Append controls preserve the document reading anchor.
+
+
+## Reference design system
+
+The workspace and account presentation follow the supplied UCaseLab design language: locally bundled Manrope, compact controls, a project top bar, quiet row-based surfaces and a split account layout. Gitmora keeps its own blue/navy semantic palette, branding and source-reading behavior. `web/src/styles.css` owns Tailwind tokens and reusable composition classes; `views/ui.ts` owns typed control variants. The hosted theme imports the same styles and `fonts.css`; FreeMarker preserves the provider form slots, actions, validation and password manager attributes. Do not copy reference product features or its backend account model.

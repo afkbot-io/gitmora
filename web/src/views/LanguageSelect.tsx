@@ -38,7 +38,7 @@ export function LanguageSelect({
         }
         className={
           compact
-            ? "border-transparent bg-transparent text-sm min-h-11"
+            ? "border-transparent bg-transparent text-sm mobile:text-[16px] min-h-11"
             : "w-full"
         }
       >

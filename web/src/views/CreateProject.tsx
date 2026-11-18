@@ -103,7 +103,7 @@ export function CreateProject({
         if (action.pending || opening) e.preventDefault();
         else onClose();
       }}
-      className="w-120 max-w-[calc(100vw-2rem)] rounded-lg border border-line p-6 shadow-dialog backdrop:bg-brand/60"
+      className="w-120 max-w-[calc(100vw-2rem)] rounded-dialog border border-line p-6 shadow-dialog backdrop:bg-brand/60"
     >
       <h2 id="new-project-title" className="mb-2">
         {translate("Новый проект")}

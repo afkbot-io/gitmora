@@ -39,6 +39,8 @@ The optional overlay uses Ollama 0.40.14 and can run `embeddinggemma:300m` on CP
 Review the model's own license before redistributing its weights. Its output is
 768-dimensional; the prompt prefixes below follow its model card. Model size is about 622 MB on disk. The overlay runs two isolated model services, each bounded to 2 GB RAM and two CPU cores, sharing the same read-only weights. Allow up to 4 GB RAM for the models and 2 GB for PostgreSQL in this profile (including a 512 MB shared buffer cache), plus the ordinary API/identity services and disk space for vectors. Interactive requests use `embedding-queries`; background batches use `embeddings`. Separate queues prevent long backfill inputs from delaying short search queries. Inference concurrency settings alone do not guarantee this isolation. This is a starting profile, not a capacity guarantee for concurrent teams.
 
+The semantic overlay disables PostgreSQL JIT compilation (`jit=off`) so short ranking requests do not spend their query budget compiling execution plans. This is a database runtime setting; it does not change source data, vectors or access rules.
+
 Set `GITMORA_STATE` to your private installation directory. Provisioning temporarily
 uses an ordinary Docker network to download weights. It receives no source data:
 

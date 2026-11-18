@@ -22,8 +22,15 @@
 
 @theme {
   --shadow-dialog: 0 18px 70px #172b4626;
-  --font-sans: "IBM Plex Sans", sans-serif;
+  --radius-dialog: 14px;
+  --font-sans: "Manrope", sans-serif;
   --font-mono: "IBM Plex Mono", monospace;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-lg: 18px;
+  --text-xl: 20px;
+  --text-2xl: 28px;
   --color-ink: #172b46;
   --color-canvas: #f5f7fb;
   --color-paper: #fff;
@@ -48,7 +55,7 @@
 
 @layer base {
   :root {
-    @apply font-sans text-ink bg-canvas font-normal leading-normal [font-synthesis:none];
+    @apply font-sans text-ink bg-canvas leading-normal [font-synthesis:none];
     color-scheme: light;
   }
   :root[data-theme="dark"] {
@@ -73,11 +80,14 @@
     --color-success-soft: #193a2d;
     --shadow-dialog: 0 20px 64px #0006;
   }
+  :root:has(.workspace) {
+    @apply scroll-pt-[82px] mobile:scroll-pt-[142px];
+  }
   * {
     @apply box-border;
   }
   body {
-    @apply m-0;
+    @apply m-0 text-base font-medium;
   }
   fieldset {
     @apply min-w-0 m-0 p-0 border-0;
@@ -106,23 +116,26 @@
     @apply text-accent underline-offset-4;
   }
   :is(button, a, input, select, textarea, summary):focus-visible {
-    @apply outline-3 outline-accent outline-offset-3;
+    @apply outline-2 outline-accent outline-offset-3;
   }
   :is(h1, h2, h3) {
     @apply mt-0 wrap-anywhere text-balance;
     scroll-margin-top: 1rem;
   }
   h1 {
-    @apply text-2xl leading-tight tracking-tight font-semibold;
+    @apply text-2xl leading-[1.3] tracking-[-0.9px] font-extrabold;
   }
   h2 {
-    @apply text-lg leading-snug font-semibold mb-3;
+    @apply text-lg leading-snug tracking-[-0.35px] font-extrabold mb-3;
+  }
+  h3 {
+    @apply text-[15px] font-bold;
   }
   p {
-    @apply mt-0;
+    @apply mt-0 leading-[1.7];
   }
   :is(input, select, textarea) {
-    @apply border border-control rounded-md bg-paper text-ink min-h-11 px-3 py-2 max-w-full;
+    @apply border border-line rounded-lg bg-paper text-ink text-sm font-medium min-h-10 px-3 py-2 max-w-full min-w-0 hover:border-control focus-visible:border-accent mobile:text-[16px] mobile:min-h-11;
   }
   :is(input[type="checkbox"], input[type="radio"]) {
     @apply size-4 min-h-0 p-0 shrink-0 accent-accent;
@@ -135,11 +148,11 @@
     @apply text-placeholder;
   }
   label {
-    @apply text-ink text-sm font-medium block mb-2;
+    @apply text-muted text-xs font-bold block mb-2;
   }
   button,
   .action-link {
-    @apply bg-paper text-ink rounded-md px-4 py-2 min-h-11 border border-transparent font-medium no-underline inline-flex justify-center items-center gap-2;
+    @apply bg-paper text-ink text-sm rounded-lg px-3.5 py-2 min-h-[38px] border border-transparent font-bold no-underline inline-flex justify-center items-center gap-2 mobile:min-h-11;
   }
   dd {
     @apply m-0 wrap-anywhere;
@@ -152,36 +165,143 @@
 }
 
 @layer components {
-  .landing-preview {
-    @apply relative py-5 mobile:py-0;
+  .brand {
+    @apply inline-flex items-center gap-2.5 text-[19px] font-extrabold tracking-[-0.8px];
+  }
+  .brand-mark {
+    @apply grid size-8 shrink-0 place-items-center rounded-[9px] bg-action text-white;
+  }
+  .workspace {
+    @apply grid min-h-dvh w-full grid-cols-[218px_minmax(0,1fr)] grid-rows-[66px_1fr] mobile:block;
+  }
+  .workspace-onboarding {
+    @apply grid-cols-1;
+  }
+  .workspace-header {
+    @apply sticky top-0 z-30 col-span-full flex min-w-0 items-center gap-6 border-b border-line bg-paper px-6 compact:gap-4 mobile:flex-wrap mobile:gap-x-3 mobile:gap-y-0 mobile:px-4;
+  }
+  .workspace-brand {
+    @apply flex w-[170px] shrink-0 items-center gap-2 compact:w-auto mobile:h-16 mobile:w-auto;
+  }
+  .navigation-toggle {
+    @apply hidden size-10 shrink-0 items-center justify-center border-0 bg-transparent p-2 text-muted hover:bg-canvas mobile:inline-flex;
+  }
+  .workspace-project {
+    @apply flex min-w-0 items-center gap-2.5 border-l border-line pl-6 compact:flex-1 compact:pl-4 mobile:order-3 mobile:flex-none mobile:basis-full mobile:w-full mobile:border-t mobile:border-l-0 mobile:py-2 mobile:pl-0;
+  }
+  .project-avatar {
+    @apply grid size-7 shrink-0 place-items-center rounded-[7px] bg-accent-soft text-[11px] font-extrabold text-accent;
+  }
+  .project-select {
+    @apply min-h-[38px] w-60 border-transparent bg-transparent pl-0 font-bold hover:border-transparent compact:w-full compact:max-w-60 compact:flex-1 mobile:w-auto mobile:max-w-none mobile:flex-1;
+  }
+  .icon-button {
+    @apply size-8 min-h-8 shrink-0 rounded-md border-0 bg-transparent p-1.5 text-muted hover:bg-canvas hover:text-accent mobile:size-11 mobile:min-h-11;
+  }
+  .workspace-account {
+    @apply ml-auto flex min-w-0 items-center gap-2;
+  }
+  .account-link {
+    @apply flex min-h-10 min-w-0 items-center gap-2.5 rounded-lg p-1 text-sm font-bold text-ink no-underline hover:bg-canvas hover:text-accent;
+  }
+  .account-avatar {
+    @apply grid size-8 shrink-0 place-items-center rounded-full bg-canvas text-xs font-extrabold text-muted;
+  }
+  .sidebar {
+    @apply sticky top-[66px] flex h-[calc(100dvh-66px)] min-w-0 flex-col gap-1 overflow-y-auto border-r border-line bg-paper px-3 pt-6 pb-4 mobile:static mobile:h-auto mobile:overflow-visible mobile:border-r-0 mobile:border-b mobile:p-0;
+  }
+  .nav-caption {
+    @apply mx-3 mb-3 text-[11px] text-muted mobile:hidden;
+  }
+  .project-navigation {
+    @apply flex flex-col gap-1 mobile:p-3;
+  }
+  .nav-link {
+    @apply flex min-h-10 items-center gap-2.5 rounded-[7px] px-3 py-2.5 text-sm font-semibold no-underline mobile:min-h-11;
+  }
+  .workspace-main {
+    @apply min-w-0;
+  }
+  .workspace-content {
+    @apply px-8 pt-7 pb-12 mobile:px-4 mobile:pt-5 mobile:pb-8;
   }
   .auth-shell {
-    @apply min-h-dvh bg-paper;
+    @apply grid min-h-dvh grid-cols-[minmax(420px,47%)_minmax(0,1fr)] bg-paper compact:grid-cols-[43%_57%] mobile:block;
   }
-  .auth-header {
-    @apply flex items-center justify-between gap-4 mx-auto max-w-320 px-10 py-6 mobile:px-5 mobile:py-4;
+  .auth-aside {
+    @apply relative flex min-w-0 flex-col overflow-hidden border-r border-line bg-accent-soft px-[clamp(2rem,4vw,4.5rem)] py-9 compact:px-8 mobile:border-0 mobile:bg-paper mobile:px-6 mobile:py-5;
   }
-  .auth-panel {
-    @apply mx-auto w-full max-w-112 px-6 pt-[clamp(2rem,8vh,6rem)] pb-10 mobile:pt-6;
+  .auth-aside::after {
+    content: "";
+    @apply pointer-events-none absolute -right-50 top-22 size-150 rounded-full border border-accent/20 mobile:hidden;
   }
-  .theme-switch {
-    @apply min-h-11 gap-2 rounded-md border border-control bg-paper px-3 py-2 text-sm text-muted hover:bg-canvas hover:text-ink;
+  .auth-story {
+    @apply relative z-1 my-auto py-12 mobile:hidden;
+  }
+  .auth-pill {
+    @apply mb-6 inline-flex items-center gap-2 rounded-md border border-line bg-paper px-2.5 py-1.5 text-[11px] text-muted;
+  }
+  .auth-pill::before {
+    content: "";
+    @apply size-1.5 rounded-full bg-action;
+  }
+  .auth-story h2 {
+    @apply mb-5 text-[clamp(2.5rem,3.5vw,3.5rem)] font-extrabold leading-[1.25] tracking-[-2px];
+  }
+  .auth-story h2 em {
+    @apply not-italic text-accent;
+  }
+  .auth-story > p {
+    @apply max-w-90 text-sm leading-[1.9] text-muted;
+  }
+  .auth-diagram {
+    @apply mx-0 mt-8 mb-0 max-w-96 border-t border-line;
+  }
+  .auth-diagram li {
+    @apply grid grid-cols-[35px_1fr] gap-x-2.5 border-b border-line py-4;
+  }
+  .auth-diagram li > span {
+    @apply row-span-2 font-mono text-[11px] leading-6 text-muted;
+  }
+  .auth-diagram strong {
+    @apply text-sm font-bold;
+  }
+  .auth-diagram small {
+    @apply mt-1 text-xs text-muted;
+  }
+  .auth-footer {
+    @apply relative text-[11px] text-muted mobile:hidden;
+  }
+  .auth-main {
+    @apply relative flex min-w-0 items-center justify-center px-6 pt-20 pb-12 mobile:pt-14 mobile:pb-8;
+  }
+  .auth-language {
+    @apply absolute top-5 right-6 text-sm text-muted mobile:top-0;
   }
   .auth-card {
-    @apply mx-auto w-full max-w-sm;
+    @apply w-full max-w-[370px];
+  }
+  .auth-icon {
+    @apply mb-6 grid size-14 place-items-center rounded-[14px] bg-accent-soft text-accent;
   }
   .auth-card h1,
   .auth-card #kc-page-title {
-    @apply text-3xl font-semibold tracking-tight mb-3;
+    @apply mb-2.5 text-[26px] font-extrabold leading-[1.4] tracking-[-0.8px];
+  }
+  .auth-description {
+    @apply mb-7 text-sm leading-[1.9] text-muted;
   }
   .auth-card :is(input[type="checkbox"], input[type="radio"]) {
     @apply min-h-0 w-auto;
+  }
+  .theme-switch {
+    @apply min-h-10 gap-2 rounded-lg border border-line bg-paper px-3 py-2 text-sm text-muted hover:border-control hover:bg-canvas hover:text-ink;
   }
   .auth-card .required {
     @apply text-danger;
   }
   .auth-card .alert-error {
-    @apply bg-danger-soft text-danger border-danger;
+    @apply bg-danger-soft text-danger border-danger/30;
   }
   .auth-card .alert-success {
     @apply bg-success-soft text-success;

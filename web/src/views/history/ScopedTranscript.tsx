@@ -157,7 +157,7 @@ export function ScopedTranscript({
         <label className="m-0 min-w-40 flex-1">
           <span className="sr-only">{t("Найти в загруженных сообщениях")}</span>
           <input
-            className="w-full text-sm"
+            className="w-full text-sm mobile:text-[16px]"
             type="search"
             placeholder={t("Найти в загруженных сообщениях")}
             value={query}

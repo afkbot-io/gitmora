@@ -81,14 +81,9 @@ async function checkLocalTheme(page, name) {
   await page.screenshot({ path: `${output}/${name}.png`, fullPage: true });
   assert.match(
     await page.locator("body").evaluate((e) => getComputedStyle(e).fontFamily),
-    /IBM Plex Sans/,
+    /Manrope/,
   );
-  assert.equal(
-    await page
-      .locator(name === "entry-mobile" ? ".landing-header" : ".auth-header")
-      .count(),
-    1,
-  );
+  assert.equal(await page.locator(".auth-aside .brand").count(), 1);
   assert.equal(await page.locator("[data-theme-toggle]").count(), 0);
   assert.equal(
     await page.evaluate(
@@ -115,9 +110,9 @@ try {
   await p
     .getByRole("heading", { name: "Sign in to Gitmora", exact: true })
     .waitFor();
-  await p.locator(".auth-header summary").click();
+  await p.locator(".auth-language summary").click();
   await p
-    .locator(".auth-header nav")
+    .locator(".auth-language nav")
     .getByRole("link", { name: /русский/i })
     .click();
   assert.equal(await p.locator("html").getAttribute("lang"), "ru");
