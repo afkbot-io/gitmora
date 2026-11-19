@@ -6,6 +6,8 @@ The managed profile uses optimized Keycloak 26.8.1, its own PostgreSQL and priva
 
 Build the matching images with `make build-image` and `make build-identity-image`. `/auth` and private management paths are baked into the optimized image; runtime settings alone cannot change them. For a separate-host root profile, use `make build-identity-root-image` instead.
 
+The identity build downloads its pinned Guava and OpenTelemetry patches through the [Google-hosted Maven Central cache](https://docs.cloud.google.com/docs/buildpacks/java#google_cloud_hosted_maven_central_mirror). Each download must match the SHA-256 recorded in `deploy/identity/Dockerfile`; dependency versions and upstream classpath filenames remain pinned. Verify both artifact availability and checksums when updating these patches.
+
 Choose private existing parent directories and a new identity directory. Replace the public origins with your installation:
 
 ```sh
