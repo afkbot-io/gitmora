@@ -81,8 +81,16 @@ jobs:
           python-version: '3.13'
       - name: Install native verification prerequisites
         run: |
-          # Hosted images prefer regional mirrors that can stall dependency downloads.
-          printf '%s\n' 'https://archive.ubuntu.com/ubuntu/' | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
+          # Use APT's mirror failover and bounded retries, including Playwright's apt calls.
+          printf '%s\tpriority:%s\n' \
+            'https://azure.archive.ubuntu.com/ubuntu/' 1 \
+            'https://archive.ubuntu.com/ubuntu/' 2 \
+            | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
+          printf '%s\n' \
+            'Acquire::Retries "3";' \
+            'Acquire::http::Timeout "30";' \
+            'Acquire::https::Timeout "30";' \
+            | sudo tee /etc/apt/apt.conf.d/99gitmora-network-retries >/dev/null
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y nginx openssl libsecret-tools gnome-keyring dbus-x11
           npm ci
