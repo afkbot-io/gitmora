@@ -26,14 +26,15 @@ COPY --from=security-runtime /mnt/rootfs/ /
 
 FROM patched AS build
 USER 0
+# Use Google's Maven Central cache; pinned checksums verify the original artifact bytes.
 # Keep the upstream classpath filename; the checked JAR's Maven metadata/version is 33.7.2-jre.
 RUN test -f /opt/keycloak/lib/lib/main/com.google.guava.guava-33.6.0-jre.jar
-ADD --checksum=sha256:b530942257fb935f8b2cfaa5f8eb5bd59c555fd8e8d01b8ce98912e077ea606c --chown=1000:0 --chmod=0644 https://repo.maven.apache.org/maven2/com/google/guava/guava/33.7.2-jre/guava-33.7.2-jre.jar /opt/keycloak/lib/lib/main/com.google.guava.guava-33.6.0-jre.jar
+ADD --checksum=sha256:b530942257fb935f8b2cfaa5f8eb5bd59c555fd8e8d01b8ce98912e077ea606c --chown=1000:0 --chmod=0644 https://maven-central.storage-download.googleapis.com/maven2/com/google/guava/guava/33.7.2-jre/guava-33.7.2-jre.jar /opt/keycloak/lib/lib/main/com.google.guava.guava-33.6.0-jre.jar
 # Stable OpenTelemetry API/context patch for bounded W3C tracestate parsing.
 RUN test -f /opt/keycloak/lib/lib/main/io.opentelemetry.opentelemetry-api-1.62.0.jar \
     && test -f /opt/keycloak/lib/lib/main/io.opentelemetry.opentelemetry-context-1.62.0.jar
-ADD --checksum=sha256:538d1dff2f9a37aecbc0ef98fd17273a3affb058e734e6763a3a07a38a5fdc59 --chown=1000:0 --chmod=0644 https://repo.maven.apache.org/maven2/io/opentelemetry/opentelemetry-api/1.67.0/opentelemetry-api-1.67.0.jar /opt/keycloak/lib/lib/main/io.opentelemetry.opentelemetry-api-1.62.0.jar
-ADD --checksum=sha256:40fb813fb5e27ec2691daa29c81b572b5b1541ef9b41e62490c3ee3e6407c55e --chown=1000:0 --chmod=0644 https://repo.maven.apache.org/maven2/io/opentelemetry/opentelemetry-context/1.67.0/opentelemetry-context-1.67.0.jar /opt/keycloak/lib/lib/main/io.opentelemetry.opentelemetry-context-1.62.0.jar
+ADD --checksum=sha256:538d1dff2f9a37aecbc0ef98fd17273a3affb058e734e6763a3a07a38a5fdc59 --chown=1000:0 --chmod=0644 https://maven-central.storage-download.googleapis.com/maven2/io/opentelemetry/opentelemetry-api/1.67.0/opentelemetry-api-1.67.0.jar /opt/keycloak/lib/lib/main/io.opentelemetry.opentelemetry-api-1.62.0.jar
+ADD --checksum=sha256:40fb813fb5e27ec2691daa29c81b572b5b1541ef9b41e62490c3ee3e6407c55e --chown=1000:0 --chmod=0644 https://maven-central.storage-download.googleapis.com/maven2/io/opentelemetry/opentelemetry-context/1.67.0/opentelemetry-context-1.67.0.jar /opt/keycloak/lib/lib/main/io.opentelemetry.opentelemetry-context-1.62.0.jar
 USER 1000:0
 ENV JAVA_HOME=/usr/lib/jvm/jre-21-openjdk
 ENV LANG=en_US.UTF-8 KC_RUN_IN_CONTAINER=true
